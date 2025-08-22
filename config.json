@@ -1,0 +1,45 @@
+{
+  "system": {
+    "mode": "PRODUCTION",
+    "enable_real_trading": true,
+    "enable_mock_mode": false,
+    "debug_level": "INFO"
+  },
+  "trading": {
+    "symbol": "XAUUSD.v",
+    "base_lot_size": 0.01,
+    "max_lot_size": 0.1,
+    "min_lot_size": 0.01,
+    "max_positions": 5,
+    "min_spacing_points": 100,
+    "max_spacing_points": 200,
+    "emergency_stop_loss": 2000
+  },
+  "api": {
+    "backend_url": "http://123.253.62.50:8080/api",
+    "timeout": 10,
+    "check_interval": 30,
+    "bot_name": "Modern_Grid_Trader",
+    "bot_version": "1.0.0"
+  },
+  "risk_management": {
+    "max_risk_percentage": 0.5,
+    "max_drawdown_percentage": 5.0,
+    "margin_usage_limit": 30.0,
+    "balance_protection_threshold": 3000,
+    "max_loss_per_position": 50,
+    "emergency_drawdown_limit": 3.0
+  },
+  "performance": {
+    "analytics_update_interval": 300,
+    "performance_window": 50,
+    "learning_rate": 0.1,
+    "optimization_threshold": 0.7
+  },
+  "ui": {
+    "update_interval": 2,
+    "log_max_lines": 1000,
+    "auto_scroll_log": true,
+    "show_debug_info": false
+  }
+}
