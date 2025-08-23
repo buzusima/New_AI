@@ -14,7 +14,7 @@ import os
 
 # Import modules - Modern Rule-based Architecture
 try:
-    from mt5_auto_connector import MT5AutoConnector
+    from mt5_connector import MT5Connector
     from rule_engine import ModernRuleEngine
     from market_analyzer import MarketAnalyzer
     from order_manager import OrderManager
@@ -56,7 +56,8 @@ class ModernAITradingGUI:
         self.account_info = {}
         
         # Modern Rule-based Components
-        self.mt5_connector = MT5AutoConnector()
+        self.mt5_connector = MT5Connector()
+
         self.rule_engine = None
         self.market_analyzer = None
         self.order_manager = None
@@ -266,7 +267,7 @@ class ModernAITradingGUI:
         self.status_label.pack()
         
     def create_controls(self, parent):
-        """Create control panel - เก็บ style เดิม"""
+        """Create control panel - เก็บ style เดิม + เพิ่ม MT5 Selection"""
         # Title
         title = tk.Label(parent, text="🎛️ Trading Controls",
                         bg=self.card_color, fg=self.text_color,
@@ -281,11 +282,51 @@ class ModernAITradingGUI:
                 bg=self.card_color, fg=self.text_color,
                 font=('Arial', 11, 'bold')).pack(anchor='w')
         
-        self.connect_btn = tk.Button(conn_frame, text="🔌 Connect MT5",
+        # === MT5 Selection (ใหม่!) ===
+        mt5_select_frame = tk.Frame(conn_frame, bg=self.card_color)
+        mt5_select_frame.pack(fill='x', pady=(5, 0))
+        
+        # Label สำหรับ MT5 Selection
+        tk.Label(mt5_select_frame, text="🖥️ Select MT5:",
+                bg=self.card_color, fg=self.text_color,
+                font=('Arial', 10)).pack(anchor='w')
+        
+        # Dropdown สำหรับเลือก MT5
+        self.mt5_var = tk.StringVar(value="Scan for MT5...")
+        self.mt5_dropdown = ttk.Combobox(mt5_select_frame, 
+                                        textvariable=self.mt5_var,
+                                        state='readonly',
+                                        font=('Arial', 9),
+                                        width=50)
+        self.mt5_dropdown.pack(fill='x', pady=(2, 5))
+        
+        # Bind event เมื่อเลือก MT5
+        self.mt5_dropdown.bind('<<ComboboxSelected>>', self.on_mt5_selected)
+        
+        # Button สำหรับ Scan MT5
+        scan_frame = tk.Frame(mt5_select_frame, bg=self.card_color)
+        scan_frame.pack(fill='x', pady=(0, 5))
+        
+        self.scan_btn = tk.Button(scan_frame, text="🔍 Scan MT5",
+                                 command=self.scan_mt5_installations,
+                                 bg='#4A90E2', fg='white',
+                                 font=('Arial', 9, 'bold'),
+                                 relief='flat', padx=15, pady=5)
+        self.scan_btn.pack(side='left')
+        
+        # Status label สำหรับแสดงผล scan
+        self.scan_status_label = tk.Label(scan_frame, text="",
+                                         bg=self.card_color, fg='#888888',
+                                         font=('Arial', 8))
+        self.scan_status_label.pack(side='left', padx=(10, 0))
+        
+        # === Connect Button (ปรับปรุง) ===
+        self.connect_btn = tk.Button(conn_frame, text="🔌 Connect to Selected MT5",
                                    command=self.connect_mt5,
                                    bg=self.accent_color, fg='black',
                                    font=('Arial', 10, 'bold'),
-                                   relief='flat', padx=20, pady=10)
+                                   relief='flat', padx=20, pady=10,
+                                   state='disabled')  # Disabled จนกว่าจะเลือก MT5
         self.connect_btn.pack(fill='x', pady=(5, 0))
         
         # Account info
@@ -361,6 +402,188 @@ class ModernAITradingGUI:
                                 relief='flat', padx=20, pady=10,
                                 state='disabled')
         self.stop_btn.pack(fill='x', pady=2)
+
+    # === เพิ่ม Methods ใหม่สำหรับ MT5 Selection ===
+    
+    def scan_mt5_installations(self):
+        """สแกนหา MT5 installations ทั้งหมด"""
+        try:
+            self.log("🔍 กำลังสแกนหา MT5...")
+            self.scan_status_label.config(text="Scanning...", fg=self.warning_color)
+            
+            # อัพเดท button state
+            self.scan_btn.config(state='disabled', text="🔄 Scanning...")
+            self.root.update()
+            
+            installations = self.mt5_connector.find_all_mt5_installations()
+            
+            if not installations:
+                self.scan_status_label.config(text="❌ ไม่เจอ MT5", fg=self.error_color)
+                self.log("❌ ไม่เจอ MT5 ในเครื่อง")
+                
+                # รีเซ็ต dropdown
+                self.mt5_dropdown['values'] = ["ไม่เจอ MT5 ในเครื่อง"]
+                self.mt5_var.set("ไม่เจอ MT5 ในเครื่อง")
+                
+            else:
+                # เจอ MT5 แล้ว - อัพเดท dropdown
+                installation_list = self.mt5_connector.get_installation_list()
+                display_names = [f"{inst['display_name']} {'🟢' if inst['is_running'] else '⚫'}" 
+                               for inst in installation_list]
+                
+                self.mt5_dropdown['values'] = display_names
+                
+                # เลือกตัวแรกโดยอัตโนมัติ
+                self.mt5_var.set(display_names[0])
+                
+                # เปิดใช้งาน Connect button
+                self.connect_btn.config(state='normal')
+                
+                self.scan_status_label.config(text=f"✅ เจอ {len(installations)} ตัว", 
+                                            fg=self.success_color)
+                self.log(f"✅ เจอ MT5 ทั้งหมด {len(installations)} ตัว")
+                
+                for inst in installation_list:
+                    status = "🟢 กำลังทำงาน" if inst['is_running'] else "⚫ หยุดทำงาน"
+                    self.log(f"   📍 {inst['broker']} - {status}")
+                    
+        except Exception as e:
+            self.scan_status_label.config(text="❌ Error", fg=self.error_color)
+            self.log(f"❌ Scan error: {e}")
+            
+        finally:
+            # คืนสถานะ button
+            self.scan_btn.config(state='normal', text="🔍 Scan MT5")
+    
+    def on_mt5_selected(self, event=None):
+        """เมื่อเลือก MT5 จาก dropdown"""
+        try:
+            selected_text = self.mt5_var.get()
+            
+            if "ไม่เจอ" in selected_text or "Scan" in selected_text:
+                self.connect_btn.config(state='disabled')
+                return
+                
+            # หา index ของ MT5 ที่เลือก
+            installation_list = self.mt5_connector.get_installation_list()
+            
+            for i, inst in enumerate(installation_list):
+                display_with_status = f"{inst['display_name']} {'🟢' if inst['is_running'] else '⚫'}"
+                if display_with_status == selected_text:
+                    self.selected_mt5_index = i
+                    self.connect_btn.config(state='normal')
+                    self.log(f"📱 เลือก MT5: {inst['display_name']}")
+                    break
+                    
+        except Exception as e:
+            self.log(f"❌ Selection error: {e}")
+    
+    def connect_mt5(self):
+        """Connect to MT5 - ปรับปรุงให้ใช้ตัวที่เลือก"""
+        try:
+            if not hasattr(self, 'selected_mt5_index'):
+                # ถ้ายังไม่ได้เลือก ลอง auto-connect
+                self.log("🔗 ลองเชื่อมต่อแบบอัตโนมัติ...")
+                
+                if self.mt5_connector.auto_connect():
+                    # สำเร็จ
+                    self._handle_successful_connection()
+                else:
+                    # ไม่สำเร็จ - อาจมีหลายตัว
+                    self.log("⚠️ กรุณาเลือก MT5 ที่ต้องการใช้จาก dropdown ข้างบน")
+                    self.scan_mt5_installations()  # Auto-scan
+                return
+            
+            # เชื่อมต่อกับตัวที่เลือก
+            self.log(f"🔗 กำลังเชื่อมต่อกับ MT5 ที่เลือก...")
+            
+            if self.mt5_connector.connect_to_installation(self.selected_mt5_index):
+                self._handle_successful_connection()
+            else:
+                self.log("❌ การเชื่อมต่อ MT5 ไม่สำเร็จ")
+                self.show_message("Error", "ไม่สามารถเชื่อมต่อ MT5 ได้", "error")
+                
+        except Exception as e:
+            self.log(f"❌ Connection error: {e}")
+            self.show_message("Error", f"Connection error: {e}", "error")
+    
+    def _handle_successful_connection(self):
+        """จัดการเมื่อเชื่อมต่อสำเร็จ"""
+        try:
+            self.is_connected = True
+            self.account_info = self.mt5_connector.account_info
+            
+            # อัพเดท GUI
+            self.status_label.config(text="● Connected", fg=self.success_color)
+            self.account_label.config(
+                text=f"Account: {self.account_info.get('login', 'Unknown')} | "
+                     f"Balance: ${self.account_info.get('balance', 0):,.2f} | "
+                     f"Broker: {self.account_info.get('company', 'Unknown')}",
+                fg=self.text_color
+            )
+            
+            # เปิดใช้งานขั้นตอนถัดไป
+            self.init_rules_btn.config(state='normal')
+            
+            # ปิดใช้งาน Connect button แล้วเปลี่ยนเป็น Disconnect
+            self.connect_btn.config(text="🔌 Disconnect", 
+                                   command=self.disconnect_mt5,
+                                   bg=self.error_color, fg='white')
+            
+            # ปิด Scan button และ Dropdown
+            self.scan_btn.config(state='disabled')
+            self.mt5_dropdown.config(state='disabled')
+            
+            self.log(f"✅ เชื่อมต่อสำเร็จ!")
+            self.log(f"💰 Balance: ${self.account_info.get('balance', 0):,.2f}")
+            self.log(f"🏦 Broker: {self.account_info.get('company', 'Unknown')}")
+            
+            if self.mt5_connector.gold_symbol:
+                self.log(f"🥇 Gold Symbol: {self.mt5_connector.gold_symbol}")
+                
+        except Exception as e:
+            self.log(f"❌ Handle connection error: {e}")
+    
+    def disconnect_mt5(self):
+        """ตัดการเชื่อมต่อ MT5"""
+        try:
+            self.log("🔌 กำลังตัดการเชื่อมต่อ...")
+            
+            # หยุดการเทรดก่อน
+            if self.is_trading:
+                self.stop_trading()
+            
+            # ตัดการเชื่อมต่อ
+            if self.mt5_connector:
+                self.mt5_connector.disconnect()
+            
+            # รีเซ็ต states
+            self.is_connected = False
+            self.account_info = {}
+            
+            # อัพเดท GUI
+            self.status_label.config(text="● Disconnected", fg=self.error_color)
+            self.account_label.config(text="No account connected", fg='#888888')
+            
+            # รีเซ็ต buttons
+            self.connect_btn.config(text="🔌 Connect to Selected MT5",
+                                   command=self.connect_mt5,
+                                   bg=self.accent_color, fg='black',
+                                   state='disabled')
+            
+            # เปิดใช้งาน Scan อีกครั้ง
+            self.scan_btn.config(state='normal')
+            self.mt5_dropdown.config(state='readonly')
+            
+            # ปิดใช้งานขั้นตอนอื่นๆ
+            self.init_rules_btn.config(state='disabled')
+            self.calc_btn.config(state='disabled')
+            self.start_btn.config(state='disabled')
+            
+            self.log("✅ ตัดการเชื่อมต่อเรียบร้อย")
+            
+        except Exception as e:
+            self.log(f"❌ Disconnect error: {e}")
         
     def create_rules_monitor(self, parent):
         """Create rules monitoring panel - ใหม่"""
