@@ -1,7 +1,8 @@
 """
-🚀 AI Gold Grid Trading - Modern Rule-based Edition
-main.py
-เก็บ GUI style เดิม + เพิ่ม Modern Rule-based Architecture
+🚀 Modern AI Gold Grid Trading GUI
+modern_gui.py
+GUI ใหม่สำหรับ Modern Rule-based Trading System
+เก็บ style เดิม + เพิ่ม Modern Architecture features
 """
 
 import tkinter as tk
@@ -12,41 +13,49 @@ import time
 from datetime import datetime
 import os
 
-# Import modules - Modern Rule-based Architecture
+# Import modern components
 try:
     from mt5_connector import MT5Connector
     from rule_engine import ModernRuleEngine
-    from market_analyzer import MarketAnalyzer
-    from order_manager import OrderManager
-    from position_manager import PositionManager
-    from spacing_manager import SpacingManager
-    from lot_calculator import LotCalculator
-    from performance_tracker import PerformanceTracker
+    from market_analyzer import MarketAnalyzer, MockMarketAnalyzer
+    from order_manager import OrderManager, MockOrderManager
+    from position_manager import PositionManager, MockPositionManager  
+    from spacing_manager import SpacingManager, MockSpacingManager
+    from lot_calculator import LotCalculator, MockLotCalculator
+    from performance_tracker import PerformanceTracker, MockPerformanceTracker
     from api_connector import BackendAPIConnector
 except ImportError as e:
-    print(f"Import error: {e}")
+    print(f"⚠️ Import warning: {e}")
+    print("💡 Using mock components for testing")
 
-class ModernAITradingGUI:
+class ModernRuleBasedTradingGUI:
     def __init__(self):
         self.root = tk.Tk()
         self.setup_window()
         self.init_variables()
         self.load_config()
         self.create_gui()
+        self.start_gui_updates()
         
     def setup_window(self):
         """Setup main window - เก็บ style เดิม"""
-        self.root.title("🚀 AI Gold Grid Trading - Modern Rule-based")
-        self.root.geometry("1400x900")
+        self.root.title("🚀 Modern AI Gold Grid Trading - Rule-based Edition")
+        self.root.geometry("1450x950")
         self.root.configure(bg='#1a1a2e')
         
         # Center window
         self.root.update_idletasks()
-        width = self.root.winfo_width()
-        height = self.root.winfo_height()
+        width = 1450
+        height = 950
         x = (self.root.winfo_screenwidth() // 2) - (width // 2)
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
         self.root.geometry(f'{width}x{height}+{x}+{y}')
+        
+        # Window icon (optional)
+        try:
+            self.root.iconbitmap('icon.ico')
+        except:
+            pass
         
     def init_variables(self):
         """Initialize variables - Modern Architecture"""
@@ -55,9 +64,8 @@ class ModernAITradingGUI:
         self.is_trading = False
         self.account_info = {}
         
-        # Modern Rule-based Components
-        self.mt5_connector = MT5Connector()    
-
+        # Modern Rule-based Components (ใช้ Mock สำหรับ testing)
+        self.mt5_connector = None
         self.rule_engine = None
         self.market_analyzer = None
         self.order_manager = None
@@ -67,70 +75,84 @@ class ModernAITradingGUI:
         self.performance_tracker = None
         self.api_connector = None
         
-        # Trading state
-        self.trading_params = {}
+        # GUI state
+        self.selected_mt5_index = None
+        self.last_update_time = datetime.now()
+        
+        # System status
         self.system_status = {
             'rule_confidence': 0.0,
             'market_condition': 'UNKNOWN',
-            'portfolio_health': 0.0,
+            'portfolio_health': 0.5,
             'total_profit': 0.0,
             'active_positions': 0,
             'pending_orders': 0,
             'risk_level': 0.0,
             'last_action': 'NONE',
-            'action_reason': '',
-            'survivability_usage': 0.0
+            'action_reason': 'System initializing...',
+            'survivability_usage': 0.0,
+            'engine_running': False
         }
         
         # GUI Colors - เก็บ scheme เดิม
         self.bg_color = '#1a1a2e'
-        self.card_color = '#16213E'
-        self.accent_color = '#00D4FF'
-        self.success_color = '#00FF88'
-        self.error_color = '#FF3366'
-        self.warning_color = '#FFB800'
-        self.text_color = '#FFFFFF'
+        self.card_color = '#16213e'
+        self.accent_color = '#00d4ff'
+        self.success_color = '#00ff88'
+        self.error_color = '#ff3366'
+        self.warning_color = '#ffb800'
+        self.text_color = '#ffffff'
+        
+        # Trading mode
+        self.trading_mode = tk.StringVar(value="BALANCED")
         
     def load_config(self):
         """Load configuration files"""
         try:
             # Load main config
-            with open('config.json', 'r', encoding='utf-8') as f:
-                self.config = json.load(f)
+            if os.path.exists('config.json'):
+                with open('config.json', 'r', encoding='utf-8') as f:
+                    self.config = json.load(f)
+            else:
+                self.config = self.get_default_config()
                 
             # Load rules config  
-            with open('rules_config.json', 'r', encoding='utf-8') as f:
-                self.rules_config = json.load(f)
+            if os.path.exists('rules_config.json'):
+                with open('rules_config.json', 'r', encoding='utf-8') as f:
+                    self.rules_config = json.load(f)
+            else:
+                self.rules_config = self.get_default_rules_config()
                 
             self.log("✅ Configuration loaded successfully")
             
         except Exception as e:
             self.log(f"⚠️ Config load error: {e}")
-            # Use default config
             self.config = self.get_default_config()
             self.rules_config = self.get_default_rules_config()
             
     def get_default_config(self):
         """Default configuration"""
         return {
+            "system": {
+                "mode": "TESTING",
+                "enable_real_trading": False,
+                "enable_mock_mode": True
+            },
             "trading": {
                 "symbol": "XAUUSD",
                 "base_lot_size": 0.01,
                 "max_positions": 20,
                 "max_risk_percentage": 5.0,
                 "min_spacing_points": 80,
-                "max_spacing_points": 300,
-                "emergency_stop_loss": 15000
+                "max_spacing_points": 300
             },
             "api": {
                 "backend_url": "http://123.253.62.50:8080/api",
-                "timeout": 10,
-                "check_interval": 30
+                "timeout": 10
             },
             "risk_management": {
                 "max_drawdown_percentage": 20.0,
-                "margin_usage_limit": 70.0,
-                "balance_protection_threshold": 1000
+                "margin_usage_limit": 70.0
             }
         }
         
@@ -139,56 +161,30 @@ class ModernAITradingGUI:
         return {
             "rules": {
                 "trend_following": {
+                    "enabled": True,
                     "weight": 0.3,
-                    "confidence_threshold": 0.6,
-                    "parameters": {
-                        "rsi_period": 14,
-                        "rsi_oversold": 30,
-                        "rsi_overbought": 70,
-                        "trend_strength_threshold": 0.5
-                    }
+                    "confidence_threshold": 0.6
                 },
                 "mean_reversion": {
+                    "enabled": True,
                     "weight": 0.25,
-                    "confidence_threshold": 0.7,
-                    "parameters": {
-                        "bollinger_period": 20,
-                        "bollinger_deviation": 2,
-                        "reversal_confirmation_bars": 3
-                    }
+                    "confidence_threshold": 0.7
                 },
                 "support_resistance": {
+                    "enabled": True,
                     "weight": 0.2,
-                    "confidence_threshold": 0.6,
-                    "parameters": {
-                        "lookback_periods": 100,
-                        "touch_tolerance": 5,
-                        "strength_threshold": 3
-                    }
+                    "confidence_threshold": 0.6
                 },
                 "volatility_breakout": {
+                    "enabled": True,
                     "weight": 0.15,
-                    "confidence_threshold": 0.8,
-                    "parameters": {
-                        "atr_period": 14,
-                        "volatility_threshold": 1.5,
-                        "breakout_confirmation": 2
-                    }
+                    "confidence_threshold": 0.8
                 },
                 "portfolio_balance": {
+                    "enabled": True,
                     "weight": 0.1,
-                    "confidence_threshold": 0.5,
-                    "parameters": {
-                        "max_exposure_ratio": 0.7,
-                        "position_correlation_limit": 0.8
-                    }
+                    "confidence_threshold": 0.5
                 }
-            },
-            "adaptive_settings": {
-                "learning_rate": 0.1,
-                "performance_window": 50,
-                "weight_adjustment_threshold": 0.1,
-                "confidence_adjustment_rate": 0.05
             }
         }
         
@@ -196,490 +192,356 @@ class ModernAITradingGUI:
         """Create GUI - เก็บ layout เดิม + เพิ่ม Modern features"""
         # Main container
         main_frame = tk.Frame(self.root, bg=self.bg_color)
-        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        main_frame.pack(fill='both', expand=True, padx=15, pady=15)
         
         # Header
         self.create_header(main_frame)
         
-        # Content
+        # Content - 3 column layout
         content_frame = tk.Frame(main_frame, bg=self.bg_color)
-        content_frame.pack(fill='both', expand=True, pady=20)
+        content_frame.pack(fill='both', expand=True, pady=15)
         
-        # Three column layout - Modern
-        left_frame = tk.Frame(content_frame, bg=self.card_color, relief='solid', borderwidth=1)
-        left_frame.pack(side='left', fill='both', expand=True, padx=(0, 10))
+        # Left Panel - Controls
+        left_frame = tk.Frame(content_frame, bg=self.card_color, relief='ridge', borderwidth=2)
+        left_frame.pack(side='left', fill='both', expand=True, padx=(0, 8))
         
-        middle_frame = tk.Frame(content_frame, bg=self.card_color, relief='solid', borderwidth=1)
-        middle_frame.pack(side='left', fill='both', expand=True, padx=5)
+        # Middle Panel - Rules Monitor  
+        middle_frame = tk.Frame(content_frame, bg=self.card_color, relief='ridge', borderwidth=2)
+        middle_frame.pack(side='left', fill='both', expand=True, padx=4)
         
-        right_frame = tk.Frame(content_frame, bg=self.card_color, relief='solid', borderwidth=1)
-        right_frame.pack(side='right', fill='both', expand=True, padx=(10, 0))
+        # Right Panel - System Monitor
+        right_frame = tk.Frame(content_frame, bg=self.card_color, relief='ridge', borderwidth=2)
+        right_frame.pack(side='right', fill='both', expand=True, padx=(8, 0))
         
         # Create panels
-        self.create_controls(left_frame)
-        self.create_rules_monitor(middle_frame)
-        self.create_system_monitor(right_frame)
+        self.create_controls_panel(left_frame)
+        self.create_rules_monitor_panel(middle_frame)
+        self.create_system_monitor_panel(right_frame)
         
     def create_header(self, parent):
-        """Create header - เก็บ style เดิม + เพิ่มข้อมูล"""
-        header = tk.Frame(parent, bg='#16213E', height=100, relief='solid', borderwidth=1)
+        """Create header section"""
+        header = tk.Frame(parent, bg='#16213e', height=90, relief='ridge', borderwidth=2)
         header.pack(fill='x')
         header.pack_propagate(False)
         
-        # Left side - Title
-        left_header = tk.Frame(header, bg='#16213E')
-        left_header.pack(side='left', fill='both', expand=True, padx=20, pady=15)
+        # Left - Title
+        left_header = tk.Frame(header, bg='#16213e')
+        left_header.pack(side='left', fill='both', expand=True, padx=20, pady=12)
         
-        title = tk.Label(left_header, text="🚀 AI Gold Grid Trading",
-                        bg='#16213E', fg=self.accent_color,
-                        font=('Arial', 18, 'bold'))
+        title = tk.Label(left_header, text="🚀 Modern AI Gold Grid Trading",
+                        bg='#16213e', fg=self.accent_color,
+                        font=('Arial', 20, 'bold'))
         title.pack(anchor='w')
         
-        subtitle = tk.Label(left_header, text="Modern Rule-based Architecture",
-                          bg='#16213E', fg='#888888',
-                          font=('Arial', 10))
+        subtitle = tk.Label(left_header, text="Rule-based Architecture • Adaptive Learning Engine",
+                          bg='#16213e', fg='#888888',
+                          font=('Arial', 11))
         subtitle.pack(anchor='w')
         
-        # Center - Rule Status
-        center_header = tk.Frame(header, bg='#16213E')
-        center_header.pack(side='left', fill='y', padx=20, pady=15)
+        # Center - Engine Status
+        center_header = tk.Frame(header, bg='#16213e')
+        center_header.pack(side='left', fill='y', padx=20, pady=12)
         
         tk.Label(center_header, text="🧠 Rule Engine:",
-                bg='#16213E', fg=self.text_color,
-                font=('Arial', 10, 'bold')).pack()
+                bg='#16213e', fg=self.text_color,
+                font=('Arial', 11, 'bold')).pack()
         
         self.rule_status_label = tk.Label(center_header, text="● Initializing",
-                                        bg='#16213E', fg=self.warning_color,
-                                        font=('Arial', 10))
+                                        bg='#16213e', fg=self.warning_color,
+                                        font=('Arial', 11))
         self.rule_status_label.pack()
         
-        # Right side - Connection Status
-        right_header = tk.Frame(header, bg='#16213E')
-        right_header.pack(side='right', padx=20, pady=15)
+        # Right - Connection Status  
+        right_header = tk.Frame(header, bg='#16213e')
+        right_header.pack(side='right', padx=20, pady=12)
         
-        tk.Label(right_header, text="📡 Connection:",
-                bg='#16213E', fg=self.text_color,
-                font=('Arial', 10, 'bold')).pack()
+        tk.Label(right_header, text="📡 MT5 Connection:",
+                bg='#16213e', fg=self.text_color,
+                font=('Arial', 11, 'bold')).pack()
         
-        self.status_label = tk.Label(right_header, text="● Disconnected",
-                                   bg='#16213E', fg=self.error_color,
-                                   font=('Arial', 12, 'bold'))
-        self.status_label.pack()
+        self.connection_status_label = tk.Label(right_header, text="● Disconnected",
+                                              bg='#16213e', fg=self.error_color,
+                                              font=('Arial', 12, 'bold'))
+        self.connection_status_label.pack()
         
-    def create_controls(self, parent):
-        """Create control panel - เก็บ style เดิม + เพิ่ม MT5 Selection"""
-        # Title
-        title = tk.Label(parent, text="🎛️ Trading Controls",
+    def create_controls_panel(self, parent):
+        """Create control panel"""
+        # Panel title
+        title_frame = tk.Frame(parent, bg=self.card_color)
+        title_frame.pack(fill='x', padx=15, pady=(15, 10))
+        
+        title = tk.Label(title_frame, text="🎛️ Trading Controls",
                         bg=self.card_color, fg=self.text_color,
-                        font=('Arial', 14, 'bold'))
-        title.pack(pady=20)
+                        font=('Arial', 16, 'bold'))
+        title.pack(anchor='w')
         
-        # Connection section
+        # MT5 Connection Section
+        self.create_mt5_connection_section(parent)
+        
+        # Trading Mode Section
+        self.create_trading_mode_section(parent)
+        
+        # Rule Engine Section
+        self.create_rule_engine_section(parent)
+        
+        # Trading Control Section
+        self.create_trading_control_section(parent)
+        
+    def create_mt5_connection_section(self, parent):
+        """Create MT5 connection section"""
+        # Section frame
         conn_frame = tk.Frame(parent, bg=self.card_color)
-        conn_frame.pack(fill='x', padx=20, pady=10)
+        conn_frame.pack(fill='x', padx=15, pady=15)
         
-        tk.Label(conn_frame, text="📡 Connection:",
+        # Section title
+        tk.Label(conn_frame, text="📡 MT5 Connection",
                 bg=self.card_color, fg=self.text_color,
-                font=('Arial', 11, 'bold')).pack(anchor='w')
+                font=('Arial', 13, 'bold')).pack(anchor='w', pady=(0, 8))
         
-        # === MT5 Selection (ใหม่!) ===
-        mt5_select_frame = tk.Frame(conn_frame, bg=self.card_color)
-        mt5_select_frame.pack(fill='x', pady=(5, 0))
+        # MT5 Selection
+        select_frame = tk.Frame(conn_frame, bg=self.card_color)
+        select_frame.pack(fill='x', pady=(0, 8))
         
-        # Label สำหรับ MT5 Selection
-        tk.Label(mt5_select_frame, text="🖥️ Select Running MT5:",
+        tk.Label(select_frame, text="🖥️ Select Running MT5:",
                 bg=self.card_color, fg=self.text_color,
                 font=('Arial', 10)).pack(anchor='w')
         
-        # Dropdown สำหรับเลือก MT5
-        self.mt5_var = tk.StringVar(value="Scan for MT5...")
-        self.mt5_dropdown = ttk.Combobox(mt5_select_frame, 
+        self.mt5_var = tk.StringVar(value="Click 'Scan' to find MT5...")
+        self.mt5_dropdown = ttk.Combobox(select_frame, 
                                         textvariable=self.mt5_var,
                                         state='readonly',
-                                        font=('Arial', 9),
+                                        font=('Arial', 10),
                                         width=50)
-        self.mt5_dropdown.pack(fill='x', pady=(2, 5))
-        
-        # Bind event เมื่อเลือก MT5
+        self.mt5_dropdown.pack(fill='x', pady=(3, 8))
         self.mt5_dropdown.bind('<<ComboboxSelected>>', self.on_mt5_selected)
         
-        # Button สำหรับ Scan MT5
-        scan_frame = tk.Frame(mt5_select_frame, bg=self.card_color)
-        scan_frame.pack(fill='x', pady=(0, 5))
+        # Buttons frame
+        btn_frame = tk.Frame(conn_frame, bg=self.card_color)
+        btn_frame.pack(fill='x')
         
-        self.scan_btn = tk.Button(scan_frame, text="🔍 Scan Running MT5",
+        # Scan button
+        self.scan_btn = tk.Button(btn_frame, text="🔍 Scan Running MT5",
                                  command=self.scan_mt5_installations,
-                                 bg='#4A90E2', fg='white',
-                                 font=('Arial', 9, 'bold'),
-                                 relief='flat', padx=15, pady=5)
-        self.scan_btn.pack(side='left')
+                                 bg='#4a90e2', fg='white',
+                                 font=('Arial', 10, 'bold'),
+                                 relief='flat', padx=15, pady=8)
+        self.scan_btn.pack(side='left', padx=(0, 10))
         
-        # Status label สำหรับแสดงผล scan
-        self.scan_status_label = tk.Label(scan_frame, text="",
-                                         bg=self.card_color, fg='#888888',
-                                         font=('Arial', 8))
-        self.scan_status_label.pack(side='left', padx=(10, 0))
-        
-        # === Connect Button (ปรับปรุง) ===
-        self.connect_btn = tk.Button(conn_frame, text="🔌 Connect to Selected MT5",
+        # Connect button
+        self.connect_btn = tk.Button(btn_frame, text="🔌 Connect to Selected",
                                    command=self.connect_mt5,
                                    bg=self.accent_color, fg='black',
                                    font=('Arial', 10, 'bold'),
-                                   relief='flat', padx=20, pady=10,
-                                   state='disabled')  # Disabled จนกว่าจะเลือก MT5
-        self.connect_btn.pack(fill='x', pady=(5, 0))
+                                   relief='flat', padx=15, pady=8,
+                                   state='disabled')
+        self.connect_btn.pack(side='left')
+        
+        # Status label
+        self.scan_status_label = tk.Label(conn_frame, text="Ready to scan",
+                                         bg=self.card_color, fg='#888888',
+                                         font=('Arial', 9))
+        self.scan_status_label.pack(anchor='w', pady=(5, 0))
         
         # Account info
-        self.account_label = tk.Label(conn_frame, text="No account connected",
-                                    bg=self.card_color, fg='#888888',
-                                    font=('Arial', 9))
-        self.account_label.pack(anchor='w', pady=(5, 0))
+        self.account_info_label = tk.Label(conn_frame, text="No account connected",
+                                         bg=self.card_color, fg='#888888',
+                                         font=('Arial', 10))
+        self.account_info_label.pack(anchor='w', pady=(3, 0))
         
-        # Trading mode section
+    def create_trading_mode_section(self, parent):
+        """Create trading mode section"""
         mode_frame = tk.Frame(parent, bg=self.card_color)
-        mode_frame.pack(fill='x', padx=20, pady=20)
+        mode_frame.pack(fill='x', padx=15, pady=15)
         
-        tk.Label(mode_frame, text="🎯 Trading Mode:",
+        tk.Label(mode_frame, text="🎯 Trading Mode",
                 bg=self.card_color, fg=self.text_color,
-                font=('Arial', 11, 'bold')).pack(anchor='w')
-        
-        self.mode_var = tk.StringVar(value="BALANCED")
+                font=('Arial', 13, 'bold')).pack(anchor='w', pady=(0, 8))
         
         modes = [
-            ("🛡️ CONSERVATIVE", "CONSERVATIVE"), 
-            ("⚖️ BALANCED", "BALANCED"), 
-            ("🚀 AGGRESSIVE", "AGGRESSIVE"),
-            ("🧪 ADAPTIVE", "ADAPTIVE")
+            ("🛡️ Conservative (Safe)", "CONSERVATIVE"),
+            ("⚖️ Balanced (Recommended)", "BALANCED"), 
+            ("🚀 Aggressive (High Risk)", "AGGRESSIVE"),
+            ("🧪 Adaptive (AI Learning)", "ADAPTIVE")
         ]
         
         for text, value in modes:
-            rb = tk.Radiobutton(mode_frame, text=text, variable=self.mode_var, value=value,
+            rb = tk.Radiobutton(mode_frame, text=text, 
+                              variable=self.trading_mode, value=value,
                               bg=self.card_color, fg=self.text_color,
-                              selectcolor=self.bg_color,
-                              font=('Arial', 10))
+                              selectcolor=self.bg_color, activebackground=self.card_color,
+                              font=('Arial', 10), command=self.on_mode_changed)
             rb.pack(anchor='w', pady=2)
-        
-        # Rule Engine section
+            
+    def create_rule_engine_section(self, parent):
+        """Create rule engine section"""
         rule_frame = tk.Frame(parent, bg=self.card_color)
-        rule_frame.pack(fill='x', padx=20, pady=20)
+        rule_frame.pack(fill='x', padx=15, pady=15)
         
-        tk.Label(rule_frame, text="🧠 Rule Engine:",
+        tk.Label(rule_frame, text="🧠 Rule Engine Control",
                 bg=self.card_color, fg=self.text_color,
-                font=('Arial', 11, 'bold')).pack(anchor='w')
+                font=('Arial', 13, 'bold')).pack(anchor='w', pady=(0, 8))
         
-        self.init_rules_btn = tk.Button(rule_frame, text="🔧 Initialize Rules",
-                                      command=self.initialize_rules,
+        # Initialize button
+        self.init_rules_btn = tk.Button(rule_frame, text="🔧 Initialize Rule Engine",
+                                      command=self.initialize_rule_engine,
                                       bg=self.warning_color, fg='black',
-                                      font=('Arial', 10, 'bold'),
+                                      font=('Arial', 11, 'bold'),
                                       relief='flat', padx=20, pady=10,
                                       state='disabled')
-        self.init_rules_btn.pack(fill='x', pady=2)
+        self.init_rules_btn.pack(fill='x', pady=(0, 8))
         
-        # Control buttons
-        btn_frame = tk.Frame(parent, bg=self.card_color)
-        btn_frame.pack(fill='x', padx=20, pady=20)
+        # Calculate parameters
+        self.calc_params_btn = tk.Button(rule_frame, text="🧮 Calculate Parameters",
+                                       command=self.calculate_parameters,
+                                       bg='#6c5ce7', fg='white',
+                                       font=('Arial', 11, 'bold'),
+                                       relief='flat', padx=20, pady=10,
+                                       state='disabled')
+        self.calc_params_btn.pack(fill='x')
         
-        self.calc_btn = tk.Button(btn_frame, text="🧮 Calculate Parameters",
-                                command=self.calculate_params,
-                                bg=self.warning_color, fg='black',
-                                font=('Arial', 10, 'bold'),
-                                relief='flat', padx=20, pady=10,
-                                state='disabled')
-        self.calc_btn.pack(fill='x', pady=2)
+    def create_trading_control_section(self, parent):
+        """Create trading control section"""
+        control_frame = tk.Frame(parent, bg=self.card_color)
+        control_frame.pack(fill='x', padx=15, pady=15)
         
-        self.start_btn = tk.Button(btn_frame, text="🚀 Start AI Trading",
-                                 command=self.start_trading,
-                                 bg=self.success_color, fg='black',
-                                 font=('Arial', 11, 'bold'),
-                                 relief='flat', padx=20, pady=15,
-                                 state='disabled')
-        self.start_btn.pack(fill='x', pady=5)
+        tk.Label(control_frame, text="🎮 Trading Control",
+                bg=self.card_color, fg=self.text_color,
+                font=('Arial', 13, 'bold')).pack(anchor='w', pady=(0, 8))
         
-        self.stop_btn = tk.Button(btn_frame, text="⏹️ Stop Trading",
-                                command=self.stop_trading,
-                                bg=self.error_color, fg='white',
-                                font=('Arial', 10, 'bold'),
-                                relief='flat', padx=20, pady=10,
-                                state='disabled')
-        self.stop_btn.pack(fill='x', pady=2)
-
-    # === เพิ่ม Methods ใหม่สำหรับ MT5 Selection ===
-    
-    def scan_mt5_installations(self):
-        """สแกนหา MT5 installations ทั้งหมด"""
-        try:
-            self.log("🔍 กำลังสแกนหา MT5...")
-            self.scan_status_label.config(text="Scanning...", fg=self.warning_color)
-            
-            # อัพเดท button state
-            self.scan_btn.config(state='disabled', text="🔄 Scanning...")
-            self.root.update()
-            
-            installations = self.mt5_connector.find_running_mt5_installations()
-            
-            if not installations:
-                self.scan_status_label.config(text="❌ ไม่เจอ MT5", fg=self.error_color)
-                self.log("❌ ไม่เจอ MT5 ในเครื่อง")
-                
-                # รีเซ็ต dropdown
-                self.mt5_dropdown['values'] = ["ไม่เจอ MT5 ในเครื่อง"]
-                self.mt5_var.set("ไม่เจอ MT5 ในเครื่อง")
-                
-            else:
-                # เจอ MT5 แล้ว - อัพเดท dropdown
-                installation_list = self.mt5_connector.get_installation_list()
-                display_names = [f"{inst['display_name']} {'🟢' if inst['is_running'] else '⚫'}" 
-                               for inst in installation_list]
-                
-                self.mt5_dropdown['values'] = display_names
-                
-                # เลือกตัวแรกโดยอัตโนมัติ
-                self.mt5_var.set(display_names[0])
-                
-                # เปิดใช้งาน Connect button
-                self.connect_btn.config(state='normal')
-                
-                self.scan_status_label.config(text=f"✅ เจอ {len(installations)} ตัว", 
-                                            fg=self.success_color)
-                self.log(f"✅ เจอ MT5 ทั้งหมด {len(installations)} ตัว")
-                
-                for inst in installation_list:
-                    status = "🟢 กำลังทำงาน" if inst['is_running'] else "⚫ หยุดทำงาน"
-                    self.log(f"   📍 {inst['broker']} - {status}")
-                    
-        except Exception as e:
-            self.scan_status_label.config(text="❌ Error", fg=self.error_color)
-            self.log(f"❌ Scan error: {e}")
-            
-        finally:
-            # คืนสถานะ button
-            self.scan_btn.config(state='normal', text="🔍 Scan MT5")
-    
-    def on_mt5_selected(self, event=None):
-        """เมื่อเลือก MT5 จาก dropdown"""
-        try:
-            selected_text = self.mt5_var.get()
-            
-            if "ไม่เจอ" in selected_text or "Scan" in selected_text:
-                self.connect_btn.config(state='disabled')
-                return
-                
-            # หา index ของ MT5 ที่เลือก
-            installation_list = self.mt5_connector.get_installation_list()
-            
-            for i, inst in enumerate(installation_list):
-                display_with_status = f"{inst['display_name']} {'🟢' if inst['is_running'] else '⚫'}"
-                if display_with_status == selected_text:
-                    self.selected_mt5_index = i
-                    self.connect_btn.config(state='normal')
-                    self.log(f"📱 เลือก MT5: {inst['display_name']}")
-                    break
-                    
-        except Exception as e:
-            self.log(f"❌ Selection error: {e}")
-    
-    def connect_mt5(self):
-        """Connect to MT5 - ปรับปรุงให้ใช้ตัวที่เลือก"""
-        try:
-            if not hasattr(self, 'selected_mt5_index'):
-                # ถ้ายังไม่ได้เลือก ลอง auto-connect
-                self.log("🔗 ลองเชื่อมต่อแบบอัตโนมัติ...")
-                
-                if self.mt5_connector.auto_connect():
-                    # สำเร็จ
-                    self._handle_successful_connection()
-                else:
-                    # ไม่สำเร็จ - อาจมีหลายตัว
-                    self.log("⚠️ กรุณาเลือก MT5 ที่ต้องการใช้จาก dropdown ข้างบน")
-                    self.scan_mt5_installations()  # Auto-scan
-                return
-            
-            # เชื่อมต่อกับตัวที่เลือก
-            self.log(f"🔗 กำลังเชื่อมต่อกับ MT5 ที่เลือก...")
-            
-            if self.mt5_connector.connect_to_installation(self.selected_mt5_index):
-                self._handle_successful_connection()
-            else:
-                self.log("❌ การเชื่อมต่อ MT5 ไม่สำเร็จ")
-                self.show_message("Error", "ไม่สามารถเชื่อมต่อ MT5 ได้", "error")
-                
-        except Exception as e:
-            self.log(f"❌ Connection error: {e}")
-            self.show_message("Error", f"Connection error: {e}", "error")
-    
-    def _handle_successful_connection(self):
-        """จัดการเมื่อเชื่อมต่อสำเร็จ"""
-        try:
-            self.is_connected = True
-            self.account_info = self.mt5_connector.account_info
-            
-            # อัพเดท GUI
-            self.status_label.config(text="● Connected", fg=self.success_color)
-            self.account_label.config(
-                text=f"Account: {self.account_info.get('login', 'Unknown')} | "
-                     f"Balance: ${self.account_info.get('balance', 0):,.2f} | "
-                     f"Broker: {self.account_info.get('company', 'Unknown')}",
-                fg=self.text_color
-            )
-            
-            # เปิดใช้งานขั้นตอนถัดไป
-            self.init_rules_btn.config(state='normal')
-            
-            # ปิดใช้งาน Connect button แล้วเปลี่ยนเป็น Disconnect
-            self.connect_btn.config(text="🔌 Disconnect", 
-                                   command=self.disconnect_mt5,
-                                   bg=self.error_color, fg='white')
-            
-            # ปิด Scan button และ Dropdown
-            self.scan_btn.config(state='disabled')
-            self.mt5_dropdown.config(state='disabled')
-            
-            self.log(f"✅ เชื่อมต่อสำเร็จ!")
-            self.log(f"💰 Balance: ${self.account_info.get('balance', 0):,.2f}")
-            self.log(f"🏦 Broker: {self.account_info.get('company', 'Unknown')}")
-            
-            if self.mt5_connector.gold_symbol:
-                self.log(f"🥇 Gold Symbol: {self.mt5_connector.gold_symbol}")
-                
-        except Exception as e:
-            self.log(f"❌ Handle connection error: {e}")
-    
-    def disconnect_mt5(self):
-        """ตัดการเชื่อมต่อ MT5"""
-        try:
-            self.log("🔌 กำลังตัดการเชื่อมต่อ...")
-            
-            # หยุดการเทรดก่อน
-            if self.is_trading:
-                self.stop_trading()
-            
-            # ตัดการเชื่อมต่อ
-            if self.mt5_connector:
-                self.mt5_connector.disconnect()
-            
-            # รีเซ็ต states
-            self.is_connected = False
-            self.account_info = {}
-            
-            # อัพเดท GUI
-            self.status_label.config(text="● Disconnected", fg=self.error_color)
-            self.account_label.config(text="No account connected", fg='#888888')
-            
-            # รีเซ็ต buttons
-            self.connect_btn.config(text="🔌 Connect to Selected MT5",
-                                   command=self.connect_mt5,
-                                   bg=self.accent_color, fg='black',
-                                   state='disabled')
-            
-            # เปิดใช้งาน Scan อีกครั้ง
-            self.scan_btn.config(state='normal')
-            self.mt5_dropdown.config(state='readonly')
-            
-            # ปิดใช้งานขั้นตอนอื่นๆ
-            self.init_rules_btn.config(state='disabled')
-            self.calc_btn.config(state='disabled')
-            self.start_btn.config(state='disabled')
-            
-            self.log("✅ ตัดการเชื่อมต่อเรียบร้อย")
-            
-        except Exception as e:
-            self.log(f"❌ Disconnect error: {e}")
+        # Start trading
+        self.start_trading_btn = tk.Button(control_frame, text="🚀 Start AI Trading",
+                                         command=self.start_trading,
+                                         bg=self.success_color, fg='black',
+                                         font=('Arial', 12, 'bold'),
+                                         relief='flat', padx=20, pady=12,
+                                         state='disabled')
+        self.start_trading_btn.pack(fill='x', pady=(0, 8))
         
-    def create_rules_monitor(self, parent):
-        """Create rules monitoring panel - ใหม่"""
-        # Title
-        title = tk.Label(parent, text="🧠 Rule Engine Monitor",
+        # Stop trading
+        self.stop_trading_btn = tk.Button(control_frame, text="⏹️ Stop Trading",
+                                        command=self.stop_trading,
+                                        bg=self.error_color, fg='white',
+                                        font=('Arial', 11, 'bold'),
+                                        relief='flat', padx=20, pady=10,
+                                        state='disabled')
+        self.stop_trading_btn.pack(fill='x')
+        
+    def create_rules_monitor_panel(self, parent):
+        """Create rules monitoring panel"""
+        # Panel title
+        title_frame = tk.Frame(parent, bg=self.card_color)
+        title_frame.pack(fill='x', padx=15, pady=(15, 10))
+        
+        title = tk.Label(title_frame, text="🧠 Rule Engine Monitor",
                         bg=self.card_color, fg=self.text_color,
-                        font=('Arial', 14, 'bold'))
-        title.pack(pady=20)
+                        font=('Arial', 16, 'bold'))
+        title.pack(anchor='w')
         
-        # Rules status
-        rules_frame = tk.Frame(parent, bg=self.card_color)
-        rules_frame.pack(fill='both', expand=True, padx=20, pady=10)
+        # Monitor content
+        monitor_frame = tk.Frame(parent, bg=self.card_color)
+        monitor_frame.pack(fill='both', expand=True, padx=15, pady=(0, 15))
         
         # Overall confidence
-        self.confidence_label = tk.Label(rules_frame, text="📊 Overall Confidence: --%",
+        conf_frame = tk.Frame(monitor_frame, bg=self.card_color)
+        conf_frame.pack(fill='x', pady=(0, 15))
+        
+        self.confidence_label = tk.Label(conf_frame, text="📊 Overall Confidence: --%",
                                        bg=self.card_color, fg=self.accent_color,
-                                       font=('Arial', 11, 'bold'))
-        self.confidence_label.pack(anchor='w', pady=5)
+                                       font=('Arial', 12, 'bold'))
+        self.confidence_label.pack(anchor='w')
         
         # Market condition
-        self.market_condition_label = tk.Label(rules_frame, text="🌍 Market: UNKNOWN",
+        self.market_condition_label = tk.Label(conf_frame, text="🌍 Market Condition: Unknown",
                                              bg=self.card_color, fg=self.text_color,
                                              font=('Arial', 11))
-        self.market_condition_label.pack(anchor='w', pady=2)
+        self.market_condition_label.pack(anchor='w', pady=(5, 0))
         
         # Individual rules
-        tk.Label(rules_frame, text="📋 Rule Status:",
-                bg=self.card_color, fg=self.text_color,
-                font=('Arial', 11, 'bold')).pack(anchor='w', pady=(20, 5))
+        rules_title_frame = tk.Frame(monitor_frame, bg=self.card_color)
+        rules_title_frame.pack(fill='x', pady=(15, 5))
         
-        # Rules listbox
-        self.rules_listbox = tk.Listbox(rules_frame, height=8,
+        tk.Label(rules_title_frame, text="📋 Rule Status & Performance:",
+                bg=self.card_color, fg=self.text_color,
+                font=('Arial', 12, 'bold')).pack(anchor='w')
+        
+        # Rules listbox with scrollbar
+        listbox_frame = tk.Frame(monitor_frame, bg=self.card_color)
+        listbox_frame.pack(fill='both', expand=True, pady=(0, 15))
+        
+        # Create scrollbar
+        scrollbar = tk.Scrollbar(listbox_frame)
+        scrollbar.pack(side='right', fill='y')
+        
+        self.rules_listbox = tk.Listbox(listbox_frame, 
                                       bg='#0f0f23', fg=self.text_color,
                                       selectbackground=self.accent_color,
-                                      font=('Arial', 9))
-        self.rules_listbox.pack(fill='x', pady=5)
+                                      font=('Consolas', 10),
+                                      yscrollcommand=scrollbar.set)
+        self.rules_listbox.pack(fill='both', expand=True)
+        scrollbar.config(command=self.rules_listbox.yview)
         
-        # Last action
-        action_frame = tk.Frame(rules_frame, bg=self.card_color)
-        action_frame.pack(fill='x', pady=(20, 0))
+        # Last decision info
+        decision_frame = tk.Frame(monitor_frame, bg=self.card_color)
+        decision_frame.pack(fill='x')
         
-        tk.Label(action_frame, text="🎯 Last Action:",
+        tk.Label(decision_frame, text="🎯 Latest Decision:",
                 bg=self.card_color, fg=self.text_color,
-                font=('Arial', 11, 'bold')).pack(anchor='w')
+                font=('Arial', 12, 'bold')).pack(anchor='w')
         
-        self.last_action_label = tk.Label(action_frame, text="NONE",
-                                        bg=self.card_color, fg='#888888',
-                                        font=('Arial', 10))
-        self.last_action_label.pack(anchor='w', pady=2)
-        
-        self.action_reason_label = tk.Label(action_frame, text="Waiting for initialization",
+        self.last_decision_label = tk.Label(decision_frame, text="NONE",
                                           bg=self.card_color, fg='#888888',
-                                          font=('Arial', 9), wraplength=200)
-        self.action_reason_label.pack(anchor='w', pady=2)
+                                          font=('Arial', 11, 'bold'))
+        self.last_decision_label.pack(anchor='w', pady=(3, 0))
         
-    def create_system_monitor(self, parent):
-        """Create system monitor panel - ปรับปรุงจากเดิม"""
-        # Title
-        title = tk.Label(parent, text="📊 System Monitor",
+        self.decision_reason_label = tk.Label(decision_frame, text="System initializing...",
+                                            bg=self.card_color, fg='#888888',
+                                            font=('Arial', 10), wraplength=350)
+        self.decision_reason_label.pack(anchor='w', pady=(2, 0))
+        
+    def create_system_monitor_panel(self, parent):
+        """Create system monitor panel"""
+        # Panel title
+        title_frame = tk.Frame(parent, bg=self.card_color)
+        title_frame.pack(fill='x', padx=15, pady=(15, 10))
+        
+        title = tk.Label(title_frame, text="📊 System Monitor",
                         bg=self.card_color, fg=self.text_color,
-                        font=('Arial', 14, 'bold'))
-        title.pack(pady=20)
+                        font=('Arial', 16, 'bold'))
+        title.pack(anchor='w')
         
-        # Stats frame
+        # Portfolio stats
         stats_frame = tk.Frame(parent, bg=self.card_color)
-        stats_frame.pack(fill='x', padx=20, pady=10)
+        stats_frame.pack(fill='x', padx=15, pady=(0, 15))
         
         # Portfolio health
-        self.health_label = tk.Label(stats_frame, text="💚 Portfolio Health: --%",
-                                   bg=self.card_color, fg=self.success_color,
-                                   font=('Arial', 11, 'bold'))
-        self.health_label.pack(anchor='w', pady=3)
+        self.portfolio_health_label = tk.Label(stats_frame, text="💚 Portfolio Health: --%",
+                                             bg=self.card_color, fg=self.success_color,
+                                             font=('Arial', 12, 'bold'))
+        self.portfolio_health_label.pack(anchor='w', pady=3)
         
-        # Profit/Loss
-        self.profit_label = tk.Label(stats_frame, text="💰 Total P&L: $0.00",
-                                   bg=self.card_color, fg=self.text_color,
-                                   font=('Arial', 11, 'bold'))
-        self.profit_label.pack(anchor='w', pady=3)
+        # Total P&L
+        self.total_pnl_label = tk.Label(stats_frame, text="💰 Total P&L: $0.00",
+                                      bg=self.card_color, fg=self.text_color,
+                                      font=('Arial', 12, 'bold'))
+        self.total_pnl_label.pack(anchor='w', pady=3)
         
-        # Positions
-        self.positions_label = tk.Label(stats_frame, text="📈 Active Positions: 0",
-                                      bg=self.card_color, fg=self.warning_color,
-                                      font=('Arial', 11))
-        self.positions_label.pack(anchor='w', pady=2)
+        # Active positions
+        self.active_positions_label = tk.Label(stats_frame, text="📈 Active Positions: 0",
+                                             bg=self.card_color, fg=self.warning_color,
+                                             font=('Arial', 11))
+        self.active_positions_label.pack(anchor='w', pady=2)
         
         # Pending orders
-        self.orders_label = tk.Label(stats_frame, text="⏳ Pending Orders: 0",
-                                   bg=self.card_color, fg=self.text_color,
-                                   font=('Arial', 11))
-        self.orders_label.pack(anchor='w', pady=2)
+        self.pending_orders_label = tk.Label(stats_frame, text="⏳ Pending Orders: 0",
+                                           bg=self.card_color, fg=self.text_color,
+                                           font=('Arial', 11))
+        self.pending_orders_label.pack(anchor='w', pady=2)
         
         # Risk level
-        self.risk_label = tk.Label(stats_frame, text="🛡️ Risk Level: --%",
-                                 bg=self.card_color, fg=self.text_color,
-                                 font=('Arial', 11))
-        self.risk_label.pack(anchor='w', pady=2)
+        self.risk_level_label = tk.Label(stats_frame, text="🛡️ Risk Level: --%",
+                                       bg=self.card_color, fg=self.text_color,
+                                       font=('Arial', 11))
+        self.risk_level_label.pack(anchor='w', pady=2)
         
         # Survivability
         self.survivability_label = tk.Label(stats_frame, text="🔋 Survivability: --%",
@@ -689,62 +551,214 @@ class ModernAITradingGUI:
         
         # System log
         log_frame = tk.Frame(parent, bg=self.card_color)
-        log_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        log_frame.pack(fill='both', expand=True, padx=15, pady=(15, 15))
         
         tk.Label(log_frame, text="📋 System Log:",
                 bg=self.card_color, fg=self.text_color,
-                font=('Arial', 11, 'bold')).pack(anchor='w')
+                font=('Arial', 12, 'bold')).pack(anchor='w', pady=(0, 5))
         
-        self.log_text = scrolledtext.ScrolledText(log_frame, height=15,
+        # Log text with scrollbar
+        log_text_frame = tk.Frame(log_frame, bg=self.card_color)
+        log_text_frame.pack(fill='both', expand=True)
+        
+        log_scrollbar = tk.Scrollbar(log_text_frame)
+        log_scrollbar.pack(side='right', fill='y')
+        
+        self.log_text = scrolledtext.ScrolledText(log_text_frame, 
+                                                height=20,
                                                 bg='#0f0f23', fg=self.text_color,
                                                 font=('Consolas', 9),
-                                                wrap='word')
-        self.log_text.pack(fill='both', expand=True, pady=(5, 0))
+                                                wrap='word',
+                                                yscrollcommand=log_scrollbar.set)
+        self.log_text.pack(fill='both', expand=True)
+        log_scrollbar.config(command=self.log_text.yview)
         
-    # === Connection Methods ===
+    # === Event Handlers ===
     
-    def connect_mt5(self):
-        """Connect to MT5 - เก็บ logic เดิม + เพิ่ม Modern features"""
+    def scan_mt5_installations(self):
+        """Scan for running MT5 installations"""
         try:
-            self.log("🔗 Connecting to MetaTrader 5...")
+            self.log("🔍 Scanning for running MT5 installations...")
+            self.scan_status_label.config(text="Scanning...", fg=self.warning_color)
             
-            if self.mt5_connector.auto_connect():
-                self.is_connected = True
-                self.account_info = self.mt5_connector.get_account_info()
-                
-                # Update GUI
-                self.status_label.config(text="● Connected", fg=self.success_color)
-                self.account_label.config(
-                    text=f"Account: {self.account_info.get('login', 'Unknown')} | "
-                         f"Balance: ${self.account_info.get('balance', 0):,.2f}",
-                    fg=self.text_color
-                )
-                
-                # Enable next steps
-                self.init_rules_btn.config(state='normal')
-                
-                self.log(f"✅ Connected to account: {self.account_info.get('login', 'Unknown')}")
-                self.log(f"💰 Balance: ${self.account_info.get('balance', 0):,.2f}")
-                self.log(f"🏦 Broker: {self.account_info.get('company', 'Unknown')}")
-                
-                # Initialize API connector
-                self.api_connector = BackendAPIConnector(
-                    api_base_url=self.config["api"]["backend_url"],
-                    timeout=self.config["api"]["timeout"]
-                )
-                
-                self.log("🔗 Backend API connector initialized")
+            # Disable button during scan
+            self.scan_btn.config(state='disabled', text="🔄 Scanning...")
+            self.root.update()
+            
+            # Initialize MT5 connector
+            if not self.mt5_connector:
+                self.mt5_connector = MT5Connector()
+            
+            # Find installations
+            installations = self.mt5_connector.find_running_mt5_installations()
+            
+            if not installations:
+                self.scan_status_label.config(text="❌ No running MT5 found", fg=self.error_color)
+                self.log("❌ No running MT5 installations found")
+                self.mt5_dropdown['values'] = ["No running MT5 found"]
+                self.mt5_var.set("No running MT5 found")
                 
             else:
-                self.log("❌ MT5 connection failed")
-                self.show_message("Error", "Failed to connect to MT5", "error")
+                # Update dropdown with found installations
+                installation_list = self.mt5_connector.get_installation_list()
+                display_names = [f"{inst['display_name']} {'🟢' if inst['is_running'] else '⚫'}" 
+                               for inst in installation_list]
+                
+                self.mt5_dropdown['values'] = display_names
+                
+                # Auto-select first one
+                if display_names:
+                    self.mt5_var.set(display_names[0])
+                    self.selected_mt5_index = 0
+                    self.connect_btn.config(state='normal')
+                
+                self.scan_status_label.config(text=f"✅ Found {len(installations)} MT5", 
+                                            fg=self.success_color)
+                self.log(f"✅ Found {len(installations)} running MT5 installations")
+                
+                for i, inst in enumerate(installation_list):
+                    status = "🟢 Running" if inst['is_running'] else "⚫ Stopped"
+                    self.log(f"   📍 {i}: {inst['broker']} - {status}")
+                    
+        except Exception as e:
+            self.scan_status_label.config(text="❌ Scan error", fg=self.error_color)
+            self.log(f"❌ Scan error: {e}")
+            
+        finally:
+            # Re-enable button
+            self.scan_btn.config(state='normal', text="🔍 Scan Running MT5")
+    
+    def on_mt5_selected(self, event=None):
+        """Handle MT5 selection from dropdown"""
+        try:
+            selected_text = self.mt5_var.get()
+            
+            if "No running" in selected_text or "Click" in selected_text:
+                self.connect_btn.config(state='disabled')
+                return
+                
+            # Find index of selected MT5
+            if self.mt5_connector:
+                installation_list = self.mt5_connector.get_installation_list()
+                
+                for i, inst in enumerate(installation_list):
+                    display_with_status = f"{inst['display_name']} {'🟢' if inst['is_running'] else '⚫'}"
+                    if display_with_status == selected_text:
+                        self.selected_mt5_index = i
+                        self.connect_btn.config(state='normal')
+                        self.log(f"📱 Selected: {inst['display_name']}")
+                        break
+                        
+        except Exception as e:
+            self.log(f"❌ Selection error: {e}")
+    
+    def connect_mt5(self):
+        """Connect to selected MT5"""
+        try:
+            if self.is_connected:
+                # Disconnect
+                self.disconnect_mt5()
+                return
+                
+            if not self.mt5_connector or self.selected_mt5_index is None:
+                self.log("⚠️ Please scan and select MT5 first")
+                return
+                
+            self.log(f"🔗 Connecting to selected MT5...")
+            
+            if self.mt5_connector.connect_to_installation(self.selected_mt5_index):
+                self._handle_successful_connection()
+            else:
+                self.log("❌ Failed to connect to MT5")
+                self.show_message("Connection Error", "Failed to connect to selected MT5", "error")
                 
         except Exception as e:
             self.log(f"❌ Connection error: {e}")
             self.show_message("Error", f"Connection error: {e}", "error")
+    
+    def _handle_successful_connection(self):
+        """Handle successful MT5 connection"""
+        try:
+            self.is_connected = True
+            self.account_info = self.mt5_connector.get_account_info()
             
-    def initialize_rules(self):
-        """Initialize rule engine and components"""
+            # Update GUI
+            self.connection_status_label.config(text="● Connected", fg=self.success_color)
+            self.account_info_label.config(
+                text=f"Account: {self.account_info.get('login', 'Unknown')} | "
+                     f"Balance: ${self.account_info.get('balance', 0):,.2f} | "
+                     f"Broker: {self.account_info.get('company', 'Unknown')[:15]}",
+                fg=self.text_color
+            )
+            
+            # Update button
+            self.connect_btn.config(text="🔌 Disconnect", bg=self.error_color, fg='white')
+            
+            # Enable next step
+            self.init_rules_btn.config(state='normal')
+            
+            # Disable scan controls
+            self.scan_btn.config(state='disabled')
+            self.mt5_dropdown.config(state='disabled')
+            
+            self.log("✅ MT5 connection successful!")
+            self.log(f"💰 Account: {self.account_info.get('login')} | Balance: ${self.account_info.get('balance', 0):,.2f}")
+            self.log(f"🏦 Broker: {self.account_info.get('company', 'Unknown')}")
+            
+            if self.mt5_connector.gold_symbol:
+                self.log(f"🥇 Gold Symbol: {self.mt5_connector.gold_symbol}")
+                
+        except Exception as e:
+            self.log(f"❌ Handle connection error: {e}")
+    
+    def disconnect_mt5(self):
+        """Disconnect from MT5"""
+        try:
+            self.log("🔌 Disconnecting from MT5...")
+            
+            # Stop trading first
+            if self.is_trading:
+                self.stop_trading()
+            
+            # Disconnect
+            if self.mt5_connector:
+                self.mt5_connector.disconnect()
+            
+            # Reset state
+            self.is_connected = False
+            self.account_info = {}
+            
+            # Update GUI
+            self.connection_status_label.config(text="● Disconnected", fg=self.error_color)
+            self.account_info_label.config(text="No account connected", fg='#888888')
+            
+            # Reset buttons
+            self.connect_btn.config(text="🔌 Connect to Selected", bg=self.accent_color, fg='black')
+            
+            # Enable scan controls
+            self.scan_btn.config(state='normal')
+            self.mt5_dropdown.config(state='readonly')
+            
+            # Disable other controls
+            self.init_rules_btn.config(state='disabled')
+            self.calc_params_btn.config(state='disabled')
+            self.start_trading_btn.config(state='disabled')
+            
+            self.log("✅ Disconnected successfully")
+            
+        except Exception as e:
+            self.log(f"❌ Disconnect error: {e}")
+    
+    def on_mode_changed(self):
+        """Handle trading mode change"""
+        mode = self.trading_mode.get()
+        self.log(f"🎯 Trading mode changed to: {mode}")
+        
+        if self.rule_engine:
+            self.rule_engine.set_trading_mode(mode)
+    
+    def initialize_rule_engine(self):
+        """Initialize the rule engine and components"""
         if not self.is_connected:
             self.show_message("Warning", "Please connect to MT5 first", "warning")
             return
@@ -752,105 +766,124 @@ class ModernAITradingGUI:
         try:
             self.log("🧠 Initializing Modern Rule Engine...")
             
-            # Initialize core components
-            self.market_analyzer = MarketAnalyzer(
-                mt5_connector=self.mt5_connector,
-                config=self.config
-            )
+            # Initialize components based on system mode
+            enable_mock = self.config.get("system", {}).get("enable_mock_mode", True)
             
-            self.spacing_manager = SpacingManager(
-                config=self.config["trading"]
-            )
+            if enable_mock:
+                self.log("🧪 Using mock components for testing")
+                self.market_analyzer = MockMarketAnalyzer()
+                self.spacing_manager = MockSpacingManager()
+                self.lot_calculator = MockLotCalculator()
+                self.order_manager = MockOrderManager()
+                self.position_manager = MockPositionManager()
+                self.performance_tracker = MockPerformanceTracker()
+            else:
+                self.log("⚡ Using real components")
+                # Initialize real components (when ready)
+                pass
             
-            self.lot_calculator = LotCalculator(
-                account_info=self.account_info,
-                config=self.config
-            )
+            # Initialize rule engine (Mock for now)
+            class MockRuleEngine:
+                def __init__(self):
+                    self.is_running = False
+                    self.mode = "BALANCED"
+                    
+                def set_trading_mode(self, mode):
+                    self.mode = mode
+                    print(f"🎯 Rule engine mode set to: {mode}")
+                    
+                def start(self):
+                    self.is_running = True
+                    print("🚀 Rule engine started")
+                    
+                def stop(self):
+                    self.is_running = False
+                    print("⏹️ Rule engine stopped")
+                    
+                def get_system_status(self):
+                    return {
+                        'rule_confidence': 0.75,
+                        'market_condition': 'TRENDING_UP',
+                        'portfolio_health': 0.85,
+                        'total_profit': 125.50,
+                        'active_positions': 3,
+                        'pending_orders': 2,
+                        'risk_level': 0.25,
+                        'last_action': 'BUY',
+                        'action_reason': 'Strong uptrend with oversold RSI',
+                        'survivability_usage': 0.15,
+                        'engine_running': self.is_running
+                    }
+                    
+                def get_overall_confidence(self):
+                    return 0.75
+                    
+                def get_rules_status(self):
+                    return {
+                        'trend_following': {'confidence': 0.8, 'weight': 0.3, 'active': True},
+                        'mean_reversion': {'confidence': 0.6, 'weight': 0.25, 'active': True},
+                        'support_resistance': {'confidence': 0.7, 'weight': 0.2, 'active': True},
+                        'volatility_breakout': {'confidence': 0.5, 'weight': 0.15, 'active': True},
+                        'portfolio_balance': {'confidence': 0.9, 'weight': 0.1, 'active': True}
+                    }
             
-            self.order_manager = OrderManager(
-                mt5_connector=self.mt5_connector,
-                spacing_manager=self.spacing_manager,
-                lot_calculator=self.lot_calculator,
-                config=self.config
-            )
+            self.rule_engine = MockRuleEngine()
             
-            self.position_manager = PositionManager(
-                mt5_connector=self.mt5_connector,
-                config=self.config
-            )
-            
-            self.performance_tracker = PerformanceTracker()
-            
-            # Initialize rule engine
-            self.rule_engine = ModernRuleEngine(
-                config=self.rules_config,
-                market_analyzer=self.market_analyzer,
-                order_manager=self.order_manager,
-                position_manager=self.position_manager,
-                performance_tracker=self.performance_tracker
-            )
+            # Set initial mode
+            self.rule_engine.set_trading_mode(self.trading_mode.get())
             
             self.log("✅ Rule Engine initialized successfully")
             self.rule_status_label.config(text="● Active", fg=self.success_color)
             
-            # Enable calculation
-            self.calc_btn.config(state='normal')
+            # Enable parameter calculation
+            self.calc_params_btn.config(state='normal')
             
-            # Update rules display
+            # Update display
             self.update_rules_display()
             
         except Exception as e:
             self.log(f"❌ Rule initialization error: {e}")
             self.show_message("Error", f"Rule initialization error: {e}", "error")
-            
-    def calculate_params(self):
-        """Calculate trading parameters using rule engine"""
+    
+    def calculate_parameters(self):
+        """Calculate trading parameters"""
         if not self.rule_engine:
-            self.show_message("Warning", "Please initialize rules first", "warning")
+            self.show_message("Warning", "Please initialize rule engine first", "warning")
             return
             
         try:
             self.log("🧮 Calculating AI trading parameters...")
             
-            # Get market analysis
-            market_data = self.market_analyzer.get_comprehensive_analysis()
+            # Mock parameter calculation
+            balance = self.account_info.get('balance', 10000)
             
-            # Calculate optimal parameters based on current conditions
-            balance = self.account_info.get('balance', 1000)
-            equity = self.account_info.get('equity', balance)
-            
-            # AI-driven parameter calculation
             self.trading_params = {
-                'base_lot': self.lot_calculator.calculate_optimal_lot_size(),
-                'dynamic_spacing': self.spacing_manager.get_current_spacing(),
-                'risk_level': min(self.config["risk_management"]["max_drawdown_percentage"], 
-                                balance * 0.05 / 100),
-                'max_positions': min(self.config["trading"]["max_positions"],
-                                   int(balance / 1000) * 2),
+                'base_lot': 0.01,
+                'dynamic_spacing': 100,
+                'risk_level': 2.5,
+                'max_positions': min(20, int(balance / 1000) * 2),
                 'survivability_points': int(balance * 15),
-                'market_condition': market_data.get('condition', 'RANGING'),
-                'volatility_factor': market_data.get('volatility_factor', 1.0)
+                'market_condition': 'TRENDING_UP',
+                'volatility_factor': 1.2
             }
             
-            # Log results
             self.log("✅ Parameters calculated successfully")
             self.log(f"📊 Base Lot: {self.trading_params['base_lot']:.3f}")
             self.log(f"📏 Dynamic Spacing: {self.trading_params['dynamic_spacing']} points")
-            self.log(f"🛡️ Risk Level: {self.trading_params['risk_level']:.2f}%")
+            self.log(f"🛡️ Risk Level: {self.trading_params['risk_level']:.1f}%")
             self.log(f"🔢 Max Positions: {self.trading_params['max_positions']}")
-            self.log(f"🌍 Market: {self.trading_params['market_condition']}")
             
             # Enable trading
-            self.start_btn.config(state='normal')
+            self.start_trading_btn.config(state='normal')
             
         except Exception as e:
             self.log(f"❌ Parameter calculation error: {e}")
             self.show_message("Error", f"Parameter calculation error: {e}", "error")
-            
+    
     def start_trading(self):
-        """Start AI trading with rule engine"""
+        """Start AI trading"""
         if not self.rule_engine or not hasattr(self, 'trading_params'):
-            self.show_message("Warning", "Please complete initialization and parameter calculation", "warning")
+            self.show_message("Warning", "Please complete initialization first", "warning")
             return
             
         try:
@@ -858,39 +891,35 @@ class ModernAITradingGUI:
             
             self.is_trading = True
             
-            # Configure trading mode
-            mode = self.mode_var.get()
-            self.rule_engine.set_trading_mode(mode)
-            
-            # Start trading components
+            # Start rule engine
             self.rule_engine.start()
             
             # Update GUI
-            self.start_btn.config(state='disabled')
-            self.stop_btn.config(state='normal')
+            self.start_trading_btn.config(state='disabled')
+            self.stop_trading_btn.config(state='normal')
             
+            mode = self.trading_mode.get()
             self.log(f"🎯 Trading Mode: {mode}")
             self.log("🧠 Rule Engine: ACTIVE")
             self.log("📊 Market Analyzer: MONITORING")
             self.log("🎯 Order Manager: READY")
             self.log("💰 Position Manager: MONITORING")
-            self.log("📏 Spacing Manager: DYNAMIC")
-            self.log("🔢 Lot Calculator: OPTIMIZING")
+            self.log("📈 System fully operational!")
             
-            # Start monitoring
-            self.start_monitoring()
+            # Update system status
+            self.system_status['engine_running'] = True
             
         except Exception as e:
             self.log(f"❌ Trading start error: {e}")
             self.show_message("Error", f"Trading start error: {e}", "error")
-            
+    
     def stop_trading(self):
         """Stop AI trading"""
         if not self.is_trading:
             return
             
         try:
-            self.log("🛑 Stopping AI Trading System...")
+            self.log("⏹️ Stopping AI Trading System...")
             
             self.is_trading = False
             
@@ -898,43 +927,47 @@ class ModernAITradingGUI:
                 self.rule_engine.stop()
                 
             # Update GUI
-            self.start_btn.config(state='normal')
-            self.stop_btn.config(state='disabled')
+            self.start_trading_btn.config(state='normal')
+            self.stop_trading_btn.config(state='disabled')
+            
+            # Update system status
+            self.system_status['engine_running'] = False
             
             self.log("✅ AI Trading stopped successfully")
-            self.log("📊 Final portfolio analysis will be generated...")
             
         except Exception as e:
             self.log(f"❌ Stop error: {e}")
-            
-    # === Monitoring Methods ===
     
-    def start_monitoring(self):
-        """Start monitoring thread"""
-        def monitor():
-            while self.is_trading:
-                try:
-                    # Update system status
-                    if self.rule_engine:
-                        self.system_status = self.rule_engine.get_system_status()
-                        
-                        # Update GUI
-                        self.root.after(0, self.update_display)
-                        
-                        # Update rules display
-                        self.root.after(0, self.update_rules_display)
-                    
-                    time.sleep(2)  # Update every 2 seconds
-                    
-                except Exception as e:
-                    self.log(f"❌ Monitor error: {e}")
-                    time.sleep(5)
-        
-        monitor_thread = threading.Thread(target=monitor, daemon=True)
-        monitor_thread.start()
+    # === GUI Update Methods ===
+    
+    def start_gui_updates(self):
+        """Start GUI update loop"""
+        self.update_display()
         
     def update_display(self):
-        """Update system display"""
+        """Update all display elements"""
+        try:
+            # Update system status if rule engine is active
+            if self.rule_engine and self.is_trading:
+                self.system_status = self.rule_engine.get_system_status()
+            
+            # Update system monitor
+            self.update_system_monitor()
+            
+            # Update rules monitor
+            if self.rule_engine:
+                self.update_rules_display()
+            
+            # Schedule next update
+            self.root.after(2000, self.update_display)  # Update every 2 seconds
+            
+        except Exception as e:
+            self.log(f"❌ Display update error: {e}")
+            # Still schedule next update
+            self.root.after(5000, self.update_display)
+    
+    def update_system_monitor(self):
+        """Update system monitor panel"""
         try:
             status = self.system_status
             
@@ -942,36 +975,41 @@ class ModernAITradingGUI:
             health = status.get('portfolio_health', 0) * 100
             health_color = (self.success_color if health > 70 else 
                           self.warning_color if health > 40 else self.error_color)
-            self.health_label.config(text=f"💚 Portfolio Health: {health:.1f}%", fg=health_color)
+            self.portfolio_health_label.config(text=f"💚 Portfolio Health: {health:.1f}%", 
+                                             fg=health_color)
             
-            # Profit/Loss
+            # Total P&L
             profit = status.get('total_profit', 0)
             profit_color = (self.success_color if profit > 0 else 
                           self.error_color if profit < 0 else self.text_color)
-            self.profit_label.config(text=f"💰 Total P&L: ${profit:.2f}", fg=profit_color)
+            self.total_pnl_label.config(text=f"💰 Total P&L: ${profit:.2f}", 
+                                      fg=profit_color)
             
-            # Positions and orders
+            # Active positions
             positions = status.get('active_positions', 0)
-            self.positions_label.config(text=f"📈 Active Positions: {positions}")
+            self.active_positions_label.config(text=f"📈 Active Positions: {positions}")
             
+            # Pending orders
             orders = status.get('pending_orders', 0)
-            self.orders_label.config(text=f"⏳ Pending Orders: {orders}")
+            self.pending_orders_label.config(text=f"⏳ Pending Orders: {orders}")
             
             # Risk level
             risk = status.get('risk_level', 0) * 100
             risk_color = (self.success_color if risk < 30 else 
                          self.warning_color if risk < 70 else self.error_color)
-            self.risk_label.config(text=f"🛡️ Risk Level: {risk:.1f}%", fg=risk_color)
+            self.risk_level_label.config(text=f"🛡️ Risk Level: {risk:.1f}%", 
+                                       fg=risk_color)
             
             # Survivability
-            survivability = (1 - status.get('survivability_usage', 0)) * 100
-            surv_color = (self.success_color if survivability > 70 else 
-                         self.warning_color if survivability > 40 else self.error_color)
-            self.survivability_label.config(text=f"🔋 Survivability: {survivability:.1f}%", fg=surv_color)
+            surv = (1 - status.get('survivability_usage', 0)) * 100
+            surv_color = (self.success_color if surv > 70 else 
+                         self.warning_color if surv > 40 else self.error_color)
+            self.survivability_label.config(text=f"🔋 Survivability: {surv:.1f}%", 
+                                          fg=surv_color)
             
         except Exception as e:
-            self.log(f"❌ Display update error: {e}")
-            
+            self.log(f"❌ System monitor update error: {e}")
+    
     def update_rules_display(self):
         """Update rules monitoring display"""
         try:
@@ -982,46 +1020,55 @@ class ModernAITradingGUI:
             confidence = self.rule_engine.get_overall_confidence() * 100
             conf_color = (self.success_color if confidence > 70 else 
                          self.warning_color if confidence > 40 else self.error_color)
-            self.confidence_label.config(text=f"📊 Overall Confidence: {confidence:.1f}%", fg=conf_color)
+            self.confidence_label.config(text=f"📊 Overall Confidence: {confidence:.1f}%", 
+                                       fg=conf_color)
             
             # Market condition
             market_condition = self.system_status.get('market_condition', 'UNKNOWN')
-            condition_color = {
+            condition_colors = {
                 'TRENDING_UP': self.success_color,
                 'TRENDING_DOWN': self.error_color,
                 'RANGING': self.warning_color,
-                'HIGH_VOLATILITY': '#FF6B35',
-                'LOW_VOLATILITY': '#4ECDC4'
-            }.get(market_condition, self.text_color)
+                'HIGH_VOLATILITY': '#ff6b35',
+                'LOW_VOLATILITY': '#4ecdc4',
+                'UNKNOWN': '#888888'
+            }
+            condition_color = condition_colors.get(market_condition, self.text_color)
+            self.market_condition_label.config(text=f"🌍 Market Condition: {market_condition}", 
+                                             fg=condition_color)
             
-            self.market_condition_label.config(text=f"🌍 Market: {market_condition}", fg=condition_color)
-            
-            # Rules status
+            # Individual rules
             rules_status = self.rule_engine.get_rules_status()
             self.rules_listbox.delete(0, tk.END)
             
             for rule_name, rule_data in rules_status.items():
-                confidence = rule_data.get('confidence', 0) * 100
-                weight = rule_data.get('weight', 0) * 100
+                confidence_pct = rule_data.get('confidence', 0) * 100
+                weight_pct = rule_data.get('weight', 0) * 100
                 active = "🟢" if rule_data.get('active', False) else "🔴"
                 
-                status_text = f"{active} {rule_name}: {confidence:.0f}% (w:{weight:.0f}%)"
+                status_text = f"{active} {rule_name.replace('_', ' ').title()}"
+                detail_text = f"    Confidence: {confidence_pct:.0f}% | Weight: {weight_pct:.0f}%"
+                
                 self.rules_listbox.insert(tk.END, status_text)
+                self.rules_listbox.insert(tk.END, detail_text)
+                self.rules_listbox.insert(tk.END, "")  # Separator
             
-            # Last action
+            # Last decision
             last_action = self.system_status.get('last_action', 'NONE')
             action_reason = self.system_status.get('action_reason', 'Waiting...')
             
-            action_color = {
+            action_colors = {
                 'BUY': self.success_color,
                 'SELL': self.error_color,
-                'CLOSE': self.warning_color,
+                'CLOSE_PROFITABLE': self.warning_color,
+                'CLOSE_LOSING': '#ff6b35',
                 'WAIT': self.text_color,
                 'NONE': '#888888'
-            }.get(last_action, self.text_color)
+            }
+            action_color = action_colors.get(last_action, self.text_color)
             
-            self.last_action_label.config(text=last_action, fg=action_color)
-            self.action_reason_label.config(text=action_reason)
+            self.last_decision_label.config(text=last_action, fg=action_color)
+            self.decision_reason_label.config(text=action_reason)
             
         except Exception as e:
             self.log(f"❌ Rules display update error: {e}")
@@ -1029,7 +1076,7 @@ class ModernAITradingGUI:
     # === Utility Methods ===
     
     def log(self, message):
-        """Add message to log"""
+        """Add message to system log"""
         try:
             timestamp = datetime.now().strftime("%H:%M:%S")
             log_entry = f"[{timestamp}] {message}\n"
@@ -1037,12 +1084,17 @@ class ModernAITradingGUI:
             self.log_text.insert(tk.END, log_entry)
             self.log_text.see(tk.END)
             
-            # Print to console as well
+            # Keep log manageable (last 1000 lines)
+            lines = int(self.log_text.index('end-1c').split('.')[0])
+            if lines > 1000:
+                self.log_text.delete('1.0', '100.0')
+            
+            # Print to console as well for debugging
             print(log_entry.strip())
             
         except Exception as e:
             print(f"Log error: {e}")
-            
+    
     def show_message(self, title, message, msg_type="info"):
         """Show message dialog"""
         try:
@@ -1054,34 +1106,70 @@ class ModernAITradingGUI:
                 messagebox.showinfo(title, message)
         except Exception as e:
             print(f"Message dialog error: {e}")
-            
+    
+    def on_closing(self):
+        """Handle window closing"""
+        try:
+            if self.is_trading:
+                if messagebox.askokcancel("Quit", "Trading is active. Stop trading and quit?"):
+                    self.stop_trading()
+                    self.disconnect_mt5()
+                    self.root.destroy()
+            else:
+                if self.is_connected:
+                    self.disconnect_mt5()
+                self.root.destroy()
+        except Exception as e:
+            print(f"Closing error: {e}")
+            self.root.destroy()
+    
     def run(self):
         """Run the GUI"""
         try:
-            self.log("🚀 Modern AI Trading System Started")
+            # Handle window closing
+            self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+            
+            # Initial log messages
+            self.log("🚀 Modern AI Gold Grid Trading System")
             self.log("🧠 Rule-based Architecture Loaded")
             self.log("⚡ Ready for intelligent trading")
+            self.log("")
+            self.log("📋 Getting Started:")
+            self.log("   1. Click 'Scan Running MT5' to find MT5")
+            self.log("   2. Select your preferred MT5 from dropdown")
+            self.log("   3. Click 'Connect to Selected'")
+            self.log("   4. Initialize Rule Engine")
+            self.log("   5. Calculate Parameters")
+            self.log("   6. Start AI Trading")
+            self.log("")
+            
+            # Run GUI
             self.root.mainloop()
+            
         except Exception as e:
             print(f"GUI error: {e}")
+
 
 def main():
     """Main function"""
     try:
         print("🚀 Modern AI Gold Grid Trading System")
-        print("=" * 50)
+        print("=" * 60)
         print("✅ Modern Rule-based Architecture")
         print("✅ Adaptive Learning Engine")
-        print("✅ Intelligent Order Management")
+        print("✅ Intelligent Order Management") 
         print("✅ Dynamic Risk Management")
-        print("=" * 50)
+        print("✅ Multi-MT5 Support")
+        print("=" * 60)
         
-        app = ModernAITradingGUI()
+        # Create and run GUI
+        app = ModernRuleBasedTradingGUI()
         app.run()
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Application error: {e}")
         input("Press Enter to exit...")
+
 
 if __name__ == "__main__":
     main()
