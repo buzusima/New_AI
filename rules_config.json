@@ -2,107 +2,181 @@
   "rules": {
     "trend_following": {
       "enabled": true,
-      "weight": 0.3,
-      "confidence_threshold": 0.2,
+      "weight": 0.18,
+      "confidence_threshold": 0.15,
       "parameters": {
         "rsi_period": 14,
-        "rsi_oversold": 30,
-        "rsi_overbought": 70,
-        "trend_strength_threshold": 0.2,
-        "trend_confirmation_bars": 3
+        "rsi_oversold": 40,
+        "rsi_overbought": 60,
+        "trend_strength_threshold": 0.1,
+        "trend_confirmation_bars": 2
       },
       "risk_settings": {
-        "max_positions_per_signal": 5,
+        "max_positions_per_signal": 8,
         "position_size_multiplier": 1.0
       }
     },
     "mean_reversion": {
       "enabled": true,
-      "weight": 0.25,
-      "confidence_threshold": 0.3,
+      "weight": 0.12,
+      "confidence_threshold": 0.20,
       "parameters": {
         "bollinger_period": 20,
-        "bollinger_deviation": 2.0,
-        "reversal_confirmation_bars": 3,
-        "price_deviation_threshold": 1.0
+        "bollinger_deviation": 1.5,
+        "reversal_confirmation_bars": 1,
+        "price_deviation_threshold": 0.5
       },
       "risk_settings": {
-        "max_positions_per_signal": 3,
+        "max_positions_per_signal": 5,
         "position_size_multiplier": 0.8
       }
     },
     "support_resistance": {
       "enabled": true,
-      "weight": 0.2,
-      "confidence_threshold": 0.3,
+      "weight": 0.10,
+      "confidence_threshold": 0.25,
       "parameters": {
         "lookback_periods": 100,
-        "touch_tolerance": 10,
-        "strength_threshold": 2,
-        "min_level_age_bars": 5
+        "touch_tolerance": 15,
+        "strength_threshold": 1,
+        "min_level_age_bars": 3
       },
       "risk_settings": {
-        "max_positions_per_signal": 4,
+        "max_positions_per_signal": 6,
         "position_size_multiplier": 1.1
       }
     },
     "volatility_breakout": {
       "enabled": true,
-      "weight": 0.15,
-      "confidence_threshold": 0.4,
+      "weight": 0.12,
+      "confidence_threshold": 0.30,
       "parameters": {
         "atr_period": 14,
-        "volatility_threshold": 1.2,
+        "volatility_threshold": 1.1,
         "breakout_confirmation": 1,
         "volume_confirmation": false
       },
       "risk_settings": {
-        "max_positions_per_signal": 2,
+        "max_positions_per_signal": 4,
         "position_size_multiplier": 1.3
       }
     },
     "portfolio_balance": {
       "enabled": true,
-      "weight": 0.1,
-      "confidence_threshold": 0.1,
+      "weight": 0.30,
+      "confidence_threshold": 0.05,
       "parameters": {
-        "max_exposure_ratio": 0.9,
-        "position_correlation_limit": 0.9,
-        "rebalance_threshold": 0.3,
-        "profit_target_percentage": 2.0
+        "profit_take_threshold": 25.0,
+        "min_balanced_profit": 15.0,
+        "max_exposure_ratio": 0.8,
+        "hedge_protection_enabled": true,
+        "hedge_trigger_loss": -200.0,
+        "hedge_with_profit_ratio": 0.75,
+        "partial_hedge_close": true,
+        "min_profitable_for_hedge": 50.0,
+        "emergency_hedge_loss": -400.0,
+        "smart_hedge_selection": true
       },
       "risk_settings": {
-        "max_positions_per_signal": 10,
+        "max_positions_per_signal": 15,
         "position_size_multiplier": 0.9
+      }
+    },
+    "grid_expansion": {
+      "enabled": true,
+      "weight": 0.25,
+      "confidence_threshold": 0.10,
+      "parameters": {
+        "auto_place_orders": true,
+        "grid_levels": 5,
+        "place_both_directions": true,
+        "immediate_placement": true,
+        "max_empty_time_minutes": 10,
+        "trend_aware_expansion": true,
+        "reduce_opposite_positions": true
+      },
+      "risk_settings": {
+        "max_positions_per_signal": 20,
+        "position_size_multiplier": 1.0
+      }
+    },
+    "position_aging": {
+      "enabled": true,
+      "weight": 0.08,
+      "confidence_threshold": 0.20,
+      "parameters": {
+        "max_age_hours": 240,
+        "gentle_aging_start": 168,
+        "close_only_if_small_loss": true,
+        "max_loss_to_close": -30.0,
+        "prefer_profitable_aging": true,
+        "aging_with_hedge_priority": true
+      },
+      "risk_settings": {
+        "max_positions_per_signal": 6,
+        "position_size_multiplier": 1.0
+      }
+    },
+    "trend_protection": {
+      "enabled": true,
+      "weight": 0.15,
+      "confidence_threshold": 0.25,
+      "parameters": {
+        "strong_trend_threshold": 0.65,
+        "max_opposite_positions": 6,
+        "trend_lot_reduction": 0.6,
+        "enable_trend_following": true,
+        "opposite_position_warning": 4,
+        "emergency_trend_strength": 0.8
+      },
+      "risk_settings": {
+        "max_positions_per_signal": 8,
+        "position_size_multiplier": 0.7
       }
     }
   },
   "adaptive_settings": {
-    "learning_rate": 0.1,
-    "performance_window": 50,
-    "weight_adjustment_threshold": 0.1,
-    "confidence_adjustment_rate": 0.05,
+    "learning_rate": 0.12,
+    "performance_window": 25,
+    "weight_adjustment_threshold": 0.05,
+    "confidence_adjustment_rate": 0.06,
     "min_rule_weight": 0.05,
-    "max_rule_weight": 0.5,
-    "adaptation_frequency": "DAILY"
+    "max_rule_weight": 0.35,
+    "adaptation_frequency": "HOURLY"
+  },
+  "global_settings": {
+    "minimum_confidence_threshold": 0.18,
+    "maximum_daily_orders": 50,
+    "maximum_daily_closes": 25,
+    "order_frequency_seconds": 5,
+    "close_frequency_seconds": 12,
+    "emergency_stop_threshold": 0.95,
+    "preserve_losing_positions": true,
+    "enable_hedge_protection": true
   },
   "market_conditions": {
     "trending_up": {
       "rule_multipliers": {
-        "trend_following": 1.2,
-        "mean_reversion": 0.8,
-        "support_resistance": 1.1,
-        "volatility_breakout": 0.9,
-        "portfolio_balance": 1.0
+        "trend_following": 1.4,
+        "mean_reversion": 0.6,
+        "support_resistance": 1.2,
+        "volatility_breakout": 1.1,
+        "portfolio_balance": 1.2,
+        "grid_expansion": 1.1,
+        "position_aging": 0.8,
+        "trend_protection": 1.3
       }
     },
     "trending_down": {
       "rule_multipliers": {
-        "trend_following": 1.2,
-        "mean_reversion": 0.8,
-        "support_resistance": 1.1,
-        "volatility_breakout": 0.9,
-        "portfolio_balance": 1.0
+        "trend_following": 1.4,
+        "mean_reversion": 0.6,
+        "support_resistance": 1.2,
+        "volatility_breakout": 1.1,
+        "portfolio_balance": 1.2,
+        "grid_expansion": 1.1,
+        "position_aging": 0.8,
+        "trend_protection": 1.3
       }
     },
     "ranging": {
@@ -111,51 +185,68 @@
         "mean_reversion": 1.3,
         "support_resistance": 1.2,
         "volatility_breakout": 0.6,
-        "portfolio_balance": 1.1
+        "portfolio_balance": 1.3,
+        "grid_expansion": 1.4,
+        "position_aging": 1.0,
+        "trend_protection": 0.8
       }
     },
     "high_volatility": {
       "rule_multipliers": {
-        "trend_following": 0.8,
-        "mean_reversion": 0.9,
+        "trend_following": 0.9,
+        "mean_reversion": 0.8,
         "support_resistance": 0.9,
-        "volatility_breakout": 1.4,
-        "portfolio_balance": 1.2
+        "volatility_breakout": 1.5,
+        "portfolio_balance": 1.4,
+        "grid_expansion": 0.9,
+        "position_aging": 1.1,
+        "trend_protection": 1.2
       }
     },
     "low_volatility": {
       "rule_multipliers": {
         "trend_following": 1.1,
-        "mean_reversion": 1.1,
+        "mean_reversion": 1.2,
         "support_resistance": 1.0,
         "volatility_breakout": 0.5,
-        "portfolio_balance": 0.9
+        "portfolio_balance": 1.1,
+        "grid_expansion": 1.3,
+        "position_aging": 0.9,
+        "trend_protection": 0.9
       }
     }
   },
   "emergency_rules": {
-    "max_consecutive_losses": 5,
-    "max_drawdown_trigger": 18.0,
-    "margin_call_threshold": 80.0,
+    "max_consecutive_losses": 10,
+    "max_drawdown_trigger": 15.0,
+    "margin_call_threshold": 75.0,
+    "max_aged_positions": 12,
+    "max_opposite_trend_positions": 8,
+    "emergency_hedge_trigger": -500.0,
     "system_halt_conditions": [
       "CONSECUTIVE_LOSSES",
       "HIGH_DRAWDOWN", 
       "MARGIN_CALL",
+      "EXCESSIVE_OPPOSITE_POSITIONS",
       "API_FAILURE"
     ],
     "recovery_conditions": [
       "MANUAL_RESTART",
       "PROFIT_RECOVERY",
-      "TIME_COOLDOWN"
+      "TIME_COOLDOWN",
+      "HEDGE_PROTECTION_ACTIVATED"
     ],
-    "cooldown_period_minutes": 60
+    "cooldown_period_minutes": 30
   },
   "logging": {
     "log_rule_decisions": true,
     "log_confidence_levels": true,
     "log_market_conditions": true,
     "log_performance_updates": true,
+    "log_position_closes": true,
+    "log_hedge_actions": true,
+    "log_trend_protection": true,
     "save_decision_history": true,
-    "max_log_entries": 10000
+    "max_log_entries": 20000
   }
 }

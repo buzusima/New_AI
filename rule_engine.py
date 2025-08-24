@@ -335,6 +335,8 @@ class ModernRuleEngine:
                 return self._rule_volatility_breakout(rule_config, weight)
             elif rule_name == "portfolio_balance":
                 return self._rule_portfolio_balance(rule_config, weight)
+            elif rule_name == "grid_expansion":
+                return self._rule_grid_expansion(rule_config, weight)
             else:
                 print(f"❌ Unknown rule: {rule_name}")
                 return None
@@ -342,7 +344,59 @@ class ModernRuleEngine:
         except Exception as e:
             print(f"❌ Rule {rule_name} execution error: {e}")
             return None
-    
+
+    def _rule_grid_expansion(self, config: Dict, weight: float) -> Optional[RuleResult]:
+        """Grid Expansion Rule - สำหรับออกไม้ต่อเนื่อง"""
+        try:
+            portfolio_data = self.last_portfolio_data
+            current_positions = portfolio_data.get("total_positions", 0)
+            max_positions = config["parameters"].get("grid_levels", 5)
+            
+            confidence = 0.0
+            decision = TradingDecision.WAIT
+            reasoning = "Grid expansion analysis"
+            
+            # ถ้ายังไม่มี positions เลย หรือ positions น้อย
+            if current_positions == 0:
+                decision = TradingDecision.BUY  # เริ่มด้วย BUY
+                confidence = 0.80
+                reasoning = "Grid expansion: No positions - initial BUY placement"
+            elif current_positions < max_positions:
+                # สลับ BUY/SELL ตามจำนวน positions ที่มี
+                if current_positions % 2 == 0:
+                    decision = TradingDecision.SELL
+                else:
+                    decision = TradingDecision.BUY
+                    
+                confidence = 0.60 + (max_positions - current_positions) * 0.05
+                reasoning = f"Grid expansion: {current_positions}/{max_positions} positions, placing {decision.value}"
+            
+            # Auto placement ถ้า enable
+            auto_place = config["parameters"].get("auto_place_orders", True)
+            if auto_place and confidence > 0:
+                confidence += 0.15  # Boost confidence for auto placement
+            
+            # Check confidence threshold
+            if confidence >= config.get("confidence_threshold", 0.1):
+                return RuleResult(
+                    rule_name="grid_expansion",
+                    decision=decision,
+                    confidence=confidence,
+                    reasoning=reasoning,
+                    supporting_data={
+                        "current_positions": current_positions,
+                        "max_positions": max_positions,
+                        "auto_place": auto_place
+                    },
+                    weight=weight
+                )
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Grid expansion rule error: {e}")
+            return None
+        
     def _rule_trend_following(self, config: Dict, weight: float) -> Optional[RuleResult]:
         """Trend Following Rule"""
         try:
@@ -560,53 +614,92 @@ class ModernRuleEngine:
             return None
     
     def _rule_portfolio_balance(self, config: Dict, weight: float) -> Optional[RuleResult]:
-        """Portfolio Balance Rule"""
+        """Enhanced Portfolio Balance with Hedge Protection"""
         try:
             portfolio_data = self.last_portfolio_data
             buy_positions = portfolio_data.get("buy_positions", 0)
             sell_positions = portfolio_data.get("sell_positions", 0)
             total_positions = buy_positions + sell_positions
             total_profit = portfolio_data.get("total_profit", 0)
-            max_exposure = config["parameters"].get("max_exposure_ratio", 0.7)
             
             confidence = 0.0
             decision = TradingDecision.WAIT
             reasoning = "Portfolio balance analysis"
             
-            # Portfolio too heavy on one side
-            if total_positions > 0:
+            # === HEDGE PROTECTION LOGIC === 
+            hedge_enabled = config["parameters"].get("hedge_protection_enabled", True)
+            hedge_trigger = config["parameters"].get("hedge_trigger_loss", -200.0)
+            emergency_trigger = config["parameters"].get("emergency_hedge_loss", -400.0)
+            
+            if hedge_enabled and total_profit <= hedge_trigger:
+                # คำนวณกำไร/ขาดทุนแยก
+                profitable_total = self._get_profitable_positions_total()
+                losing_total = self._get_losing_positions_total() 
+                min_profitable = config["parameters"].get("min_profitable_for_hedge", 50.0)
+                
+                if profitable_total >= min_profitable:
+                    hedge_ratio = config["parameters"].get("hedge_with_profit_ratio", 0.75)
+                    
+                    # Emergency hedge (ขาดทุนมากมาย)
+                    if total_profit <= emergency_trigger:
+                        confidence = 0.85
+                        decision = TradingDecision.CLOSE_PROFITABLE
+                        reasoning = f"🚨 EMERGENCY HEDGE: Total loss ${abs(total_profit):.0f} - Close profitable positions for protection"
+                    
+                    # Normal hedge protection
+                    else:
+                        # หา hedge opportunity ที่ดีที่สุด
+                        hedge_opportunity = self._calculate_hedge_opportunity(
+                            profitable_total, abs(losing_total), hedge_ratio
+                        )
+                        
+                        if hedge_opportunity["net_result"] >= 10:  # คุ้มค่าขั้นต่ำ
+                            confidence = 0.72 + min(0.15, abs(total_profit) / 1000)
+                            decision = TradingDecision.CLOSE_PROFITABLE
+                            reasoning = f"🛡️ HEDGE PROTECTION: Net ${hedge_opportunity['net_result']:.0f} - Reduce exposure smartly"
+            
+            # === NORMAL PROFIT TAKING ===
+            elif total_profit >= 25:  # กำไรปกติ
+                confidence = 0.58 + min(0.25, total_profit / 200)
+                decision = TradingDecision.CLOSE_PROFITABLE
+                reasoning = f"💰 TAKE PROFIT: Total ${total_profit:.0f} - Secure gains"
+            
+            # === BALANCED OPPORTUNITIES ===
+            elif total_positions >= 5:
+                balanced_opportunity = self._find_balanced_opportunity()
+                if balanced_opportunity and balanced_opportunity["net_profit"] >= 15:
+                    confidence = 0.50 + min(0.15, balanced_opportunity["net_profit"] / 100)
+                    decision = TradingDecision.CLOSE_PROFITABLE
+                    reasoning = f"⚖️ BALANCED CLOSE: Net ${balanced_opportunity['net_profit']:.0f}"
+            
+            # === PORTFOLIO REBALANCING ===
+            elif total_positions > 0:
+                max_exposure = config["parameters"].get("max_exposure_ratio", 0.8)
                 buy_ratio = buy_positions / total_positions
                 sell_ratio = sell_positions / total_positions
                 
-                # Too many BUY positions, consider SELL for balance
                 if buy_ratio > max_exposure:
+                    confidence = 0.35 + (buy_ratio - max_exposure) * 1.5
                     decision = TradingDecision.SELL
-                    confidence = 0.6 + (buy_ratio - max_exposure) * 2
-                    reasoning = f"Portfolio imbalanced - too many BUY positions ({buy_ratio:.1%})"
-                
-                # Too many SELL positions, consider BUY for balance
+                    reasoning = f"📊 REBALANCE: Too many BUY positions ({buy_ratio:.1%})"
                 elif sell_ratio > max_exposure:
+                    confidence = 0.35 + (sell_ratio - max_exposure) * 1.5
                     decision = TradingDecision.BUY
-                    confidence = 0.6 + (sell_ratio - max_exposure) * 2
-                    reasoning = f"Portfolio imbalanced - too many SELL positions ({sell_ratio:.1%})"
-            
-            # Consider closing profitable positions
-            if total_profit > 100:  # $100 profit threshold
-                decision = TradingDecision.CLOSE_PROFITABLE
-                confidence = min(0.8, 0.5 + (total_profit / 1000) * 0.3)
-                reasoning = f"Close profitable positions - total profit: ${total_profit:.2f}"
+                    reasoning = f"📊 REBALANCE: Too many SELL positions ({sell_ratio:.1%})"
             
             # Check confidence threshold
-            if confidence >= config.get("confidence_threshold", 0.5):
+            if confidence >= config.get("confidence_threshold", 0.05):
                 return RuleResult(
                     rule_name="portfolio_balance",
                     decision=decision,
                     confidence=confidence,
                     reasoning=reasoning,
                     supporting_data={
+                        "total_profit": total_profit,
+                        "hedge_protection": hedge_enabled and total_profit <= hedge_trigger,
+                        "emergency_level": total_profit <= emergency_trigger,
                         "buy_positions": buy_positions,
-                        "sell_positions": sell_positions,
-                        "total_profit": total_profit
+                        "sell_positions": sell_positions
                     },
                     weight=weight
                 )
@@ -615,6 +708,139 @@ class ModernRuleEngine:
             
         except Exception as e:
             print(f"❌ Portfolio balance rule error: {e}")
+            return None
+
+    def _rule_trend_protection(self, config: Dict, weight: float) -> Optional[RuleResult]:
+        """Trend Protection Rule - ป้องกันการเทรดทวนเทรนด์มากเกินไป"""
+        try:
+            market_data = self.last_market_data
+            portfolio_data = self.last_portfolio_data
+            
+            trend_strength = market_data.get("trend_strength", 0)
+            trend_direction = market_data.get("trend_direction", "SIDEWAYS")
+            strong_trend_threshold = config["parameters"].get("strong_trend_threshold", 0.65)
+            
+            if trend_strength < strong_trend_threshold:
+                return None  # เทรนด์ไม่แรงพอ ไม่ต้องป้องกัน
+            
+            # นับ positions ที่ทวนเทรนด์
+            buy_positions = portfolio_data.get("buy_positions", 0)
+            sell_positions = portfolio_data.get("sell_positions", 0)
+            
+            opposite_positions = 0
+            if trend_direction == "UP":
+                opposite_positions = sell_positions
+                follow_direction = TradingDecision.BUY
+            elif trend_direction == "DOWN":
+                opposite_positions = buy_positions
+                follow_direction = TradingDecision.SELL
+            else:
+                return None
+            
+            max_opposite = config["parameters"].get("max_opposite_positions", 6)
+            warning_level = config["parameters"].get("opposite_position_warning", 4)
+            emergency_strength = config["parameters"].get("emergency_trend_strength", 0.8)
+            
+            confidence = 0.0
+            decision = TradingDecision.WAIT
+            reasoning = "Trend protection analysis"
+            
+            # Emergency trend following
+            if trend_strength >= emergency_strength and opposite_positions >= max_opposite:
+                confidence = 0.80
+                decision = follow_direction
+                reasoning = f"🚨 EMERGENCY TREND FOLLOW: Very strong {trend_direction} trend ({trend_strength:.1%}) - Too many opposite positions ({opposite_positions})"
+            
+            # Strong trend following  
+            elif opposite_positions >= warning_level:
+                confidence = 0.45 + (trend_strength - strong_trend_threshold) * 0.5
+                decision = follow_direction
+                reasoning = f"🌊 TREND PROTECTION: Strong {trend_direction} trend ({trend_strength:.1%}) - Follow trend to balance risk"
+            
+            # Check confidence threshold
+            if confidence >= config.get("confidence_threshold", 0.25):
+                return RuleResult(
+                    rule_name="trend_protection",
+                    decision=decision,
+                    confidence=confidence,
+                    reasoning=reasoning,
+                    supporting_data={
+                        "trend_direction": trend_direction,
+                        "trend_strength": trend_strength,
+                        "opposite_positions": opposite_positions,
+                        "max_opposite": max_opposite
+                    },
+                    weight=weight
+                )
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Trend protection rule error: {e}")
+            return None
+
+    def _calculate_hedge_opportunity(self, profitable_total: float, losing_total: float, hedge_ratio: float) -> Dict:
+        """คำนวณโอกาส hedge ที่ดีที่สุด"""
+        try:
+            # จำนวนที่จะใช้ hedge
+            hedge_amount = profitable_total * hedge_ratio
+            
+            # หา losing positions ที่เหมาะสมจะปิด
+            suitable_losses = min(hedge_amount * 0.8, losing_total * 0.4)  # ปิดไม่เกิน 40% ของขาดทุน
+            
+            # คำนวณผลลัพธ์
+            net_result = hedge_amount - suitable_losses
+            exposure_reduction = (hedge_amount + suitable_losses) / (profitable_total + losing_total)
+            
+            return {
+                "hedge_amount": hedge_amount,
+                "suitable_losses": suitable_losses,
+                "net_result": net_result,
+                "exposure_reduction": exposure_reduction,
+                "is_worthwhile": net_result >= 10 and exposure_reduction >= 0.2
+            }
+            
+        except Exception as e:
+            print(f"❌ Hedge calculation error: {e}")
+            return {"net_result": 0, "is_worthwhile": False}
+    
+    def _rule_position_aging(self, config: Dict, weight: float) -> Optional[RuleResult]:
+        """Position Aging Rule - ปิดไม้ที่อายุมากเกินไป"""
+        try:
+            if not hasattr(self, 'position_manager'):
+                return None
+                
+            # หา positions ที่อายุมากเกินไป
+            max_age_hours = config["parameters"].get("max_age_hours", 168)  # 7 วัน
+            aged_positions = []
+            
+            # สมมติว่ามีฟังก์ชันดึง position details
+            positions = self.position_manager.get_active_positions()
+            for pos in positions:
+                if pos.get("age_hours", 0) >= max_age_hours:
+                    aged_positions.append(pos)
+            
+            if aged_positions:
+                confidence = 0.75  # แน่นอนว่าต้องปิด
+                decision = TradingDecision.CLOSE_LOSING  # ส่วนใหญ่จะขาดทุน
+                reasoning = f"Close {len(aged_positions)} aged positions (>{max_age_hours}h)"
+                
+                return RuleResult(
+                    rule_name="position_aging",
+                    decision=decision,
+                    confidence=confidence,
+                    reasoning=reasoning,
+                    supporting_data={
+                        "aged_positions": len(aged_positions),
+                        "max_age_hours": max_age_hours
+                    },
+                    weight=weight
+                )
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Position aging rule error: {e}")
             return None
     
     def _make_weighted_decision(self, rule_results: List[RuleResult]) -> Optional[RuleResult]:
@@ -656,8 +882,8 @@ class ModernRuleEngine:
             best_decision = max(decision_scores.keys(), key=lambda k: decision_scores[k])
             best_score = decision_scores[best_decision]
             
-            # Minimum threshold for action
-            min_threshold = 0.5
+            # Minimum threshold for action - ลดลงให้ออกไม้ไวขึ้น
+            min_threshold = 0.25  # ลดจาก 0.5 เป็น 0.25
             if best_score < min_threshold:
                 return None
             
