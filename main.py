@@ -56,7 +56,7 @@ class ModernAITradingGUI:
         self.account_info = {}
         
         # Modern Rule-based Components
-        self.mt5_connector = MT5Connector()
+        self.mt5_connector = MT5Connector()    
 
         self.rule_engine = None
         self.market_analyzer = None
@@ -287,7 +287,7 @@ class ModernAITradingGUI:
         mt5_select_frame.pack(fill='x', pady=(5, 0))
         
         # Label สำหรับ MT5 Selection
-        tk.Label(mt5_select_frame, text="🖥️ Select MT5:",
+        tk.Label(mt5_select_frame, text="🖥️ Select Running MT5:",
                 bg=self.card_color, fg=self.text_color,
                 font=('Arial', 10)).pack(anchor='w')
         
@@ -307,7 +307,7 @@ class ModernAITradingGUI:
         scan_frame = tk.Frame(mt5_select_frame, bg=self.card_color)
         scan_frame.pack(fill='x', pady=(0, 5))
         
-        self.scan_btn = tk.Button(scan_frame, text="🔍 Scan MT5",
+        self.scan_btn = tk.Button(scan_frame, text="🔍 Scan Running MT5",
                                  command=self.scan_mt5_installations,
                                  bg='#4A90E2', fg='white',
                                  font=('Arial', 9, 'bold'),
@@ -415,7 +415,7 @@ class ModernAITradingGUI:
             self.scan_btn.config(state='disabled', text="🔄 Scanning...")
             self.root.update()
             
-            installations = self.mt5_connector.find_all_mt5_installations()
+            installations = self.mt5_connector.find_running_mt5_installations()
             
             if not installations:
                 self.scan_status_label.config(text="❌ ไม่เจอ MT5", fg=self.error_color)

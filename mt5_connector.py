@@ -23,7 +23,7 @@ class MT5Installation:
     is_running: bool = False
     data_path: str = ""
 
-class MT5AutoConnector:
+class MT5Connector:
     """
     🔍  MT5 Multi-Installation Connector
     
@@ -51,194 +51,163 @@ class MT5AutoConnector:
             "XAUUSD_", "XAUUSD#", "XAUUSDpro", "GOLD.std"
         ]
         
-    def find_all_mt5_installations(self) -> List[MT5Installation]:
+    def find_running_mt5_installations(self) -> List[MT5Installation]:
         """
-        🔍 หา MT5 ทุกตัวในเครื่อง
-        Returns: List ของ MT5Installation objects
+        🔍 หา MT5 ที่กำลังรันอยู่เท่านั้น
+        Returns: List ของ MT5Installation objects ที่กำลังทำงาน
         """
         installations = []
-        found_paths = set()  # เพื่อป้องกัน duplicate
+        found_processes = {}
         
-        print("🔍 หา MT5 ทุกตัวในเครื่อง...")
+        print("🔍 หา MT5 ที่กำลังทำงานอยู่...")
         
-        # Method 1: Registry
-        installations.extend(self._scan_registry(found_paths))
+        try:
+            # หาจาก running processes เท่านั้น
+            for proc in psutil.process_iter(['pid', 'name', 'exe', 'cmdline']):
+                try:
+                    proc_info = proc.info
+                    if not proc_info['name']:
+                        continue
+                        
+                    # เช็คว่าเป็น MT5 หรือไม่
+                    if ('terminal64.exe' in proc_info['name'].lower() or 
+                        'terminal.exe' in proc_info['name'].lower()):
+                        
+                        exe_path = proc_info['exe']
+                        if exe_path and self._is_mt5_process(exe_path):
+                            
+                            # ป้องกัน duplicate processes
+                            if exe_path not in found_processes:
+                                
+                                # ตรวจจับ broker จาก path และ process info
+                                broker_name = self._detect_broker_from_process(proc_info)
+                                
+                                installation = MT5Installation(
+                                    path=exe_path,
+                                    broker=broker_name,
+                                    executable_type=os.path.basename(exe_path),
+                                    is_running=True
+                                )
+                                
+                                installations.append(installation)
+                                found_processes[exe_path] = installation
+                                
+                                print(f"   ✅ เจอ: {broker_name} ({installation.executable_type})")
+                                
+                except (psutil.NoSuchProcess, psutil.AccessDenied, TypeError):
+                    continue
+                    
+        except Exception as e:
+            print(f"❌ Process scan error: {e}")
         
-        # Method 2: Common directories
-        installations.extend(self._scan_common_paths(found_paths))
-        
-        # Method 3: Running processes
-        installations.extend(self._scan_running_processes(found_paths))
-        
-        # เพิ่มข้อมูลพื้นฐาน
-        for installation in installations:
-            installation.broker = self._detect_broker_name(installation.path)
-            
         self.available_installations = installations
         
         if installations:
-            print(f"✅ เจอ MT5 ทั้งหมด {len(installations)} ตัว")
+            print(f"✅ เจอ MT5 ที่ทำงานอยู่ {len(installations)} ตัว")
         else:
-            print("❌ ไม่เจอ MT5 เลย")
+            print("❌ ไม่เจอ MT5 ที่ทำงานอยู่")
+            print("💡 กรุณาเปิด MT5 ก่อน แล้วลอง Scan อีกครั้ง")
             
         return installations
     
-    def _scan_registry(self, found_paths: set) -> List[MT5Installation]:
-        """สแกน Registry หา MT5"""
-        installations = []
-        
-        registry_paths = [
-            (winreg.HKEY_CURRENT_USER, "SOFTWARE\\MetaQuotes\\Terminal"),
-            (winreg.HKEY_LOCAL_MACHINE, "SOFTWARE\\MetaQuotes\\Terminal"),
-            (winreg.HKEY_CURRENT_USER, "SOFTWARE\\WOW6432Node\\MetaQuotes\\Terminal"),
-            (winreg.HKEY_LOCAL_MACHINE, "SOFTWARE\\WOW6432Node\\MetaQuotes\\Terminal")
-        ]
-        
-        for root, base_path in registry_paths:
-            try:
-                with winreg.OpenKey(root, base_path) as terminal_key:
-                    i = 0
-                    while True:
-                        try:
-                            subkey_name = winreg.EnumKey(terminal_key, i)
-                            subkey_path = f"{base_path}\\{subkey_name}"
-                            
-                            with winreg.OpenKey(root, subkey_path) as installation_key:
-                                try:
-                                    data_path = winreg.QueryValueEx(installation_key, "DataPath")[0]
-                                    exe_dir = os.path.dirname(data_path)
-                                    
-                                    # หา executable
-                                    for exe_name in ["terminal64.exe", "terminal.exe"]:
-                                        exe_path = os.path.join(exe_dir, exe_name)
-                                        if os.path.exists(exe_path) and exe_path not in found_paths:
-                                            installation = MT5Installation(
-                                                path=exe_path,
-                                                data_path=data_path,
-                                                executable_type=exe_name
-                                            )
-                                            installations.append(installation)
-                                            found_paths.add(exe_path)
-                                            break
-                                except FileNotFoundError:
-                                    pass
-                                    
-                            i += 1
-                        except OSError:
-                            break
-                            
-            except FileNotFoundError:
-                continue
-                
-        return installations
-    
-    def _scan_common_paths(self, found_paths: set) -> List[MT5Installation]:
-        """สแกนโฟลเดอร์ทั่วไป"""
-        installations = []
-        
-        common_paths = [
-            # User directories
-            os.path.expanduser("~/AppData/Roaming/MetaQuotes/Terminal"),
-            
-            # Program Files
-            "C:/Program Files/MetaTrader 5",
-            "C:/Program Files (x86)/MetaTrader 5",
-            "C:/Program Files/MetaQuotes/MetaTrader 5", 
-            "C:/Program Files (x86)/MetaQuotes/MetaTrader 5",
-            
-            # Other common locations
-            "D:/MetaTrader 5",
-            "C:/MetaTrader5",
-            "D:/MetaTrader5"
-        ]
-        
-        for base_path in common_paths:
-            if os.path.exists(base_path):
-                # ลองในโฟลเดอร์หลัก
-                for exe_name in ["terminal64.exe", "terminal.exe"]:
-                    exe_path = os.path.join(base_path, exe_name)
-                    if os.path.exists(exe_path) and exe_path not in found_paths:
-                        installation = MT5Installation(
-                            path=exe_path,
-                            executable_type=exe_name
-                        )
-                        installations.append(installation)
-                        found_paths.add(exe_path)
-                
-                # ลองใน subdirectories (broker folders)
-                try:
-                    for item in os.listdir(base_path):
-                        item_path = os.path.join(base_path, item)
-                        if os.path.isdir(item_path):
-                            for exe_name in ["terminal64.exe", "terminal.exe"]:
-                                exe_path = os.path.join(item_path, exe_name)
-                                if os.path.exists(exe_path) and exe_path not in found_paths:
-                                    installation = MT5Installation(
-                                        path=exe_path,
-                                        executable_type=exe_name
-                                    )
-                                    installations.append(installation)
-                                    found_paths.add(exe_path)
-                except OSError:
-                    pass
-                    
-        return installations
-    
-    def _scan_running_processes(self, found_paths: set) -> List[MT5Installation]:
-        """สแกนจาก running processes"""
-        installations = []
-        
+    def _is_mt5_process(self, exe_path: str) -> bool:
+        """เช็คว่าเป็น MT5 process จริงหรือไม่"""
         try:
-            for proc in psutil.process_iter(['pid', 'name', 'exe']):
-                try:
-                    if proc.info['name'] and 'terminal' in proc.info['name'].lower():
-                        if proc.info['exe'] and proc.info['exe'] not in found_paths:
-                            # ตรวจสอบว่าเป็น MT5 จริงๆ
-                            if self._looks_like_mt5(proc.info['exe']):
-                                installation = MT5Installation(
-                                    path=proc.info['exe'],
-                                    is_running=True,
-                                    executable_type=os.path.basename(proc.info['exe'])
-                                )
-                                installations.append(installation)
-                                found_paths.add(proc.info['exe'])
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
-        except Exception:
-            pass
-            
-        return installations
-    
-    def _looks_like_mt5(self, exe_path: str) -> bool:
-        """เช็คคร่าวๆ ว่าน่าจะเป็น MT5"""
-        path_lower = exe_path.lower()
-        return ('metatrader' in path_lower or 
-                'terminal64' in path_lower or 
-                'terminal.exe' in path_lower)
-    
-    def _detect_broker_name(self, exe_path: str) -> str:
-        """ตรวจจับชื่อ broker จาก path"""
-        path_lower = exe_path.lower()
-        
-        # รายชื่อ broker ที่รู้จัก
-        known_brokers = {
-            'exness': 'Exness',
-            'icmarkets': 'IC Markets', 
-            'ic markets': 'IC Markets',
-            'pepperstone': 'Pepperstone',
-            'fxtm': 'FXTM',
-            'xm': 'XM',
-            'fxpro': 'FXPro',
-            'avatrade': 'AvaTrade',
-            'tickmill': 'Tickmill',
-            'admiral': 'Admiral Markets'
-        }
-        
-        for key, name in known_brokers.items():
-            if key in path_lower:
-                return name
+            if not exe_path:
+                return False
                 
-        return "Unknown"
+            path_lower = exe_path.lower()
+            
+            # เช็คชื่อไฟล์
+            if not ('terminal64.exe' in path_lower or 'terminal.exe' in path_lower):
+                return False
+                
+            # เช็คว่ามีไฟล์ที่เกี่ยวข้องกับ MT5 หรือไม่
+            exe_dir = os.path.dirname(exe_path)
+            
+            # ไฟล์ที่ MT5 ควรมี
+            mt5_files = [
+                'metatrader.exe', 'metaeditor64.exe', 'metaeditor.exe',
+                'terminal.ini', 'config', 'profiles'
+            ]
+            
+            has_mt5_files = any(
+                os.path.exists(os.path.join(exe_dir, f)) or 
+                os.path.exists(os.path.join(exe_dir, f.capitalize()))
+                for f in mt5_files
+            )
+            
+            return has_mt5_files
+            
+        except Exception:
+            return False
+    
+    def _detect_broker_from_process(self, proc_info: Dict) -> str:
+        """ตรวจจับ broker จาก process information"""
+        try:
+            exe_path = proc_info.get('exe', '')
+            cmdline = proc_info.get('cmdline', [])
+            
+            # ตรวจจับจาก path
+            path_lower = exe_path.lower() if exe_path else ''
+            
+            # รายชื่อ broker ที่รู้จัก
+            known_brokers = {
+                'exness': 'Exness',
+                'icmarkets': 'IC Markets', 
+                'ic markets': 'IC Markets',
+                'ic_markets': 'IC Markets',
+                'pepperstone': 'Pepperstone',
+                'fxtm': 'FXTM',
+                'forextime': 'FXTM',
+                'xm': 'XM',
+                'xmglobal': 'XM',
+                'fxpro': 'FXPro',
+                'avatrade': 'AvaTrade',
+                'tickmill': 'Tickmill',
+                'admiral': 'Admiral Markets',
+                'admiralmarkets': 'Admiral Markets',
+                'oanda': 'OANDA',
+                'forex.com': 'Forex.com',
+                'hotforex': 'HotForex',
+                'roboforex': 'RoboForex',
+                'alpari': 'Alpari',
+                'instaforex': 'InstaForex',
+                'fbs': 'FBS'
+            }
+            
+            # เช็คจาก path
+            for key, name in known_brokers.items():
+                if key in path_lower:
+                    return name
+            
+            # เช็คจาก command line arguments
+            if cmdline:
+                cmdline_str = ' '.join(cmdline).lower()
+                for key, name in known_brokers.items():
+                    if key in cmdline_str:
+                        return f"{name} (cmdline)"
+            
+            # เช็คจาก folder structure
+            if exe_path:
+                path_parts = exe_path.replace('\\', '/').split('/')
+                for part in path_parts:
+                    part_lower = part.lower()
+                    if part_lower and len(part_lower) > 3:  # ข้าม folder ชื่อสั้นๆ
+                        for key, name in known_brokers.items():
+                            if key in part_lower:
+                                return f"{name}"
+                
+                # ถ้ายังหาไม่เจอ ใช้ parent folder name
+                parent_folder = os.path.basename(os.path.dirname(exe_path))
+                if parent_folder and parent_folder.lower() not in ['metatrader 5', 'metatrader5', 'mt5', 'program files', 'program files (x86)']:
+                    return f"MT5 ({parent_folder})"
+            
+            return "MT5 (Unknown Broker)"
+            
+        except Exception as e:
+            print(f"Broker detection error: {e}")
+            return "MT5 (Detection Error)"
     
     def connect_to_installation(self, installation_index: int) -> bool:
         """
@@ -267,11 +236,12 @@ class MT5AutoConnector:
         """
         print("🔗 เริ่มการเชื่อมต่อ MT5...")
         
-        # หา MT5 ทั้งหมด
-        installations = self.find_all_mt5_installations()
+        # หา MT5 ที่ทำงานอยู่
+        installations = self.find_running_mt5_installations()
         
         if not installations:
-            print("❌ ไม่เจอ MT5 ในเครื่อง")
+            print("❌ ไม่เจอ MT5 ที่ทำงานอยู่")
+            print("💡 กรุณาเปิด MT5 ก่อน")
             return False
             
         # ถ้ามีตัวเดียว -> เชื่อมต่อเลย
@@ -282,10 +252,8 @@ class MT5AutoConnector:
         # ถ้ามีหลายตัว -> แสดงให้เลือก
         print(f"\n📋 เจอ MT5 ทั้งหมด {len(installations)} ตัว:")
         for i, inst in enumerate(installations):
-            status = "🟢 กำลังทำงาน" if inst.is_running else "⚫ หยุดทำงาน"
             exe_type = "64-bit" if "64" in inst.executable_type else "32-bit"
-            
-            print(f"  {i+1}. {inst.broker} ({exe_type}) - {status}")
+            print(f"  {i+1}. {inst.broker} ({exe_type}) - 🟢 กำลังทำงาน")
             print(f"     📁 {inst.path}")
             
         print(f"\n❓ กรุณาเลือก MT5 ที่ต้องการใช้ (1-{len(installations)}):")
@@ -299,11 +267,10 @@ class MT5AutoConnector:
             print(f"🔗 กำลังเชื่อมต่อ: {installation.broker}")
             print(f"📁 Path: {installation.path}")
             
-            # Start MT5 ถ้ายังไม่ทำงาน
+            # MT5 กำลังรันอยู่แล้ว ไม่ต้องสตาร์ท
             if not installation.is_running:
-                print(f"🚀 กำลังเริ่ม MT5...")
-                os.startfile(installation.path)
-                time.sleep(5)
+                print(f"⚠️ MT5 ไม่ได้ทำงานอยู่ - ข้ามไป")
+                return False
                 
             # Initialize MT5
             if not mt5.initialize():
@@ -426,6 +393,14 @@ class MT5AutoConnector:
             for i, inst in enumerate(self.available_installations)
         ]
     
+    def get_account_info(self) -> Dict:
+        """ดึงข้อมูล account ปัจจุบัน"""
+        return self.account_info.copy()
+    
+    def get_gold_symbol(self) -> Optional[str]:
+        """ดึงสัญลักษณ์ทองคำที่ตรวจจับได้"""
+        return self.gold_symbol
+    
     def disconnect(self):
         """ตัดการเชื่อมต่อ"""
         try:
@@ -449,21 +424,21 @@ def test_connector():
     print("🧪 ทดสอบ  MT5 Connector...")
     print("=" * 50)
     
-    connector = MT5AutoConnector()
+    connector = MT5Connector()
     
-    # Test 1: หา installations ทั้งหมด
-    installations = connector.find_all_mt5_installations()
+    # Test 1: หา installations ที่ทำงานอยู่
+    installations = connector.find_running_mt5_installations()
     
     if not installations:
-        print("❌ ไม่เจอ MT5")
+        print("❌ ไม่เจอ MT5 ที่ทำงานอยู่")
+        print("💡 กรุณาเปิด MT5 ก่อน")
         return
         
     # Test 2: แสดงรายการ
-    print(f"\n📊 รายการ MT5 ที่เจอ:")
+    print(f"\n📊 รายการ MT5 ที่ทำงานอยู่:")
     for i, inst in enumerate(installations):
-        status = "🟢" if inst.is_running else "⚫"
         exe_type = "64-bit" if "64" in inst.executable_type else "32-bit"
-        print(f"  {i}: {status} {inst.broker} ({exe_type})")
+        print(f"  {i}: 🟢 {inst.broker} ({exe_type})")
         print(f"     {inst.path}")
     
     # Test 3: ทดสอบการเชื่อมต่อกับตัวแรก
