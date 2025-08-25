@@ -1,8 +1,8 @@
 """
 🚀 Modern AI Gold Grid Trading GUI
-modern_gui.py
-GUI ใหม่สำหรับ Modern Rule-based Trading System
-เก็บ style เดิม + เพิ่ม Modern Architecture features
+main.py
+GUI สำหรับ Modern Rule-based Trading System - Production Ready
+** NO MOCK DATA - REAL DATA ONLY **
 """
 
 import tkinter as tk
@@ -13,20 +13,20 @@ import time
 from datetime import datetime
 import os
 
-# Import modern components
+# Import modern components - NO MOCK
 try:
     from mt5_connector import MT5Connector
     from rule_engine import ModernRuleEngine
-    from market_analyzer import MarketAnalyzer, MockMarketAnalyzer
-    from order_manager import OrderManager, MockOrderManager
-    from position_manager import PositionManager, MockPositionManager  
-    from spacing_manager import SpacingManager, MockSpacingManager
-    from lot_calculator import LotCalculator, MockLotCalculator
-    from performance_tracker import PerformanceTracker, MockPerformanceTracker
+    from market_analyzer import MarketAnalyzer
+    from order_manager import OrderManager
+    from position_manager import PositionManager  
+    from spacing_manager import SpacingManager
+    from lot_calculator import LotCalculator
+    from performance_tracker import PerformanceTracker
     from api_connector import BackendAPIConnector
 except ImportError as e:
-    print(f"⚠️ Import warning: {e}")
-    print("💡 Using mock components for testing")
+    print(f"⚠️ Import error: {e}")
+    print("💡 Please ensure all modules are available")
 
 class ModernRuleBasedTradingGUI:
     def __init__(self):
@@ -60,11 +60,11 @@ class ModernRuleBasedTradingGUI:
     def init_variables(self):
         """Initialize variables - Modern Architecture"""
         # Connection states
-        self.is_connected = True
-        self.is_trading = True
+        self.is_connected = False
+        self.is_trading = False
         self.account_info = {}
         
-        # Modern Rule-based Components (ใช้ Mock สำหรับ testing)
+        # Modern Rule-based Components - NO MOCK
         self.mt5_connector = None
         self.rule_engine = None
         self.market_analyzer = None
@@ -134,9 +134,8 @@ class ModernRuleBasedTradingGUI:
         """Default configuration"""
         return {
             "system": {
-                "mode": "TESTING",
-                "enable_real_trading": True,
-                "enable_mock_mode": False
+                "mode": "PRODUCTION",
+                "enable_real_trading": True
             },
             "trading": {
                 "symbol": "XAUUSD",
@@ -189,7 +188,7 @@ class ModernRuleBasedTradingGUI:
         }
         
     def create_gui(self):
-        """Create GUI - เก็บ layout เดิม + เพิ่ม Modern features"""
+        """Create GUI - เก็บ layout เดิม + Modern features"""
         # Main container
         main_frame = tk.Frame(self.root, bg=self.bg_color)
         main_frame.pack(fill='both', expand=True, padx=15, pady=15)
@@ -758,7 +757,7 @@ class ModernRuleBasedTradingGUI:
             self.rule_engine.set_trading_mode(mode)
     
     def initialize_rule_engine(self):
-        """Initialize the rule engine and components"""
+        """Initialize the rule engine and components - NO MOCK"""
         if not self.is_connected:
             self.show_message("Warning", "Please connect to MT5 first", "warning")
             return
@@ -766,68 +765,40 @@ class ModernRuleBasedTradingGUI:
         try:
             self.log("🧠 Initializing Modern Rule Engine...")
             
-            # Initialize components based on system mode
-            enable_mock = self.config.get("system", {}).get("enable_mock_mode", False)
+            # Initialize REAL components
+            if not self.mt5_connector:
+                self.log("❌ MT5 connector not available")
+                return
             
-            if enable_mock:
-                self.log("🧪 Using mock components for testing")
-                self.market_analyzer = MockMarketAnalyzer()
-                self.spacing_manager = MockSpacingManager()
-                self.lot_calculator = MockLotCalculator()
-                self.order_manager = MockOrderManager()
-                self.position_manager = MockPositionManager()
-                self.performance_tracker = MockPerformanceTracker()
-            else:
-                self.log("⚡ Using real components")
-                # Initialize real components (when ready)
-                pass
+            # Initialize market analyzer with REAL data
+            self.market_analyzer = MarketAnalyzer(self.mt5_connector, self.config)
             
-            # Initialize rule engine (Mock for now)
-            class MockRuleEngine:
-                def __init__(self):
-                    self.is_running = False
-                    self.mode = "BALANCED"
-                    
-                def set_trading_mode(self, mode):
-                    self.mode = mode
-                    print(f"🎯 Rule engine mode set to: {mode}")
-                    
-                def start(self):
-                    self.is_running = True
-                    print("🚀 Rule engine started")
-                    
-                def stop(self):
-                    self.is_running = False
-                    print("⏹️ Rule engine stopped")
-                    
-                def get_system_status(self):
-                    return {
-                        'rule_confidence': 0.75,
-                        'market_condition': 'TRENDING_UP',
-                        'portfolio_health': 0.85,
-                        'total_profit': 125.50,
-                        'active_positions': 3,
-                        'pending_orders': 2,
-                        'risk_level': 0.25,
-                        'last_action': 'BUY',
-                        'action_reason': 'Strong uptrend with oversold RSI',
-                        'survivability_usage': 0.15,
-                        'engine_running': self.is_running
-                    }
-                    
-                def get_overall_confidence(self):
-                    return 0.75
-                    
-                def get_rules_status(self):
-                    return {
-                        'trend_following': {'confidence': 0.8, 'weight': 0.3, 'active': True},
-                        'mean_reversion': {'confidence': 0.6, 'weight': 0.25, 'active': True},
-                        'support_resistance': {'confidence': 0.7, 'weight': 0.2, 'active': True},
-                        'volatility_breakout': {'confidence': 0.5, 'weight': 0.15, 'active': True},
-                        'portfolio_balance': {'confidence': 0.9, 'weight': 0.1, 'active': True}
-                    }
+            # Initialize spacing manager
+            self.spacing_manager = SpacingManager(self.config)
             
-            self.rule_engine = MockRuleEngine()
+            # Initialize lot calculator
+            self.lot_calculator = LotCalculator(self.account_info, self.config)
+            
+            # Initialize order manager
+            self.order_manager = OrderManager(
+                self.mt5_connector, self.spacing_manager, 
+                self.lot_calculator, self.config
+            )
+            
+            # Initialize position manager
+            self.position_manager = PositionManager(self.mt5_connector, self.config)
+            
+            # Initialize performance tracker
+            self.performance_tracker = PerformanceTracker(self.config)
+            
+            # Initialize rule engine with REAL components
+            self.rule_engine = ModernRuleEngine(
+                config=self.rules_config,
+                market_analyzer=self.market_analyzer,
+                order_manager=self.order_manager,
+                position_manager=self.position_manager,
+                performance_tracker=self.performance_tracker
+            )
             
             # Set initial mode
             self.rule_engine.set_trading_mode(self.trading_mode.get())
@@ -854,17 +825,27 @@ class ModernRuleBasedTradingGUI:
         try:
             self.log("🧮 Calculating AI trading parameters...")
             
-            # Mock parameter calculation
+            # Get REAL market data for parameter calculation
+            if self.market_analyzer:
+                market_data = self.market_analyzer.get_comprehensive_analysis()
+                
+                if market_data.get("error"):
+                    self.log(f"⚠️ Market analysis unavailable: {market_data['error']}")
+                    market_data = None
+            else:
+                market_data = None
+            
+            # Get account balance for calculations
             balance = self.account_info.get('balance', 10000)
             
             self.trading_params = {
-                'base_lot': 0.01,
-                'dynamic_spacing': 100,
-                'risk_level': 2.5,
-                'max_positions': min(20, int(balance / 1000) * 2),
+                'base_lot': self.config.get('trading', {}).get('base_lot_size', 0.01),
+                'dynamic_spacing': self.config.get('trading', {}).get('min_spacing_points', 100),
+                'risk_level': self.config.get('risk_management', {}).get('max_risk_percentage', 2.5),
+                'max_positions': min(20, max(5, int(balance / 2000) * 2)),
                 'survivability_points': int(balance * 15),
-                'market_condition': 'TRENDING_UP',
-                'volatility_factor': 1.2
+                'market_condition': market_data.get('condition', 'UNKNOWN') if market_data else 'UNKNOWN',
+                'volatility_factor': market_data.get('volatility_factor', 1.0) if market_data else 1.0
             }
             
             self.log("✅ Parameters calculated successfully")
@@ -881,7 +862,7 @@ class ModernRuleBasedTradingGUI:
             self.show_message("Error", f"Parameter calculation error: {e}", "error")
     
     def start_trading(self):
-        """Start AI trading"""
+        """Start AI trading - NO MOCK"""
         if not self.rule_engine or not hasattr(self, 'trading_params'):
             self.show_message("Warning", "Please complete initialization first", "warning")
             return
@@ -945,11 +926,14 @@ class ModernRuleBasedTradingGUI:
         self.update_display()
         
     def update_display(self):
-        """Update all display elements"""
+        """Update all display elements - NO MOCK DATA"""
         try:
             # Update system status if rule engine is active
             if self.rule_engine and self.is_trading:
-                self.system_status = self.rule_engine.get_system_status()
+                try:
+                    self.system_status = self.rule_engine.get_system_status()
+                except Exception as e:
+                    self.log(f"⚠️ Cannot get system status: {e}")
             
             # Update system monitor
             self.update_system_monitor()
@@ -967,7 +951,7 @@ class ModernRuleBasedTradingGUI:
             self.root.after(5000, self.update_display)
     
     def update_system_monitor(self):
-        """Update system monitor panel"""
+        """Update system monitor panel - NO MOCK DATA"""
         try:
             status = self.system_status
             
@@ -1011,17 +995,22 @@ class ModernRuleBasedTradingGUI:
             self.log(f"❌ System monitor update error: {e}")
     
     def update_rules_display(self):
-        """Update rules monitoring display"""
+        """Update rules monitoring display - NO MOCK DATA"""
         try:
             if not self.rule_engine:
                 return
                 
             # Overall confidence
-            confidence = self.rule_engine.get_overall_confidence() * 100
-            conf_color = (self.success_color if confidence > 70 else 
-                         self.warning_color if confidence > 40 else self.error_color)
-            self.confidence_label.config(text=f"📊 Overall Confidence: {confidence:.1f}%", 
-                                       fg=conf_color)
+            try:
+                confidence = self.rule_engine.get_overall_confidence() * 100
+                conf_color = (self.success_color if confidence > 70 else 
+                             self.warning_color if confidence > 40 else self.error_color)
+                self.confidence_label.config(text=f"📊 Overall Confidence: {confidence:.1f}%", 
+                                           fg=conf_color)
+            except Exception as e:
+                self.log(f"⚠️ Cannot get rule confidence: {e}")
+                self.confidence_label.config(text="📊 Overall Confidence: --% (unavailable)", 
+                                           fg='#888888')
             
             # Market condition
             market_condition = self.system_status.get('market_condition', 'UNKNOWN')
@@ -1038,20 +1027,26 @@ class ModernRuleBasedTradingGUI:
                                              fg=condition_color)
             
             # Individual rules
-            rules_status = self.rule_engine.get_rules_status()
-            self.rules_listbox.delete(0, tk.END)
-            
-            for rule_name, rule_data in rules_status.items():
-                confidence_pct = rule_data.get('confidence', 0) * 100
-                weight_pct = rule_data.get('weight', 0) * 100
-                active = "🟢" if rule_data.get('active', False) else "🔴"
+            try:
+                rules_status = self.rule_engine.get_rules_status()
+                self.rules_listbox.delete(0, tk.END)
                 
-                status_text = f"{active} {rule_name.replace('_', ' ').title()}"
-                detail_text = f"    Confidence: {confidence_pct:.0f}% | Weight: {weight_pct:.0f}%"
-                
-                self.rules_listbox.insert(tk.END, status_text)
-                self.rules_listbox.insert(tk.END, detail_text)
-                self.rules_listbox.insert(tk.END, "")  # Separator
+                for rule_name, rule_data in rules_status.items():
+                    confidence_pct = rule_data.get('confidence', 0) * 100
+                    weight_pct = rule_data.get('weight', 0) * 100
+                    active = "🟢" if rule_data.get('active', False) else "🔴"
+                    
+                    status_text = f"{active} {rule_name.replace('_', ' ').title()}"
+                    detail_text = f"    Confidence: {confidence_pct:.0f}% | Weight: {weight_pct:.0f}%"
+                    
+                    self.rules_listbox.insert(tk.END, status_text)
+                    self.rules_listbox.insert(tk.END, detail_text)
+                    self.rules_listbox.insert(tk.END, "")  # Separator
+                    
+            except Exception as e:
+                self.log(f"⚠️ Cannot get rules status: {e}")
+                self.rules_listbox.delete(0, tk.END)
+                self.rules_listbox.insert(tk.END, "Rules status unavailable")
             
             # Last decision
             last_action = self.system_status.get('last_action', 'NONE')
@@ -1160,6 +1155,7 @@ def main():
         print("✅ Intelligent Order Management") 
         print("✅ Dynamic Risk Management")
         print("✅ Multi-MT5 Support")
+        print("⚠️ NO MOCK DATA - PRODUCTION READY")
         print("=" * 60)
         
         # Create and run GUI

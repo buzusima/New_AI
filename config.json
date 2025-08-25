@@ -2,7 +2,6 @@
   "system": {
     "mode": "PRODUCTION",
     "enable_real_trading": true,
-    "enable_mock_mode": false,
     "debug_level": "INFO",
     "aggressive_mode": true
   },
