@@ -900,19 +900,41 @@ class ModernRuleBasedTradingGUI:
             self.show_message("Error", f"Trading start error: {e}", "error")
 
     def execute_rule_cycle(self):
-        """Execute one rule cycle (แทน threading)"""
+        """Execute one rule cycle with enhanced control"""
         try:
             if not self.is_trading or not self.rule_engine:
                 return
                 
+            # *** เพิ่ม Cycle Quality Control ***
+            
+            # Gate 1: เช็คเวลาผ่านมาแล้วไหม (อย่างน้อย 30 วินาที)
+            if hasattr(self, 'last_rule_execution'):
+                time_since_last = (datetime.now() - self.last_rule_execution).total_seconds()
+                if time_since_last < 30:
+                    print(f"⏰ Rule cycle too frequent - waiting {30 - time_since_last:.0f}s")
+                    if self.is_trading:
+                        self.root.after(5000, self.execute_rule_cycle)
+                    return
+            
+            self.last_rule_execution = datetime.now()
             self.log("🔄 Executing rule cycle...")
+            
+            # Gate 2: เช็ค Market Hours และ Quality
+            market_quality_ok = self._check_market_readiness()
+            if not market_quality_ok:
+                self.log("⏰ Market not ready for trading")
+                if self.is_trading:
+                    self.root.after(30000, self.execute_rule_cycle)  # รอ 30 วินาที
+                return
+            
+            # *** ดำเนินการปกติ ***
             
             # Get market and portfolio data
             try:
                 if self.market_analyzer:
                     market_data = self.market_analyzer.get_comprehensive_analysis()
                     self.rule_engine.last_market_data = market_data
-                    self.log(f"📊 Market data: {market_data.get('condition', 'UNKNOWN')}")
+                    self.log(f"📊 Market: {market_data.get('condition', 'UNKNOWN')}, Price: {market_data.get('current_price', 0):.2f}")
                 else:
                     self.log("⚠️ No market analyzer")
                     
@@ -923,7 +945,9 @@ class ModernRuleBasedTradingGUI:
                 if self.position_manager:
                     portfolio_data = self.position_manager.get_portfolio_status()
                     self.rule_engine.last_portfolio_data = portfolio_data
-                    self.log(f"💰 Portfolio: {portfolio_data.get('total_positions', 0)} positions")
+                    positions = portfolio_data.get('total_positions', 0)
+                    profit = portfolio_data.get('total_profit', 0)
+                    self.log(f"💰 Portfolio: {positions} positions, ${profit:.2f} profit")
                 else:
                     self.log("⚠️ No position manager")
                     
@@ -960,15 +984,71 @@ class ModernRuleBasedTradingGUI:
             except Exception as e:
                 self.log(f"⚠️ Performance update error: {e}")
             
-            # Schedule next cycle (แทน threading)
+            # Schedule next cycle (ปรับเวลาให้เหมาะสม)
+            next_cycle_delay = self._calculate_next_cycle_delay()
             if self.is_trading:
-                self.root.after(5000, self.execute_rule_cycle)  # ทุก 5 วินาที
+                self.root.after(next_cycle_delay, self.execute_rule_cycle)
                 
         except Exception as e:
             self.log(f"❌ Rule cycle error: {e}")
-            # ยัง schedule ต่อไปแม้มี error
             if self.is_trading:
-                self.root.after(10000, self.execute_rule_cycle)  # รอนานกว่าเมื่อมี error
+                self.root.after(30000, self.execute_rule_cycle)  # รอนานกว่าเมื่อมี error
+
+    def _check_market_readiness(self) -> bool:
+        """เช็คว่าตลาดพร้อมสำหรับการเทรดหรือไม่"""
+        try:
+            # เช็คเวลาตลาด (ไม่เทรดช่วงเศรษฐกิจ)
+            now = datetime.now()
+            hour = now.hour
+            
+            # หลีกเลี่ยงช่วงตลาดปิด (weekend และช่วงข่าว)
+            if now.weekday() >= 5:  # วันเสาร์-อาทิตย์
+                return False
+            
+            if 22 <= hour or hour <= 1:  # ช่วงตลาดปิดหลัก
+                return False
+            
+            # เช็ค volatility และ spread
+            if hasattr(self, 'market_analyzer') and self.market_analyzer:
+                try:
+                    analysis = self.market_analyzer.get_comprehensive_analysis()
+                    spread = analysis.get("spread", 0)
+                    volatility = analysis.get("volatility_factor", 0)
+                    
+                    # ไม่เทรดถ้า spread กว้างหรือ volatility สูงเกินไป
+                    if spread > 0.8 or volatility > 3.0:
+                        return False
+                        
+                except:
+                    pass
+            
+            return True
+            
+        except Exception as e:
+            return True  # Default to allow trading
+
+    def _calculate_next_cycle_delay(self) -> int:
+        """คำนวณเวลาสำหรับ cycle ถัดไป"""
+        try:
+            # เช็คกิจกรรมล่าสุด
+            recent_orders = 0
+            if hasattr(self, 'order_manager') and self.order_manager:
+                # นับออเดอร์ในช่วง 5 นาทีที่ผ่านมา
+                recent_orders = len([
+                    order for order in self.order_manager.order_history
+                    if (datetime.now() - order.get("timestamp", datetime.min)).total_seconds() < 300
+                ])
+            
+            # ปรับเวลาตาม activity
+            if recent_orders >= 3:
+                return 60000  # 1 นาที (ถ้ามี activity เยอะ)
+            elif recent_orders >= 1:
+                return 30000  # 30 วินาที (ถ้ามี activity ปานกลาง)
+            else:
+                return 15000  # 15 วินาที (ถ้าไม่มี activity)
+                
+        except Exception as e:
+            return 20000  # Default 20 วินาที
 
     def stop_trading(self):
         """Stop AI trading - แบบใหม่"""
@@ -995,7 +1075,7 @@ class ModernRuleBasedTradingGUI:
             
         except Exception as e:
             self.log(f"❌ Stop error: {e}")
-
+            
     # === GUI Update Methods ===
     
     def start_gui_updates(self):

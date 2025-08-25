@@ -347,175 +347,207 @@ class ModernRuleEngine:
             return None
 
     def _rule_grid_expansion(self, config: Dict, weight: float) -> Optional[RuleResult]:
-        """Enhanced Grid Expansion Rule with Order Cooldown & Price Collision Prevention"""
+        """🧠 Systematic Grid Expansion - มีแผนการวางกริดที่ชัดเจน"""
         try:
-            print("🔍 GRID RULE CALLED!")
+            print("🔍 SYSTEMATIC GRID ANALYSIS...")
             
-            # *** เพิ่ม Order Cooldown ***
-            if not hasattr(self, 'last_grid_order_time'):
-                self.last_grid_order_time = {}
+            # Get current market price
+            current_price = self.last_market_data.get("current_price", 0)
+            if current_price == 0:
+                print("❌ No current price available")
+                return None
             
-            now = datetime.now()
-            min_order_interval = timedelta(seconds=15)  # ห้ามวางเร็วกว่า 15 วินาที
+            # *** ดึง point_value จาก Order Manager ***
+            point_value = 0.01
+            if self.order_manager and hasattr(self.order_manager, 'point_value'):
+                point_value = self.order_manager.point_value
             
-            # เช็ค cooldown สำหรับ BUY
-            last_buy_time = self.last_grid_order_time.get("BUY", datetime.min)
-            can_place_buy = (now - last_buy_time) >= min_order_interval
+            # *** Configuration ***
+            base_spacing = config["parameters"].get("min_spacing_points", 100)
+            max_grid_per_side = config["parameters"].get("initial_grid_per_side", 5)
+            spacing_value = base_spacing * point_value
             
-            # เช็ค cooldown สำหรับ SELL  
-            last_sell_time = self.last_grid_order_time.get("SELL", datetime.min)
-            can_place_sell = (now - last_sell_time) >= min_order_interval
+            # *** วิเคราะห์กริดปัจจุบัน ***
+            grid_analysis = self._analyze_current_grid(current_price, spacing_value)
             
-            print(f"⏰ Order Cooldown Status:")
-            print(f"   Can place BUY: {can_place_buy} (last: {(now - last_buy_time).total_seconds():.0f}s ago)")
-            print(f"   Can place SELL: {can_place_sell} (last: {(now - last_sell_time).total_seconds():.0f}s ago)")
+            print(f"📊 Grid Analysis:")
+            print(f"   Current price: {current_price:.2f}")
+            print(f"   BUY side: {grid_analysis['buy_orders']}/{max_grid_per_side} orders")
+            print(f"   SELL side: {grid_analysis['sell_orders']}/{max_grid_per_side} orders")
+            print(f"   Next BUY slot: {grid_analysis['next_buy_price']:.2f}" if grid_analysis['next_buy_price'] else "   Next BUY slot: None")
+            print(f"   Next SELL slot: {grid_analysis['next_sell_price']:.2f}" if grid_analysis['next_sell_price'] else "   Next SELL slot: None")
             
-            portfolio_data = self.last_portfolio_data
-            current_positions = portfolio_data.get("total_positions", 0)
-            buy_positions = portfolio_data.get("buy_positions", 0) 
-            sell_positions = portfolio_data.get("sell_positions", 0)
+            # *** ตัดสินใจแบบมีระบบ ***
             
-            # ดึงข้อมูล pending orders จาก order_manager
-            pending_orders_count = 0
-            pending_buy_orders = 0
-            pending_sell_orders = 0
-            
-            if self.order_manager:
-                try:
-                    pending_orders = self.order_manager.get_pending_orders()
-                    pending_orders_count = len(pending_orders)
-                    
-                    for order in pending_orders:
-                        if "BUY" in order.get("type", ""):
-                            pending_buy_orders += 1
-                        elif "SELL" in order.get("type", ""):
-                            pending_sell_orders += 1
-                except:
-                    pending_orders_count = 0
-            
-            # รวม positions + pending orders
-            total_buy_exposure = buy_positions + pending_buy_orders
-            total_sell_exposure = sell_positions + pending_sell_orders
-            total_exposure = current_positions + pending_orders_count
-            
-            # Configuration
-            initial_grid_per_side = config["parameters"].get("initial_grid_per_side", 5)
-            max_positions = config["parameters"].get("grid_levels", 10)
-            auto_place = config["parameters"].get("auto_place_orders", True)
-            
-            print(f"📊 Portfolio State:")
-            print(f"   Positions: {current_positions} (BUY: {buy_positions}, SELL: {sell_positions})")
-            print(f"   Pending: {pending_orders_count} (BUY: {pending_buy_orders}, SELL: {pending_sell_orders})")
-            print(f"   Total exposure: {total_exposure}")
-            print(f"   Target per side: {initial_grid_per_side}")
-            
-            confidence = 0.0
-            decision = TradingDecision.WAIT
-            reasoning = "Grid expansion analysis"
-            
-            # === PHASE 1: INITIAL GRID SETUP (ฝั่งละ 5 ไม้) ===
-            if total_exposure < (initial_grid_per_side * 2):
-                
-                # ตรวจสอบว่าต้องวางฝั่งไหน (พร้อม cooldown check)
-                need_buy_orders = max(0, initial_grid_per_side - total_buy_exposure)
-                need_sell_orders = max(0, initial_grid_per_side - total_sell_exposure)
-                
-                print(f"🏗️ INITIAL GRID PHASE:")
-                print(f"   Need BUY orders: {need_buy_orders} (cooldown ok: {can_place_buy})")
-                print(f"   Need SELL orders: {need_sell_orders} (cooldown ok: {can_place_sell})")
-                
-                # *** วาง BUY ก่อน ถ้าผ่าน cooldown ***
-                if need_buy_orders > 0 and can_place_buy:
-                    decision = TradingDecision.BUY
-                    confidence = 0.95
-                    reasoning = f"🏗️ INITIAL GRID: Creating BUY grid ({total_buy_exposure}/{initial_grid_per_side}) - Priority setup"
-                    
-                    # บันทึกเวลาที่วาง BUY
-                    self.last_grid_order_time["BUY"] = now
-                    
-                # *** แล้วค่อยวาง SELL ถ้า BUY ครบแล้ว และผ่าน cooldown ***
-                elif need_sell_orders > 0 and can_place_sell:
-                    decision = TradingDecision.SELL  
-                    confidence = 0.95
-                    reasoning = f"🏗️ INITIAL GRID: Creating SELL grid ({total_sell_exposure}/{initial_grid_per_side}) - Priority setup"
-                    
-                    # บันทึกเวลาที่วาง SELL
-                    self.last_grid_order_time["SELL"] = now
-                    
-                else:
-                    # *** รอ cooldown หรือเสร็จแล้ว ***
-                    if need_buy_orders > 0 or need_sell_orders > 0:
-                        remaining_cooldown = min_order_interval.total_seconds() - min(
-                            (now - last_buy_time).total_seconds() if need_buy_orders > 0 else 999,
-                            (now - last_sell_time).total_seconds() if need_sell_orders > 0 else 999
-                        )
-                        reasoning = f"⏰ COOLDOWN: Waiting {remaining_cooldown:.0f}s before next order"
-                        print(reasoning)
-                    else:
-                        print("✅ Initial grid complete! Switching to normal operation...")
-                        reasoning = "✅ Initial grid setup completed - Ready for rule-based operation"
-            
-            # === PHASE 2: NORMAL GRID EXPANSION ===
-            else:
-                print("🔄 NORMAL GRID PHASE:")
-                
-                if total_exposure < max_positions and auto_place:
-                    portfolio_balance = total_buy_exposure / max(total_exposure, 1)
-                    
-                    print(f"   Portfolio balance: {portfolio_balance:.2f}")
-                    
-                    # *** เช็ค cooldown ก่อนวาง ***
-                    if portfolio_balance > 0.7 and can_place_sell:  # BUY มากเกินไป
-                        decision = TradingDecision.SELL
-                        confidence = 0.60 + (portfolio_balance - 0.7) * 1.0
-                        reasoning = f"📊 GRID BALANCE: Too many BUY ({portfolio_balance:.1%}) - Adding SELL"
-                        self.last_grid_order_time["SELL"] = now
-                        
-                    elif portfolio_balance < 0.3 and can_place_buy:  # SELL มากเกินไป
-                        decision = TradingDecision.BUY
-                        confidence = 0.60 + (0.3 - portfolio_balance) * 1.0
-                        reasoning = f"📊 GRID BALANCE: Too many SELL ({portfolio_balance:.1%}) - Adding BUY"
-                        self.last_grid_order_time["BUY"] = now
-                        
-                    else:
-                        # สมดุลแล้ว หรือยัง cooldown
-                        if portfolio_balance >= 0.3 and portfolio_balance <= 0.7:
-                            reasoning = "⚖️ GRID BALANCED: Portfolio in good balance"
-                        else:
-                            reasoning = f"⏰ COOLDOWN: Need to wait before rebalancing"
-            
-            print(f"🎯 Grid Decision: {decision.value}, Confidence: {confidence:.1%}")
-            print(f"💭 Reasoning: {reasoning}")
-            
-            # Check confidence threshold
-            threshold = config.get("confidence_threshold", 0.05)
-            if confidence >= threshold:
+            # Priority 1: สร้างกริดพื้นฐาน (ฝั่งละ 3 ไม้ก่อน)
+            if grid_analysis['buy_orders'] < 3 and grid_analysis['next_buy_price']:
                 return RuleResult(
                     rule_name="grid_expansion",
-                    decision=decision,
-                    confidence=confidence,
-                    reasoning=reasoning,
+                    decision=TradingDecision.BUY,
+                    confidence=0.85,
+                    reasoning=f"🏗️ SYSTEMATIC GRID: Build BUY foundation ({grid_analysis['buy_orders']}/3)",
                     supporting_data={
-                        "current_positions": current_positions,
-                        "pending_orders": pending_orders_count,
-                        "total_buy_exposure": total_buy_exposure,
-                        "total_sell_exposure": total_sell_exposure,
-                        "initial_grid_per_side": initial_grid_per_side,
-                        "max_positions": max_positions,
-                        "phase": "INITIAL" if total_exposure < (initial_grid_per_side * 2) else "NORMAL",
-                        "cooldown_active": not (can_place_buy and can_place_sell),
-                        "auto_place": auto_place
+                        "target_price": grid_analysis['next_buy_price'],
+                        "grid_phase": "FOUNDATION",
+                        "direction": "BUY",
+                        "grid_position": grid_analysis['buy_orders'] + 1
                     },
                     weight=weight
                 )
-            else:
-                print(f"❌ Grid confidence {confidence:.1%} below threshold {threshold:.1%}")
-                return None
+            
+            if grid_analysis['sell_orders'] < 3 and grid_analysis['next_sell_price']:
+                return RuleResult(
+                    rule_name="grid_expansion",
+                    decision=TradingDecision.SELL,
+                    confidence=0.85,
+                    reasoning=f"🏗️ SYSTEMATIC GRID: Build SELL foundation ({grid_analysis['sell_orders']}/3)",
+                    supporting_data={
+                        "target_price": grid_analysis['next_sell_price'],
+                        "grid_phase": "FOUNDATION",
+                        "direction": "SELL",
+                        "grid_position": grid_analysis['sell_orders'] + 1
+                    },
+                    weight=weight
+                )
+            
+            # Priority 2: ขยายกริดแบบสมดุล (หลังจากมีพื้นฐานแล้ว)
+            if grid_analysis['buy_orders'] >= 3 and grid_analysis['sell_orders'] >= 3:
                 
-        except Exception as e:
-            print(f"❌ Grid expansion rule error: {e}")
+                # เช็คความสมดุล
+                total_orders = grid_analysis['buy_orders'] + grid_analysis['sell_orders']
+                buy_ratio = grid_analysis['buy_orders'] / total_orders
+                
+                print(f"⚖️ Grid Balance Analysis:")
+                print(f"   BUY ratio: {buy_ratio:.1%}")
+                print(f"   Total orders: {total_orders}")
+                
+                # มี BUY น้อยเกินไป
+                if buy_ratio < 0.4 and grid_analysis['buy_orders'] < max_grid_per_side and grid_analysis['next_buy_price']:
+                    return RuleResult(
+                        rule_name="grid_expansion",
+                        decision=TradingDecision.BUY,
+                        confidence=0.65,
+                        reasoning=f"⚖️ BALANCE GRID: Rebalance BUY side ({buy_ratio:.1%} ratio)",
+                        supporting_data={
+                            "target_price": grid_analysis['next_buy_price'],
+                            "grid_phase": "BALANCE",
+                            "direction": "BUY"
+                        },
+                        weight=weight
+                    )
+                
+                # มี SELL น้อยเกินไป
+                elif buy_ratio > 0.6 and grid_analysis['sell_orders'] < max_grid_per_side and grid_analysis['next_sell_price']:
+                    return RuleResult(
+                        rule_name="grid_expansion",
+                        decision=TradingDecision.SELL,
+                        confidence=0.65,
+                        reasoning=f"⚖️ BALANCE GRID: Rebalance SELL side ({buy_ratio:.1%} ratio)",
+                        supporting_data={
+                            "target_price": grid_analysis['next_sell_price'],
+                            "grid_phase": "BALANCE",
+                            "direction": "SELL"
+                        },
+                        weight=weight
+                    )
+            
+            # Priority 3: กริดเต็มหรือไม่มีช่องว่าง
+            print("✅ GRID COMPLETE: Systematic grid is complete or no suitable slots")
             return None
+            
+        except Exception as e:
+            print(f"❌ Systematic grid expansion error: {e}")
+            return None
+
+    def _analyze_current_grid(self, current_price: float, spacing: float) -> Dict:
+        """วิเคราะห์สถานะกริดปัจจุบันอย่างเป็นระบบ"""
+        try:
+            # *** ดึงข้อมูลจริงจาก MT5 ***
+            positions = []
+            pending_orders = []
+            
+            if self.position_manager:
+                self.position_manager.update_positions()
+                positions = list(self.position_manager.active_positions.values())
+            
+            if self.order_manager:
+                pending_orders = self.order_manager.get_pending_orders()
+            
+            # *** สร้าง Grid Map ***
+            buy_levels = set()
+            sell_levels = set()
+            
+            # จาก positions
+            for pos in positions:
+                price = pos.open_price
+                if pos.type.value == "BUY":
+                    buy_levels.add(round(price, 2))
+                elif pos.type.value == "SELL":
+                    sell_levels.add(round(price, 2))
+            
+            # จาก pending orders
+            for order in pending_orders:
+                order_type = order.get("type", "")
+                price = round(order.get("price", 0), 2)
+                if price > 0:
+                    if "BUY" in order_type:
+                        buy_levels.add(price)
+                    elif "SELL" in order_type:
+                        sell_levels.add(price)
+            
+            # *** คำนวณ Grid Slots ที่ควรมี ***
+            expected_buy_levels = set()
+            expected_sell_levels = set()
+            
+            # สร้าง grid slots อย่างเป็นระบบ
+            for i in range(1, 6):  # 5 levels ต่อฝั่ง
+                buy_price = round(current_price - (spacing * i), 2)
+                sell_price = round(current_price + (spacing * i), 2)
                 
+                expected_buy_levels.add(buy_price)
+                expected_sell_levels.add(sell_price)
+            
+            # *** หา slots ที่ยังว่าง ***
+            missing_buy_slots = expected_buy_levels - buy_levels
+            missing_sell_slots = expected_sell_levels - sell_levels
+            
+            # เลือก slot ถัดไปที่ใกล้ current price ที่สุด
+            next_buy_price = None
+            next_sell_price = None
+            
+            if missing_buy_slots:
+                next_buy_price = max(missing_buy_slots)  # เลือกที่ใกล้ current price ที่สุด
+            
+            if missing_sell_slots:
+                next_sell_price = min(missing_sell_slots)  # เลือกที่ใกล้ current price ที่สุด
+            
+            print(f"🗺️ Grid Map:")
+            print(f"   Expected BUY levels: {sorted(expected_buy_levels, reverse=True)}")
+            print(f"   Occupied BUY levels: {sorted(buy_levels, reverse=True)}")
+            print(f"   Missing BUY slots: {sorted(missing_buy_slots, reverse=True)}")
+            print(f"   Expected SELL levels: {sorted(expected_sell_levels)}")
+            print(f"   Occupied SELL levels: {sorted(sell_levels)}")
+            print(f"   Missing SELL slots: {sorted(missing_sell_slots)}")
+            
+            return {
+                "buy_orders": len(buy_levels),
+                "sell_orders": len(sell_levels),
+                "next_buy_price": next_buy_price,
+                "next_sell_price": next_sell_price,
+                "buy_levels": sorted(buy_levels, reverse=True),
+                "sell_levels": sorted(sell_levels),
+                "missing_buy_slots": len(missing_buy_slots),
+                "missing_sell_slots": len(missing_sell_slots),
+                "grid_completeness": (len(buy_levels) + len(sell_levels)) / 10  # 10 = 5+5 เป้าหมาย
+            }
+            
+        except Exception as e:
+            print(f"❌ Grid analysis error: {e}")
+            return {
+                "buy_orders": 0, "sell_orders": 0,
+                "next_buy_price": None, "next_sell_price": None
+            }
+                        
     def _rule_trend_following(self, config: Dict, weight: float) -> Optional[RuleResult]:
         """Trend Following Rule"""
         try:
@@ -1038,25 +1070,36 @@ class ModernRuleEngine:
             return None
         
     def _execute_trading_decision(self, decision_result: RuleResult):
-        """Execute the trading decision"""
+        """Execute the trading decision with target price from rule"""
         try:
             decision = decision_result.decision
             confidence = decision_result.confidence
             reasoning = decision_result.reasoning
+            supporting_data = decision_result.supporting_data  # ← เพิ่มตรงนี้
             
             print(f"🎯 Executing decision: {decision.value} (confidence: {confidence:.1%})")
             print(f"💭 Reasoning: {reasoning}")
+            
+            # *** เตรียม market_data ที่มี target_price ***
+            enhanced_market_data = self.last_market_data.copy() if self.last_market_data else {}
+            
+            # เพิ่ม target_price จาก rule ใน market_data
+            if "target_price" in supporting_data:
+                enhanced_market_data["target_price"] = supporting_data["target_price"]
+                print(f"🎯 Using rule target price: {supporting_data['target_price']:.5f}")
             
             # Execute based on decision type
             if decision == TradingDecision.BUY:
                 success = self.order_manager.place_smart_buy_order(
                     confidence=confidence,
-                    reasoning=reasoning
+                    reasoning=reasoning,
+                    market_data=enhanced_market_data  # ← ส่ง market_data ที่มี target_price
                 )
             elif decision == TradingDecision.SELL:
                 success = self.order_manager.place_smart_sell_order(
                     confidence=confidence,
-                    reasoning=reasoning
+                    reasoning=reasoning,
+                    market_data=enhanced_market_data  # ← ส่ง market_data ที่มี target_price
                 )
             elif decision == TradingDecision.CLOSE_PROFITABLE:
                 success = self.position_manager.close_profitable_positions(
@@ -1078,11 +1121,12 @@ class ModernRuleEngine:
             self.last_decision_time = datetime.now()
             
             # Track execution
-            self.performance_tracker.track_decision(decision_result, success)
+            if hasattr(self, 'performance_tracker') and self.performance_tracker:
+                self.performance_tracker.track_decision(decision_result, success)
             
         except Exception as e:
             print(f"❌ Decision execution error: {e}")
-    
+
     def _update_rule_performances(self):
         """Update rule performance metrics"""
         try:

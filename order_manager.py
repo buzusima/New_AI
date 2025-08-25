@@ -345,7 +345,7 @@ class OrderManager:
             return False
     
     def _calculate_smart_buy_parameters(self, confidence: float, market_data: Dict, 
-                                      reasoning: str) -> Optional[Dict]:
+                                    reasoning: str) -> Optional[Dict]:
         """Calculate smart parameters for BUY order using REAL market data"""
         try:
             current_price = market_data.get("current_price", 0)
@@ -363,42 +363,56 @@ class OrderManager:
                 order_type="BUY"
             ) if self.lot_calculator else self.smart_params.base_lot_size
             
-            # Calculate price based on REAL market conditions
-            volatility_factor = market_data.get("volatility_factor", 1.0)
-            trend_strength = market_data.get("trend_strength", 0.0)
+            # *** เช็คว่า Rule ส่งราคาเป้าหมายมาหรือไม่ ***
+            rule_target_price = market_data.get("target_price")
             
-            # Dynamic spacing based on REAL market conditions
-            spacing = self.spacing_manager.get_current_spacing(
-                volatility_factor=volatility_factor,
-                trend_strength=trend_strength,
-                direction="BUY"
-            ) if self.spacing_manager else self.smart_params.current_spacing
-            
-            # Price calculation varies by reason using REAL data
-            if reason == OrderReason.SUPPORT_RESISTANCE:
-                # Place near support level from REAL data
-                support_levels = market_data.get("support_levels", [])
-                if support_levels:
-                    target_price = min([level["level"] for level in support_levels], 
-                                     key=lambda x: abs(x - current_price))
-                else:
-                    target_price = current_price - (spacing * self.point_value)
-            elif reason == OrderReason.MEAN_REVERSION:
-                # Place below current price expecting reversion
-                deviation = market_data.get("price_deviation_from_mean", 0)
-                adjustment = abs(deviation) * 10 * self.point_value if deviation < 0 else spacing * self.point_value
-                target_price = current_price - adjustment
+            if rule_target_price:
+                # ใช้ราคาจาก Rule Engine (ที่หาช่องว่างแล้ว)
+                target_price = rule_target_price
+                print(f"🎯 Using rule target price: {target_price:.5f}")
+                
             else:
-                # Standard grid placement
-                target_price = current_price - (spacing * self.point_value)
+                # คำนวณราคาแบบเดิม
+                volatility_factor = market_data.get("volatility_factor", 1.0)
+                trend_strength = market_data.get("trend_strength", 0.0)
+                
+                # Dynamic spacing based on REAL market conditions
+                spacing = self.spacing_manager.get_current_spacing(
+                    volatility_factor=volatility_factor,
+                    trend_strength=trend_strength,
+                    direction="BUY"
+                ) if self.spacing_manager else self.smart_params.current_spacing
+                
+                # Price calculation varies by reason using REAL data
+                if reason == OrderReason.SUPPORT_RESISTANCE:
+                    # Place near support level from REAL data
+                    support_levels = market_data.get("support_levels", [])
+                    if support_levels:
+                        target_price = min([level["level"] for level in support_levels], 
+                                            key=lambda x: abs(x - current_price))
+                    else:
+                        target_price = current_price - (spacing * self.point_value)
+                elif reason == OrderReason.MEAN_REVERSION:
+                    # Place below current price expecting reversion
+                    deviation = market_data.get("price_deviation_from_mean", 0)
+                    adjustment = abs(deviation) * 10 * self.point_value if deviation < 0 else spacing * self.point_value
+                    target_price = current_price - adjustment
+                else:
+                    # Standard grid placement
+                    target_price = current_price - (spacing * self.point_value)
+                
+                # Ensure minimum distance
+                min_distance = self.config.get("trading", {}).get("min_spacing_points", 50) * self.point_value
+                if abs(target_price - current_price) < min_distance:
+                    target_price = current_price - min_distance
             
-            # Ensure minimum distance
-            min_distance = self.config.get("trading", {}).get("min_spacing_points", 50) * self.point_value
-            if abs(target_price - current_price) < min_distance:
-                target_price = current_price - min_distance
+            # *** เช็ค collision (ไม่ว่าราคามาจากไหน) ***
+            safe_price = self._avoid_order_collisions(target_price, "BUY")
+            if safe_price is None:
+                self.log("❌ Price collision detected - skipping BUY order")
+                return None
             
-            # Check for collisions with existing REAL orders
-            target_price = self._avoid_order_collisions(target_price, "BUY")
+            target_price = safe_price
             
             # Validate price
             if target_price <= 0:
@@ -415,15 +429,15 @@ class OrderManager:
                 "sl": sl_price,
                 "tp": tp_price,
                 "reason": reason,
-                "slippage": min(20, int(volatility_factor * 10))
+                "slippage": min(20, int(market_data.get("volatility_factor", 1.0) * 10))
             }
             
         except Exception as e:
             self.log(f"❌ Smart buy parameters error: {e}")
             return None
-    
+       
     def _calculate_smart_sell_parameters(self, confidence: float, market_data: Dict, 
-                                       reasoning: str) -> Optional[Dict]:
+                                    reasoning: str) -> Optional[Dict]:
         """Calculate smart parameters for SELL order using REAL market data"""
         try:
             current_price = market_data.get("current_price", 0)
@@ -441,42 +455,56 @@ class OrderManager:
                 order_type="SELL"
             ) if self.lot_calculator else self.smart_params.base_lot_size
             
-            # Calculate price based on REAL market conditions
-            volatility_factor = market_data.get("volatility_factor", 1.0)
-            trend_strength = market_data.get("trend_strength", 0.0)
+            # *** เช็คว่า Rule ส่งราคาเป้าหมายมาหรือไม่ ***
+            rule_target_price = market_data.get("target_price")
             
-            # Dynamic spacing based on REAL market conditions
-            spacing = self.spacing_manager.get_current_spacing(
-                volatility_factor=volatility_factor,
-                trend_strength=trend_strength,
-                direction="SELL"
-            ) if self.spacing_manager else self.smart_params.current_spacing
-            
-            # Price calculation varies by reason using REAL data
-            if reason == OrderReason.SUPPORT_RESISTANCE:
-                # Place near resistance level from REAL data
-                resistance_levels = market_data.get("resistance_levels", [])
-                if resistance_levels:
-                    target_price = min([level["level"] for level in resistance_levels], 
-                                     key=lambda x: abs(x - current_price))
-                else:
-                    target_price = current_price + (spacing * self.point_value)
-            elif reason == OrderReason.MEAN_REVERSION:
-                # Place above current price expecting reversion
-                deviation = market_data.get("price_deviation_from_mean", 0)
-                adjustment = abs(deviation) * 10 * self.point_value if deviation > 0 else spacing * self.point_value
-                target_price = current_price + adjustment
+            if rule_target_price:
+                # ใช้ราคาจาก Rule Engine (ที่หาช่องว่างแล้ว)
+                target_price = rule_target_price
+                print(f"🎯 Using rule target price: {target_price:.5f}")
+                
             else:
-                # Standard grid placement
-                target_price = current_price + (spacing * self.point_value)
+                # คำนวณราคาแบบเดิม
+                volatility_factor = market_data.get("volatility_factor", 1.0)
+                trend_strength = market_data.get("trend_strength", 0.0)
+                
+                # Dynamic spacing based on REAL market conditions
+                spacing = self.spacing_manager.get_current_spacing(
+                    volatility_factor=volatility_factor,
+                    trend_strength=trend_strength,
+                    direction="SELL"
+                ) if self.spacing_manager else self.smart_params.current_spacing
+                
+                # Price calculation varies by reason using REAL data
+                if reason == OrderReason.SUPPORT_RESISTANCE:
+                    # Place near resistance level from REAL data
+                    resistance_levels = market_data.get("resistance_levels", [])
+                    if resistance_levels:
+                        target_price = min([level["level"] for level in resistance_levels], 
+                                        key=lambda x: abs(x - current_price))
+                    else:
+                        target_price = current_price + (spacing * self.point_value)
+                elif reason == OrderReason.MEAN_REVERSION:
+                    # Place above current price expecting reversion
+                    deviation = market_data.get("price_deviation_from_mean", 0)
+                    adjustment = abs(deviation) * 10 * self.point_value if deviation > 0 else spacing * self.point_value
+                    target_price = current_price + adjustment
+                else:
+                    # Standard grid placement
+                    target_price = current_price + (spacing * self.point_value)
+                
+                # Ensure minimum distance
+                min_distance = self.config.get("trading", {}).get("min_spacing_points", 50) * self.point_value
+                if abs(target_price - current_price) < min_distance:
+                    target_price = current_price + min_distance
             
-            # Ensure minimum distance
-            min_distance = self.config.get("trading", {}).get("min_spacing_points", 50) * self.point_value
-            if abs(target_price - current_price) < min_distance:
-                target_price = current_price + min_distance
-            
-            # Check for collisions with existing REAL orders
-            target_price = self._avoid_order_collisions(target_price, "SELL")
+            # *** เช็ค collision (ไม่ว่าราคามาจากไหน) ***
+            safe_price = self._avoid_order_collisions(target_price, "SELL")
+            if safe_price is None:
+                self.log("❌ Price collision detected - skipping SELL order")
+                return None
+                
+            target_price = safe_price
             
             # Validate price
             if target_price <= 0:
@@ -493,13 +521,13 @@ class OrderManager:
                 "sl": sl_price,
                 "tp": tp_price,
                 "reason": reason,
-                "slippage": min(20, int(volatility_factor * 10))
+                "slippage": min(20, int(market_data.get("volatility_factor", 1.0) * 10))
             }
             
         except Exception as e:
             self.log(f"❌ Smart sell parameters error: {e}")
             return None
-    
+        
     def _determine_order_reason(self, reasoning: str) -> OrderReason:
         """Determine order reason from reasoning text"""
         reasoning_lower = reasoning.lower()
@@ -571,102 +599,53 @@ class OrderManager:
             self.log(f"❌ Sell order type error: {e}")
             return OrderType.SELL_LIMIT
     
-    def _avoid_order_collisions(self, target_price: float, direction: str) -> float:
-        """หลีกเลี่ยงการวางออเดอร์ซ้ำกันหรือใกล้กันเกินไป"""
+    def _avoid_order_collisions(self, target_price: float, direction: str) -> Optional[float]:
+        """เช็คว่าราคาซ้ำหรือไม่ ถ้าซ้ำ หาช่องว่างถัดไป"""
         try:
-            min_distance = self.config.get("trading", {}).get("min_spacing_points", 50) * self.point_value
+            tolerance_points = 5
+            tolerance = tolerance_points * self.point_value
+            spacing = self.smart_params.current_spacing * self.point_value
             
-            # *** ENHANCED: เพิ่มระยะห่างขั้นต่ำเป็น 2 เท่า ***
-            enhanced_min_distance = min_distance * 2.0
-            
-            # Get REAL pending orders from MT5
+            # Get REAL pending orders
             pending_orders = self.get_pending_orders()
+            existing_prices = [order.get("price", 0) for order in pending_orders]
+            existing_prices.sort()  # เรียงราคา
             
-            print(f"🔍 COLLISION CHECK: Target {direction} @ {target_price:.2f}")
-            print(f"   Min distance required: {enhanced_min_distance:.5f} ({enhanced_min_distance/self.point_value:.0f} points)")
-            print(f"   Checking against {len(pending_orders)} existing orders...")
+            print(f"🔍 COLLISION CHECK: {direction} @ {target_price:.5f}")
+            print(f"   Existing prices: {[f'{p:.2f}' for p in existing_prices[:5]]}")
             
-            # เก็บราคาทั้งหมดของออเดอร์ที่มีอยู่
-            existing_prices = []
-            for order in pending_orders:
-                order_price = order.get("price", 0)
-                order_type = order.get("type", "")
-                existing_prices.append(order_price)
-                
-                print(f"     Existing: {order_type} @ {order_price:.2f}")
-                
-                # เช็คระยะห่างกับออเดอร์ที่มีอยู่
-                distance = abs(target_price - order_price)
-                
-                if distance < enhanced_min_distance:
-                    print(f"⚠️ COLLISION DETECTED! Distance: {distance:.5f} < Required: {enhanced_min_distance:.5f}")
+            # เช็คราคาเป้าหมาย
+            for price in existing_prices:
+                if abs(target_price - price) <= tolerance:
+                    print(f"❌ COLLISION @ {price:.5f}")
                     
-                    # ปรับราคาให้ห่างจากออเดอร์ที่มีอยู่
+                    # หาช่องว่างถัดไป
                     if direction == "BUY":
-                        if target_price > order_price:
-                            # วาง BUY เหนือออเดอร์เดิม
-                            adjusted_price = order_price + enhanced_min_distance
-                        else:
-                            # วาง BUY ใต้ออเดอร์เดิม  
-                            adjusted_price = order_price - enhanced_min_distance
+                        # หาช่องว่างที่ต่ำกว่า
+                        for i in range(len(existing_prices)):
+                            gap_price = existing_prices[i] - spacing
+                            if not any(abs(gap_price - p) <= tolerance for p in existing_prices):
+                                print(f"✅ Found gap @ {gap_price:.5f}")
+                                return gap_price
                     else:  # SELL
-                        if target_price > order_price:
-                            # วาง SELL เหนือออเดอร์เดิม
-                            adjusted_price = order_price + enhanced_min_distance
-                        else:
-                            # วาง SELL ใต้ออเดอร์เดิม
-                            adjusted_price = order_price - enhanced_min_distance
+                        # หาช่องว่างที่สูงกว่า
+                        for i in range(len(existing_prices)):
+                            gap_price = existing_prices[i] + spacing
+                            if not any(abs(gap_price - p) <= tolerance for p in existing_prices):
+                                print(f"✅ Found gap @ {gap_price:.5f}")
+                                return gap_price
                     
-                    print(f"🔧 PRICE ADJUSTED: {target_price:.2f} → {adjusted_price:.2f}")
-                    target_price = adjusted_price
+                    print("❌ No suitable gap found")
+                    return None
             
-            # *** เช็คซ้ำอีกครั้งหลังปรับ ***
-            collision_found = True
-            max_adjustments = 10  # ป้องกัน infinite loop
-            adjustment_count = 0
-            
-            while collision_found and adjustment_count < max_adjustments:
-                collision_found = False
-                adjustment_count += 1
-                
-                for existing_price in existing_prices:
-                    distance = abs(target_price - existing_price)
-                    if distance < enhanced_min_distance:
-                        collision_found = True
-                        
-                        # สุ่มทิศทางการปรับ (ขึ้นหรือลง)
-                        if adjustment_count % 2 == 0:
-                            target_price = existing_price + enhanced_min_distance
-                        else:
-                            target_price = existing_price - enhanced_min_distance
-                        
-                        print(f"🔄 Re-adjustment #{adjustment_count}: → {target_price:.2f}")
-                        break
-            
-            if adjustment_count >= max_adjustments:
-                print("⚠️ Max adjustments reached - using current price with large offset")
-                current_market_price = self._get_current_market_price()
-                if direction == "BUY":
-                    target_price = current_market_price - (enhanced_min_distance * 3)
-                else:
-                    target_price = current_market_price + (enhanced_min_distance * 3)
-            
-            # *** FINAL VALIDATION: เช็คว่าไม่ได้ราคาติดลบหรือผิดปกติ ***
-            if target_price <= 0:
-                print(f"❌ Invalid final price: {target_price}")
-                current_market_price = self._get_current_market_price()
-                if direction == "BUY":
-                    target_price = current_market_price - enhanced_min_distance
-                else:
-                    target_price = current_market_price + enhanced_min_distance
-            
-            print(f"✅ FINAL PRICE: {direction} @ {target_price:.2f}")
+            # ไม่มี collision
+            print(f"✅ Safe to place @ {target_price:.5f}")
             return target_price
             
         except Exception as e:
-            self.log(f"❌ Collision avoidance error: {e}")
-            return target_price
-    
+            self.log(f"❌ Collision check error: {e}")
+            return None
+            
     def _get_current_market_price(self) -> float:
         """ดึงราคาตลาดปัจจุบันจาก MT5"""
         try:
@@ -684,7 +663,7 @@ class OrderManager:
             return 2000.0
 
     def _execute_real_order(self, order_request: OrderRequest) -> OrderResult:
-        """Execute order request with REAL MT5 - NO SIMULATION"""
+        """Execute order request with REAL MT5 + Enhanced Price Validation"""
         try:
             if not self.mt5_connector.is_connected:
                 return OrderResult(
@@ -692,12 +671,23 @@ class OrderManager:
                     error_message="MT5 not connected"
                 )
             
+            # *** ENHANCED PRICE VALIDATION ***
+            validation_result = self._validate_order_price(order_request)
+            if not validation_result["valid"]:
+                return OrderResult(
+                    success=False,
+                    error_message=f"Price validation failed: {validation_result['reason']}"
+                )
+            
+            # ใช้ราคาที่ปรับแล้ว
+            validated_price = validation_result["adjusted_price"]
+            
             # Prepare order request for REAL MT5
             request = {
                 "action": mt5.TRADE_ACTION_PENDING,
                 "symbol": self.symbol,
                 "volume": order_request.volume,
-                "price": order_request.price,
+                "price": validated_price,  # ← ใช้ราคาที่ validate แล้ว
                 "sl": order_request.sl,
                 "tp": order_request.tp,
                 "deviation": order_request.max_slippage,
@@ -726,7 +716,7 @@ class OrderManager:
                 del request["price"]  # Market orders don't need price
             
             # Send REAL order to MT5
-            self.log(f"📤 Sending REAL order to MT5: {order_request.order_type.value} {order_request.volume} @ {order_request.price}")
+            self.log(f"📤 Sending REAL order to MT5: {order_request.order_type.value} {order_request.volume} @ {validated_price}")
             result = mt5.order_send(request)
             
             if result is None:
@@ -740,38 +730,174 @@ class OrderManager:
                 order_result = OrderResult(
                     success=True,
                     ticket=result.order if hasattr(result, 'order') else result.deal,
-                    execution_price=result.price if hasattr(result, 'price') else order_request.price,
-                    slippage=abs(result.price - order_request.price) if hasattr(result, 'price') and order_request.price > 0 else 0
+                    execution_price=result.price if hasattr(result, 'price') else validated_price,
+                    slippage=abs(result.price - validated_price) if hasattr(result, 'price') else 0
                 )
                 
-                # Track the REAL order
-                self._track_order(order_request, order_result)
+                # Add to order history for tracking
+                self.order_history.append({
+                    "timestamp": datetime.now(),
+                    "ticket": order_result.ticket,
+                    "type": order_request.order_type.value,
+                    "volume": order_request.volume,
+                    "price": validated_price,
+                    "reason": order_request.reason.value,
+                    "success": True
+                })
                 
-                # Update daily counter
-                self.daily_order_count += 1
-                
-                self.log(f"✅ REAL MT5 order executed successfully - Ticket: {order_result.ticket}")
+                self.log(f"✅ REAL order executed successfully - Ticket: {order_result.ticket}")
                 return order_result
             else:
                 # REAL Order failed
-                error_message = f"MT5 order failed - Code: {result.retcode}"
-                if hasattr(result, 'comment'):
-                    error_message += f", Comment: {result.comment}"
+                error_message = f"MT5 order failed - Code: {result.retcode}, Comment: {result.comment}"
                 
-                self.log(f"❌ REAL MT5 order failed: {error_message}")
-                return OrderResult(
+                order_result = OrderResult(
                     success=False,
                     error_code=result.retcode,
                     error_message=error_message
                 )
                 
+                # Add failed order to history
+                self.order_history.append({
+                    "timestamp": datetime.now(),
+                    "type": order_request.order_type.value,
+                    "volume": order_request.volume,
+                    "price": validated_price,
+                    "reason": order_request.reason.value,
+                    "success": False,
+                    "error_code": result.retcode
+                })
+                
+                self.log(f"❌ REAL order failed: {error_message}")
+                return order_result
+                
         except Exception as e:
-            self.log(f"❌ REAL order execution error: {e}")
+            self.log(f"❌ Order execution error: {e}")
             return OrderResult(
                 success=False,
-                error_message=f"Order execution error: {e}"
+                error_message=f"Order execution exception: {str(e)}"
             )
-    
+
+    def _validate_order_price(self, order_request: OrderRequest) -> Dict:
+        """
+        Validate และปรับราคาให้ถูกต้องสำหรับ MT5
+        
+        Returns:
+            {
+                "valid": bool,
+                "adjusted_price": float,
+                "reason": str
+            }
+        """
+        try:
+            # Get current market data
+            tick = mt5.symbol_info_tick(self.symbol)
+            if not tick:
+                return {
+                    "valid": False,
+                    "adjusted_price": order_request.price,
+                    "reason": "Cannot get current market tick"
+                }
+            
+            current_bid = tick.bid
+            current_ask = tick.ask
+            spread = current_ask - current_bid
+            target_price = order_request.price
+            
+            print(f"🔍 Price Validation:")
+            print(f"   Target: {target_price:.5f}")
+            print(f"   Current Bid: {current_bid:.5f}")
+            print(f"   Current Ask: {current_ask:.5f}")
+            print(f"   Spread: {spread:.5f}")
+            
+            # *** ข้อกำหนดสำหรับแต่ละประเภทออเดอร์ ***
+            
+            if order_request.order_type == OrderType.BUY_LIMIT:
+                # BUY_LIMIT ต้องต่ำกว่า current ask
+                min_distance = max(spread * 2, 50 * self.point_value)  # อย่างน้อย 50 points หรือ 2x spread
+                
+                if target_price >= current_ask:
+                    adjusted_price = current_ask - min_distance
+                    print(f"⚠️ BUY_LIMIT too high, adjusted: {target_price:.5f} → {adjusted_price:.5f}")
+                    return {
+                        "valid": True,
+                        "adjusted_price": round(adjusted_price, 5),
+                        "reason": "Price adjusted below ask"
+                    }
+                
+                elif (current_ask - target_price) < min_distance:
+                    adjusted_price = current_ask - min_distance
+                    print(f"⚠️ BUY_LIMIT too close, adjusted: {target_price:.5f} → {adjusted_price:.5f}")
+                    return {
+                        "valid": True,
+                        "adjusted_price": round(adjusted_price, 5),
+                        "reason": "Price adjusted for minimum distance"
+                    }
+            
+            elif order_request.order_type == OrderType.SELL_LIMIT:
+                # SELL_LIMIT ต้องสูงกว่า current bid
+                min_distance = max(spread * 2, 50 * self.point_value)  # อย่างน้อย 50 points หรือ 2x spread
+                
+                if target_price <= current_bid:
+                    adjusted_price = current_bid + min_distance
+                    print(f"⚠️ SELL_LIMIT too low, adjusted: {target_price:.5f} → {adjusted_price:.5f}")
+                    return {
+                        "valid": True,
+                        "adjusted_price": round(adjusted_price, 5),
+                        "reason": "Price adjusted above bid"
+                    }
+                
+                elif (target_price - current_bid) < min_distance:
+                    adjusted_price = current_bid + min_distance
+                    print(f"⚠️ SELL_LIMIT too close, adjusted: {target_price:.5f} → {adjusted_price:.5f}")
+                    return {
+                        "valid": True,
+                        "adjusted_price": round(adjusted_price, 5),
+                        "reason": "Price adjusted for minimum distance"
+                    }
+            
+            elif order_request.order_type == OrderType.BUY_STOP:
+                # BUY_STOP ต้องสูงกว่า current ask
+                min_distance = max(spread, 30 * self.point_value)
+                
+                if target_price <= current_ask:
+                    adjusted_price = current_ask + min_distance
+                    print(f"⚠️ BUY_STOP too low, adjusted: {target_price:.5f} → {adjusted_price:.5f}")
+                    return {
+                        "valid": True,
+                        "adjusted_price": round(adjusted_price, 5),
+                        "reason": "Price adjusted above ask"
+                    }
+            
+            elif order_request.order_type == OrderType.SELL_STOP:
+                # SELL_STOP ต้องต่ำกว่า current bid
+                min_distance = max(spread, 30 * self.point_value)
+                
+                if target_price >= current_bid:
+                    adjusted_price = current_bid - min_distance
+                    print(f"⚠️ SELL_STOP too high, adjusted: {target_price:.5f} → {adjusted_price:.5f}")
+                    return {
+                        "valid": True,
+                        "adjusted_price": round(adjusted_price, 5),
+                        "reason": "Price adjusted below bid"
+                    }
+            
+            # ราคาผ่านการตรวจสอบ
+            print(f"✅ Price validated: {target_price:.5f}")
+            return {
+                "valid": True,
+                "adjusted_price": round(target_price, 5),
+                "reason": "Price valid"
+            }
+            
+        except Exception as e:
+            self.log(f"❌ Price validation error: {e}")
+            return {
+                "valid": False,
+                "adjusted_price": order_request.price,
+                "reason": f"Validation error: {str(e)}"
+            }
+        
     def _track_order(self, order_request: OrderRequest, order_result: OrderResult):
         """Track REAL order for monitoring and analysis"""
         try:
