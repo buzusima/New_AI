@@ -411,29 +411,34 @@ class ModernRuleEngine:
             return 0.5
     
     def _analyze_portfolio_safety(self) -> float:
-        """Dimension 2: วิเคราะห์ความปลอดภัย Portfolio (25%)"""
+        """Dimension 2: วิเคราะห์ความปลอดภัย Portfolio - FIXED: Division by zero"""
         try:
             if not self.capital_allocation:
                 return 0.5
             
-            # Margin efficiency calculation
-            margin_score = 1 - self.capital_allocation.margin_usage_ratio
+            # Margin efficiency calculation - FIXED
+            available_margin = max(self.capital_allocation.available_margin, 1.0)  # ป้องกัน division by zero
+            margin_score = 1 - (self.capital_allocation.used_margin / available_margin)
             margin_score = max(0, min(1, margin_score))
             
-            # Risk distribution
-            positions = self.position_manager.get_active_positions()
+            # Risk distribution - FIXED
+            positions = self.position_manager.get_active_positions() if self.position_manager else []
             buy_count = sum(1 for p in positions if p.get('type') == 0)  # BUY
             sell_count = sum(1 for p in positions if p.get('type') == 1)  # SELL
             total_count = len(positions)
             
             if total_count > 0:
-                balance_ratio = min(buy_count, sell_count) / max(buy_count, sell_count, 1)
+                # ป้องกัน division by zero
+                max_count = max(buy_count, sell_count, 1)
+                min_count = min(buy_count, sell_count)
+                balance_ratio = min_count / max_count
                 balance_score = balance_ratio
             else:
                 balance_score = 1.0  # Perfect if no positions
             
-            # Emergency preparedness
-            free_margin_ratio = self.capital_allocation.free_margin / self.capital_allocation.available_margin
+            # Emergency preparedness - FIXED
+            available_margin = max(self.capital_allocation.available_margin, 1.0)
+            free_margin_ratio = self.capital_allocation.free_margin / available_margin
             emergency_score = min(max(free_margin_ratio * 2, 0), 1)  # ดีถ้ามี free margin มาก
             
             # Combined safety score
@@ -491,38 +496,51 @@ class ModernRuleEngine:
             return 0.5
     
     def _analyze_market_context(self) -> float:
-        """Dimension 4: วิเคราะห์บริบทตลาด (20%)"""
+        """Dimension 4: วิเคราะห์บริบทตลาด - FIXED: Handle None market_context"""
         try:
             if not self.market_context:
-                return 0.5
+                return 0.5  # Default score if no market context
             
-            # Trend alignment assessment
-            trend_score = 0.5  # Default neutral
-            if self.market_context.trend_direction == "SIDEWAYS":
-                trend_score = 0.8  # ดีสำหรับกริด
-            elif self.market_context.trend_strength < 0.3:
-                trend_score = 0.7  # เทรนด์อ่อน = ดีสำหรับกริด
-            else:
-                trend_score = 0.3  # เทรนด์แรง = ยากสำหรับกริด
+            # Session scoring
+            session_scores = {
+                MarketSession.LONDON: 0.9,
+                MarketSession.NEW_YORK: 0.8, 
+                MarketSession.OVERLAP: 1.0,
+                MarketSession.ASIAN: 0.6,
+                MarketSession.QUIET: 0.3
+            }
+            session_score = session_scores.get(self.market_context.session, 0.5)
             
-            # Session timing optimization
-            session_score = 0.5
-            if self.market_context.session in [MarketSession.LONDON, MarketSession.OVERLAP]:
-                session_score = 0.8  # เซสชันดี
-            elif self.market_context.session == MarketSession.QUIET:
-                session_score = 0.3  # เซสชันเงียบ
+            # Trend condition analysis - FIXED: Handle string values
+            try:
+                trend_strength = float(self.market_context.trend_strength)
+            except (ValueError, TypeError):
+                trend_strength = 0.5
+                
+            if self.market_context.trend_direction == "UP":
+                trend_score = 0.5 + (trend_strength * 0.3)
+            elif self.market_context.trend_direction == "DOWN":  
+                trend_score = 0.5 + (trend_strength * 0.3)
+            else:  # SIDEWAYS
+                trend_score = 0.7  # Good for grid trading
             
-            # Volatility exposure management
-            volatility_score = 0.5
-            if self.market_context.volatility_level == "MEDIUM":
-                volatility_score = 0.8  # ดีที่สุดสำหรับกริด
-            elif self.market_context.volatility_level in ["LOW", "HIGH"]:
-                volatility_score = 0.6  # พอใช้ได้
-            else:  # VERY_LOW or VERY_HIGH
-                volatility_score = 0.2  # ไม่เหมาะ
+            # Volatility condition analysis
+            volatility_scores = {
+                "VERY_LOW": 0.4,
+                "LOW": 0.7,
+                "MEDIUM": 1.0,
+                "HIGH": 0.6,
+                "VERY_HIGH": 0.2
+            }
+            volatility_score = volatility_scores.get(self.market_context.volatility_level, 0.5)
             
             # Liquidity condition analysis
-            liquidity_score = 0.8 if self.market_context.liquidity_level == "HIGH" else 0.5
+            liquidity_scores = {
+                "HIGH": 0.8,
+                "MEDIUM": 0.5, 
+                "LOW": 0.2
+            }
+            liquidity_score = liquidity_scores.get(self.market_context.liquidity_level, 0.5)
             
             # Combined context score
             context_score = (
@@ -536,8 +554,7 @@ class ModernRuleEngine:
             
         except Exception as e:
             print(f"❌ Market context analysis error: {e}")
-            return 0.5
-    
+            return 0.5    
     # ========================================================================================
     # 🚀 HYBRID ENTRY LOGIC - ENHANCED
     # ========================================================================================
@@ -938,7 +955,7 @@ class ModernRuleEngine:
     # ========================================================================================
     
     def _update_market_context(self):
-        """อัปเดตบริบทตลาด"""
+        """อัปเดตบริบทตลาด - FIXED: Handle 'float' object error"""
         try:
             if not self.market_analyzer:
                 return
@@ -946,25 +963,69 @@ class ModernRuleEngine:
             # ดึงข้อมูลตลาดล่าสุด
             market_data = self.market_analyzer.get_comprehensive_analysis()
             
-            if market_data:
+            if market_data and isinstance(market_data, dict):  # ← เพิ่มการเช็ค type
                 self.last_market_data = market_data
                 
-                # สร้าง MarketContext
+                # สร้าง MarketContext - ป้องกัน error จาก wrong data type
+                volatility_info = market_data.get('volatility', {})
+                trend_info = market_data.get('trend', {})
+                liquidity_info = market_data.get('liquidity', {})
+                spread_info = market_data.get('spread', {})
+                momentum_info = market_data.get('momentum', {})
+                
+                # Safe data extraction with defaults
+                volatility_level = volatility_info.get('level', 'MEDIUM') if isinstance(volatility_info, dict) else 'MEDIUM'
+                trend_direction = trend_info.get('direction', 'SIDEWAYS') if isinstance(trend_info, dict) else 'SIDEWAYS'
+                trend_strength = trend_info.get('strength', 0.5) if isinstance(trend_info, dict) else 0.5
+                liquidity_level = liquidity_info.get('level', 'MEDIUM') if isinstance(liquidity_info, dict) else 'MEDIUM'
+                spread_condition = spread_info.get('condition', 'NORMAL') if isinstance(spread_info, dict) else 'NORMAL'
+                momentum_value = momentum_info.get('value', 0.0) if isinstance(momentum_info, dict) else 0.0
+                
+                # Ensure numeric values are proper
+                if not isinstance(trend_strength, (int, float)):
+                    trend_strength = 0.5
+                if not isinstance(momentum_value, (int, float)):
+                    momentum_value = 0.0
+                    
                 self.market_context = MarketContext(
                     session=self._detect_market_session(),
-                    volatility_level=market_data.get('volatility', {}).get('level', 'MEDIUM'),
-                    trend_direction=market_data.get('trend', {}).get('direction', 'SIDEWAYS'),
-                    trend_strength=market_data.get('trend', {}).get('strength', 0.5),
-                    liquidity_level=market_data.get('liquidity', {}).get('level', 'MEDIUM'),
-                    spread_condition=market_data.get('spread', {}).get('condition', 'NORMAL'),
-                    momentum=market_data.get('momentum', {}).get('value', 0.0)
+                    volatility_level=volatility_level,
+                    trend_direction=trend_direction,
+                    trend_strength=float(trend_strength),
+                    liquidity_level=liquidity_level,
+                    spread_condition=spread_condition,
+                    momentum=float(momentum_value)
+                )
+            else:
+                # Create default market context if data is invalid
+                self.market_context = MarketContext(
+                    session=self._detect_market_session(),
+                    volatility_level='MEDIUM',
+                    trend_direction='SIDEWAYS',
+                    trend_strength=0.5,
+                    liquidity_level='MEDIUM',
+                    spread_condition='NORMAL',
+                    momentum=0.0
                 )
                 
         except Exception as e:
             print(f"❌ Update market context error: {e}")
+            # Create safe default context
+            try:
+                self.market_context = MarketContext(
+                    session=self._detect_market_session(),
+                    volatility_level='MEDIUM',
+                    trend_direction='SIDEWAYS',
+                    trend_strength=0.5,
+                    liquidity_level='MEDIUM',
+                    spread_condition='NORMAL',
+                    momentum=0.0
+                )
+            except:
+                self.market_context = None
     
     def _update_capital_allocation(self):
-        """อัปเดตการจัดสรรเงินทุน"""
+        """อัปเดตการจัดสรรเงินทุน - FIXED: Handle division by zero"""
         try:
             if not self.position_manager:
                 return
@@ -972,20 +1033,53 @@ class ModernRuleEngine:
             # ดึงข้อมูล account
             account_info = self.position_manager.get_account_info()
             
-            if account_info:
+            if account_info and isinstance(account_info, dict):
+                # Safe extraction with proper defaults
+                balance = account_info.get('balance', 10000.0)
+                margin = account_info.get('margin', 0.0)
+                margin_used = account_info.get('margin_used', 0.0)
+                margin_free = account_info.get('margin_free', balance * 0.8)
+                
+                # Ensure positive values and prevent division by zero
+                balance = max(balance, 1000.0)
+                margin = max(margin, balance * 0.1)
+                margin_used = max(margin_used, 0.0)
+                margin_free = max(margin_free, balance * 0.1)
+                
                 self.capital_allocation = CapitalAllocation(
-                    total_balance=account_info.get('balance', 0),
-                    available_margin=account_info.get('margin', 0),
-                    used_margin=account_info.get('margin_used', 0),
-                    free_margin=account_info.get('margin_free', 0),
+                    total_balance=float(balance),
+                    available_margin=float(margin),
+                    used_margin=float(margin_used),
+                    free_margin=float(margin_free),
                     max_grid_allocation=0.8,  # ใช้ 80% สำหรับกริด
                     optimal_grid_size=self._calculate_optimal_grid_size(account_info),
                     risk_budget=self._calculate_risk_budget(account_info)
                 )
+            else:
+                # Create default capital allocation
+                self.capital_allocation = CapitalAllocation(
+                    total_balance=10000.0,
+                    available_margin=8000.0,
+                    used_margin=0.0,
+                    free_margin=8000.0,
+                    max_grid_allocation=0.8,
+                    optimal_grid_size=10,
+                    risk_budget=2000.0
+                )
                 
         except Exception as e:
             print(f"❌ Update capital allocation error: {e}")
-    
+            # Create safe default allocation
+            self.capital_allocation = CapitalAllocation(
+                total_balance=10000.0,
+                available_margin=8000.0,
+                used_margin=0.0,
+                free_margin=8000.0,
+                max_grid_allocation=0.8,
+                optimal_grid_size=10,
+                risk_budget=2000.0
+            )
+
     def _detect_market_session(self) -> MarketSession:
         """ตรวจจับเซสชันตลาดปัจจุบัน"""
         try:

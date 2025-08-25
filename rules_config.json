@@ -1,13 +1,13 @@
 {
   "config_version": "4D_AI_Enhanced_v1.0",
   "last_updated": "2024-08-25T00:00:00Z",
-  "description": "Enhanced 4D AI Rule Configuration - Market Order Focus with Smart Recovery",
+  "description": "Enhanced 4D AI Rule Configuration - Market Order Focus with Smart Recovery - MODIFIED FOR FASTER ENTRY",
   
   "rules": {
     "portfolio_balance": {
       "enabled": true,
       "weight": 4.0,
-      "confidence_threshold": 0.15,
+      "confidence_threshold": 0.05,
       "description": "Primary rule - Portfolio balance maintenance with 4D AI insights",
       "parameters": {
         "profit_take_threshold": 30.0,
@@ -26,7 +26,7 @@
         "recovery_opportunity_threshold": 5.0,
         "net_positive_close_threshold": 2.0,
         "four_d_integration": {
-          "min_4d_score_for_action": 0.3,
+          "min_4d_score_for_action": 0.15,
           "hedge_4d_weight": 0.25,
           "balance_4d_weight": 0.30,
           "safety_4d_weight": 0.25,
@@ -50,7 +50,7 @@
     "grid_expansion": {
       "enabled": true,
       "weight": 3.0,
-      "confidence_threshold": 0.10,
+      "confidence_threshold": 0.02,
       "description": "Enhanced grid building with 4D AI guidance",
       "parameters": {
         "auto_place_orders": true,
@@ -70,7 +70,7 @@
         "unlimited_placement": true,
         "four_d_guided_placement": {
           "enable_4d_spacing": true,
-          "min_4d_score_for_expansion": 0.25,
+          "min_4d_score_for_expansion": 0.10,
           "spacing_4d_weight": 0.20,
           "opportunity_4d_weight": 0.30
         }
@@ -92,7 +92,7 @@
     "four_d_ai_entry": {
       "enabled": true,
       "weight": 2.5,
-      "confidence_threshold": 0.20,
+      "confidence_threshold": 0.05,
       "description": "Pure 4D AI driven entries with hybrid factors",
       "parameters": {
         "hybrid_entry_logic": {
@@ -101,7 +101,7 @@
           "opportunity_factor_weight": 0.25,
           "time_factor_weight": 0.15
         },
-        "min_hybrid_confidence": 0.25,
+        "min_hybrid_confidence": 0.10,
         "max_hybrid_confidence": 0.95,
         "four_d_dimension_weights": {
           "position_value": 0.30,
@@ -110,9 +110,9 @@
           "market_context": 0.20
         },
         "entry_frequency_limits": {
-          "min_time_between_entries": 60,
-          "max_entries_per_hour": 8,
-          "max_entries_per_session": 25
+          "min_time_between_entries": 10,
+          "max_entries_per_hour": 20,
+          "max_entries_per_session": 50
         },
         "dynamic_lot_sizing": {
           "base_lot": 0.01,
@@ -191,7 +191,7 @@
     "trend_following": {
       "enabled": true,
       "weight": 1.5,
-      "confidence_threshold": 0.20,
+      "confidence_threshold": 0.05,
       "description": "Enhanced trend following with 4D market context",
       "parameters": {
         "rsi_period": 14,
@@ -221,7 +221,7 @@
     "mean_reversion": {
       "enabled": true,
       "weight": 1.2,
-      "confidence_threshold": 0.25,
+      "confidence_threshold": 0.10,
       "description": "Mean reversion with 4D volatility analysis",
       "parameters": {
         "bollinger_period": 20,
@@ -250,7 +250,7 @@
     "support_resistance": {
       "enabled": true,
       "weight": 0.8,
-      "confidence_threshold": 0.35,
+      "confidence_threshold": 0.15,
       "description": "Support/Resistance with 4D market alignment",
       "parameters": {
         "level_detection_period": 100,
@@ -286,9 +286,9 @@
       "market_context_analysis": 0.20
     },
     "thresholds": {
-      "min_entry_confidence": 0.20,
+      "min_entry_confidence": 0.05,
       "min_recovery_confidence": 0.55,
-      "portfolio_health_threshold": 0.35,
+      "portfolio_health_threshold": 0.15,
       "hedge_urgency_threshold": 0.75,
       "emergency_action_threshold": 0.15
     },
@@ -326,11 +326,11 @@
       "time_pressure_weight": 1.8
     },
     "entry_conditions": {
-      "min_total_confidence": 0.25,
+      "min_total_confidence": 0.10,
       "balance_imbalance_threshold": 0.3,
       "margin_usage_limit": 0.75,
-      "time_since_last_action_minutes": 5,
-      "market_session_filter": true
+      "time_since_last_action_minutes": 1,
+      "market_session_filter": false
     },
     "dynamic_adjustments": {
       "adaptive_thresholds": true,
@@ -408,7 +408,7 @@
   },
   
   "market_filters": {
-    "min_market_score": 0.25,
+    "min_market_score": 0.10,
     "max_spread_multiplier": 4.0,
     "min_liquidity_threshold": 0.4,
     "news_impact_filter": false,
@@ -421,7 +421,7 @@
     },
     "four_d_market_filtering": {
       "use_4d_market_context": true,
-      "min_market_context_score": 0.20,
+      "min_market_context_score": 0.05,
       "session_weight_adjustments": {
         "LONDON": 1.2,
         "NEW_YORK": 1.1,
@@ -438,7 +438,7 @@
       "grid_expansion_weight": 2.5,
       "four_d_ai_entry_weight": 2.0,
       "smart_recovery_weight": 3.0,
-      "min_entry_confidence": 0.30,
+      "min_entry_confidence": 0.15,
       "max_positions": 30,
       "margin_usage_limit": 0.65
     },
@@ -447,7 +447,7 @@
       "grid_expansion_weight": 3.0,
       "four_d_ai_entry_weight": 2.5,
       "smart_recovery_weight": 3.5,
-      "min_entry_confidence": 0.20,
+      "min_entry_confidence": 0.05,
       "max_positions": 50,
       "margin_usage_limit": 0.75
     },
@@ -456,7 +456,7 @@
       "grid_expansion_weight": 3.5,
       "four_d_ai_entry_weight": 3.0,
       "smart_recovery_weight": 4.0,
-      "min_entry_confidence": 0.15,
+      "min_entry_confidence": 0.02,
       "max_positions": 80,
       "margin_usage_limit": 0.85
     },
@@ -465,7 +465,7 @@
       "grid_expansion_weight": 3.2,
       "four_d_ai_entry_weight": 2.8,
       "smart_recovery_weight": 3.8,
-      "min_entry_confidence": 0.18,
+      "min_entry_confidence": 0.05,
       "max_positions": 60,
       "margin_usage_limit": 0.80,
       "auto_adjust_based_on_performance": true

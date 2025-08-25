@@ -1180,7 +1180,7 @@ class PositionManager:
     # ========================================================================================
     
     def update_positions(self):
-        """อัปเดตข้อมูล positions จาก MT5"""
+        """อัปเดตข้อมูล positions จาก MT5 - FIXED: Handle missing commission attribute"""
         try:
             if not self.mt5_connector.is_connected:
                 return
@@ -1202,6 +1202,13 @@ class PositionManager:
                 open_time = datetime.fromtimestamp(mt5_pos.time)
                 age_hours = (datetime.now() - open_time).total_seconds() / 3600
                 
+                # FIXED: Safe attribute access with defaults
+                commission = getattr(mt5_pos, 'commission', 0.0)
+                swap = getattr(mt5_pos, 'swap', 0.0)
+                profit = getattr(mt5_pos, 'profit', 0.0)
+                comment = getattr(mt5_pos, 'comment', '')
+                magic = getattr(mt5_pos, 'magic', 0)
+                
                 # สร้าง Position object
                 position = Position(
                     ticket=mt5_pos.ticket,
@@ -1210,13 +1217,13 @@ class PositionManager:
                     volume=mt5_pos.volume,
                     open_price=mt5_pos.price_open,
                     current_price=mt5_pos.price_current,
-                    profit=mt5_pos.profit,
-                    swap=mt5_pos.swap,
-                    commission=mt5_pos.commission,
+                    profit=profit,
+                    swap=swap,
+                    commission=commission,  # ← Use safe value
                     open_time=open_time,
                     age_hours=age_hours,
-                    comment=mt5_pos.comment,
-                    magic=mt5_pos.magic
+                    comment=comment,
+                    magic=magic
                 )
                 
                 # รักษา 4D analysis scores ถ้ามีอยู่แล้ว
@@ -1235,14 +1242,17 @@ class PositionManager:
             
         except Exception as e:
             self.log(f"❌ Update positions error: {e}")
-    
+
     def get_active_positions(self) -> List[Dict]:
-        """ดึงข้อมูล active positions - Compatibility method"""
+        """ดึงข้อมูล active positions - FIXED: Handle missing commission safely"""
         try:
             self.update_positions()
             
             positions = []
             for pos in self.active_positions.values():
+                # Safe commission access
+                commission = getattr(pos, 'commission', 0.0) if hasattr(pos, 'commission') else 0.0
+                
                 positions.append({
                     'ticket': pos.ticket,
                     'symbol': pos.symbol,
@@ -1251,15 +1261,15 @@ class PositionManager:
                     'price_open': pos.open_price,
                     'price': pos.current_price,
                     'profit': pos.total_profit,
-                    'swap': pos.swap,
-                    'commission': pos.commission,
+                    'swap': getattr(pos, 'swap', 0.0),
+                    'commission': commission,  # ← Use safe value
                     'time': pos.open_time,
-                    'comment': pos.comment,
-                    'magic': pos.magic,
+                    'comment': getattr(pos, 'comment', ''),
+                    'magic': getattr(pos, 'magic', 0),
                     # 4D Analysis data
                     'four_d_score': pos.four_d_overall_score,
-                    'recovery_priority': pos.recovery_priority,
-                    'hedge_candidates': len(pos.hedge_candidates)
+                    'recovery_priority': getattr(pos, 'recovery_priority', 0.0),
+                    'hedge_candidates': len(getattr(pos, 'hedge_candidates', []))
                 })
             
             return positions
@@ -1267,7 +1277,19 @@ class PositionManager:
         except Exception as e:
             self.log(f"❌ Get active positions error: {e}")
             return []
-    
+
+    @property
+    def total_profit(self) -> float:
+        """กำไร/ขาดทุนรวม - FIXED: Handle missing commission safely"""
+        try:
+            commission = getattr(self, 'commission', 0.0) if hasattr(self, 'commission') else 0.0
+            swap = getattr(self, 'swap', 0.0) if hasattr(self, 'swap') else 0.0
+            profit = getattr(self, 'profit', 0.0) if hasattr(self, 'profit') else 0.0
+            
+            return profit + swap + commission
+        except:
+            return getattr(self, 'profit', 0.0)
+            
     def get_pending_orders(self) -> List[Dict]:
         """ดึงข้อมูล pending orders - Compatibility method"""
         try:

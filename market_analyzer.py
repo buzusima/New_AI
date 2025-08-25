@@ -799,21 +799,41 @@ class MarketAnalyzer:
             return "SIDEWAYS"
     
     def _calculate_trend_strength(self, prices: np.ndarray) -> float:
-        """คำนวณความแรงของ trend"""
-        if len(prices) < 5:
-            return 0.0
-        
-        # Linear regression slope
-        x = np.arange(len(prices))
-        slope = np.polyfit(x, prices, 1)[0]
-        
-        # Normalize slope to 0-1 scale
-        price_range = np.max(prices) - np.min(prices)
-        if price_range == 0:
-            return 0.0
+        """คำนวณความแรงของ trend - FIXED: Handle overflow warnings"""
+        try:
+            if len(prices) < 5:
+                return 0.0
             
-        normalized_slope = abs(slope) / (price_range / len(prices))
-        return min(1.0, normalized_slope)
+            # ป้องกัน overflow
+            prices = np.array(prices, dtype=np.float64)
+            prices = np.clip(prices, -1e10, 1e10)
+            
+            # Linear regression slope with overflow protection
+            x = np.arange(len(prices))
+            try:
+                slope = np.polyfit(x, prices, 1)[0]
+            except (np.RankWarning, RuntimeWarning):
+                return 0.0
+            
+            # Normalize slope to 0-1 scale with overflow protection
+            price_range = np.max(prices) - np.min(prices)
+            if price_range == 0 or np.isnan(price_range) or np.isinf(price_range):
+                return 0.0
+                
+            normalized_slope = abs(slope) / (price_range / len(prices))
+            
+            # ตรวจสอบผลลัพธ์
+            if np.isnan(normalized_slope) or np.isinf(normalized_slope):
+                return 0.0
+            
+            return float(min(1.0, max(0.0, normalized_slope)))
+            
+        except (OverflowError, RuntimeWarning, FloatingPointError) as e:
+            self.log(f"⚠️ Trend strength calculation overflow handled: {type(e).__name__}")
+            return 0.0
+        except Exception as e:
+            self.log(f"❌ Trend strength calculation error: {e}")
+            return 0.0
     
     def _calculate_trend_consistency(self, prices: np.ndarray) -> float:
         """คำนวณความสม่ำเสมอของ trend"""
@@ -837,21 +857,45 @@ class MarketAnalyzer:
         return min(1.0, consistency)
     
     def _calculate_obv_trend(self, prices: np.ndarray, volumes: np.ndarray) -> str:
-        """คำนวณ On-Balance Volume trend"""
+        """คำนวณ On-Balance Volume trend - FIXED: Handle overflow warnings"""
         try:
             if len(prices) < 2 or len(volumes) < 2:
                 return "NEUTRAL"
             
-            obv = [volumes[0]]
+            # ป้องกัน overflow
+            prices = np.array(prices, dtype=np.float64)
+            volumes = np.array(volumes, dtype=np.float64)
+            prices = np.clip(prices, -1e10, 1e10)
+            volumes = np.clip(volumes, 0, 1e10)  # volumes ไม่ติดลบ
+            
+            obv = [float(volumes[0])]
             for i in range(1, len(prices)):
-                if prices[i] > prices[i-1]:
-                    obv.append(obv[-1] + volumes[i])
-                elif prices[i] < prices[i-1]:
-                    obv.append(obv[-1] - volumes[i])
-                else:
+                try:
+                    if prices[i] > prices[i-1]:
+                        next_obv = obv[-1] + volumes[i]
+                    elif prices[i] < prices[i-1]:
+                        next_obv = obv[-1] - volumes[i]
+                    else:
+                        next_obv = obv[-1]
+                    
+                    # ตรวจสอบ overflow
+                    if np.isnan(next_obv) or np.isinf(next_obv):
+                        next_obv = obv[-1]
+                    
+                    obv.append(float(np.clip(next_obv, -1e15, 1e15)))
+                    
+                except (OverflowError, FloatingPointError):
                     obv.append(obv[-1])
             
-            obv_change = (obv[-1] - obv[0]) / abs(obv[0]) if obv[0] != 0 else 0
+            # คำนวณการเปลี่ยนแปลง
+            if abs(obv[0]) < 1e-10:  # ป้องกันการหารด้วยเลขเล็กมาก
+                return "NEUTRAL"
+            
+            obv_change = (obv[-1] - obv[0]) / abs(obv[0])
+            
+            # ตรวจสอบผลลัพธ์
+            if np.isnan(obv_change) or np.isinf(obv_change):
+                return "NEUTRAL"
             
             if obv_change > 0.05:
                 return "BULLISH"
@@ -860,22 +904,49 @@ class MarketAnalyzer:
             else:
                 return "NEUTRAL"
                 
-        except Exception as e:
+        except (OverflowError, RuntimeWarning, FloatingPointError) as e:
+            self.log(f"⚠️ OBV calculation overflow handled: {type(e).__name__}")
             return "NEUTRAL"
-    
+        except Exception as e:
+            self.log(f"❌ OBV calculation error: {e}")
+            return "NEUTRAL"
+            
     def _calculate_volume_price_correlation(self, price_changes: np.ndarray, 
                                           volume_changes: np.ndarray) -> float:
-        """คำนวณความสัมพันธ์ volume-price"""
+        """คำนวณความสัมพันธ์ volume-price - FIXED: Handle overflow warnings"""
         try:
-            if len(price_changes) < 3 or len(volume_changes) < 3:
+            if len(price_changes) < 2 or len(volume_changes) < 2:
                 return 0.0
             
-            correlation = np.corrcoef(price_changes, volume_changes)[0, 1]
-            return round(correlation if not np.isnan(correlation) else 0.0, 3)
+            # ป้องกัน overflow
+            price_changes = np.array(price_changes, dtype=np.float64)
+            volume_changes = np.array(volume_changes, dtype=np.float64)
+            price_changes = np.clip(price_changes, -1e6, 1e6)
+            volume_changes = np.clip(volume_changes, -1e6, 1e6)
             
-        except Exception as e:
+            # ตรวจสอบ standard deviation เพื่อป้องกัน division by zero
+            price_std = np.std(price_changes)
+            volume_std = np.std(volume_changes)
+            
+            if price_std < 1e-10 or volume_std < 1e-10:
+                return 0.0
+            
+            # คำนวณ correlation
+            correlation = np.corrcoef(price_changes, volume_changes)[0, 1]
+            
+            # ตรวจสอบผลลัพธ์
+            if np.isnan(correlation) or np.isinf(correlation):
+                return 0.0
+            
+            return float(np.clip(correlation, -1.0, 1.0))
+            
+        except (OverflowError, RuntimeWarning, FloatingPointError) as e:
+            self.log(f"⚠️ Volume-price correlation overflow handled: {type(e).__name__}")
             return 0.0
-    
+        except Exception as e:
+            self.log(f"❌ Volume-price correlation error: {e}")
+            return 0.0
+            
     def _identify_trading_session(self, hour: int) -> Dict:
         """ระบุ trading session"""
         if 0 <= hour <= 6:
@@ -1000,48 +1071,87 @@ class MarketAnalyzer:
         except Exception as e:
             return 0.0
     
-    # Technical indicator calculations
     def _calculate_rsi(self, prices: np.ndarray, period: int = 14) -> float:
-        """คำนวณ RSI"""
+        """คำนวณ RSI - FIXED: Handle overflow warnings"""
         try:
             if len(prices) < period + 1:
                 return 50.0
+            
+            # ป้องกัน overflow ด้วยการใช้ float64 และ clipping
+            prices = np.array(prices, dtype=np.float64)
+            prices = np.clip(prices, -1e10, 1e10)  # จำกัดขนาดค่า
             
             deltas = np.diff(prices)
             gains = np.where(deltas > 0, deltas, 0)
             losses = np.where(deltas < 0, -deltas, 0)
             
+            # ป้องกันการหารด้วย 0 และ overflow
             avg_gain = np.mean(gains[-period:])
             avg_loss = np.mean(losses[-period:])
             
-            if avg_loss == 0:
+            # ตรวจสอบค่าที่ผิดปกติ
+            if np.isnan(avg_gain) or np.isnan(avg_loss) or np.isinf(avg_gain) or np.isinf(avg_loss):
+                return 50.0
+            
+            if avg_loss == 0 or avg_loss < 1e-10:  # ป้องกันการหารด้วยเลขที่เล็กมาก
                 return 100.0
             
             rs = avg_gain / avg_loss
+            
+            # ป้องกัน overflow ใน RSI calculation
+            if rs > 1e6:  # ถ้า RS ใหญ่เกินไป
+                return 100.0
+            
             rsi = 100 - (100 / (1 + rs))
             
-            return round(rsi, 2)
+            # ตรวจสอบผลลัพธ์สุดท้าย
+            if np.isnan(rsi) or np.isinf(rsi):
+                return 50.0
             
-        except Exception as e:
+            return round(float(np.clip(rsi, 0, 100)), 2)
+            
+        except (OverflowError, RuntimeWarning, FloatingPointError) as e:
+            self.log(f"⚠️ RSI calculation overflow handled: {type(e).__name__}")
             return 50.0
-    
+        except Exception as e:
+            self.log(f"❌ RSI calculation error: {e}")
+            return 50.0
+
     def _calculate_ema(self, prices: np.ndarray, period: int) -> np.ndarray:
-        """คำนวณ EMA"""
+        """คำนวณ EMA - FIXED: Handle overflow warnings"""
         try:
             if len(prices) < period:
                 return np.array([])
             
+            # ป้องกัน overflow ด้วยการใช้ float64 และ clipping
+            prices = np.array(prices, dtype=np.float64)
+            prices = np.clip(prices, -1e10, 1e10)  # จำกัดขนาดค่า
+            
             alpha = 2.0 / (period + 1)
-            ema = [prices[0]]
+            ema = [float(prices[0])]
             
             for i in range(1, len(prices)):
-                ema.append(alpha * prices[i] + (1 - alpha) * ema[-1])
+                try:
+                    next_ema = alpha * float(prices[i]) + (1 - alpha) * ema[-1]
+                    
+                    # ตรวจสอบค่าผิดปกติ
+                    if np.isnan(next_ema) or np.isinf(next_ema):
+                        next_ema = ema[-1]  # ใช้ค่าก่อนหน้า
+                    
+                    ema.append(float(np.clip(next_ema, -1e10, 1e10)))
+                    
+                except (OverflowError, FloatingPointError):
+                    ema.append(ema[-1])  # ใช้ค่าก่อนหน้าถ้า overflow
             
-            return np.array(ema)
+            return np.array(ema, dtype=np.float64)
             
-        except Exception as e:
+        except (OverflowError, RuntimeWarning, FloatingPointError) as e:
+            self.log(f"⚠️ EMA calculation overflow handled: {type(e).__name__}")
             return np.array([])
-    
+        except Exception as e:
+            self.log(f"❌ EMA calculation error: {e}")
+            return np.array([])
+            
     def _classify_rsi(self, rsi: float) -> str:
         """จำแนก RSI condition"""
         if rsi < 30:

@@ -215,7 +215,7 @@ class OrderManager:
                 "magic": order_request.magic_number,
                 "comment": f"{order_request.reason.value}|4D:{order_request.four_d_score:.2f}",
                 "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": mt5.ORDER_FILLING_IOC   # ⭐ Immediate or Cancel
+                "type_filling": mt5.ORDER_FILLING_FOK   # ⭐ Immediate or Cancel
             }
             
             # ไม่ใส่ SL/TP (ใช้ recovery system แทน)

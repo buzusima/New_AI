@@ -67,14 +67,14 @@ class ModernRuleBasedTradingGUI:
             pass
         
     def init_variables(self):
-        """Initialize variables - Modern Architecture"""
+        """Initialize variables - Modern Architecture with REAL MT5"""
         # Connection states
         self.is_connected = False
         self.is_trading = False
         self.account_info = {}
         
-        # Modern Rule-based Components - NO MOCK
-        self.mt5_connector = None
+        # Modern Rule-based Components - REAL CONNECTIONS
+        self.mt5_connector = MT5Connector()  # ✅ Initialize real MT5 connector
         self.rule_engine = None
         self.market_analyzer = None
         self.order_manager = None
@@ -82,6 +82,10 @@ class ModernRuleBasedTradingGUI:
         self.spacing_manager = None
         self.lot_calculator = None
         self.performance_tracker = None
+        
+        # Configuration placeholders (จะถูกโหลดใน load_config)
+        self.config = {}
+        self.rules_config = {}  # ✅ เพิ่มตัวนี้
         
         # GUI state
         self.selected_mt5_index = None
@@ -100,15 +104,25 @@ class ModernRuleBasedTradingGUI:
             "overall_score": 0.0
         }
         
-        print("💡 Modern GUI initialized with 4D enhancement")
+        print("🔧 4D Enhanced GUI initialized with REAL MT5 connector")
         
     def load_config(self):
-        """Load configuration - เหมือนเดิม"""
+        """Load configuration - FIXED: Load both config and rules_config"""
         try:
+            # Load rules config
+            if os.path.exists('rules_config.json'):
+                with open('rules_config.json', 'r', encoding='utf-8') as f:
+                    self.rules_config = json.load(f)
+                    print("✅ Rules config loaded")
+            else:
+                print("⚠️ rules_config.json not found, using defaults")
+                self.rules_config = {"rules": {}}
+                
+            # Load main config
             if os.path.exists('config.json'):
                 with open('config.json', 'r', encoding='utf-8') as f:
                     self.config = json.load(f)
-                print("✅ Configuration loaded")
+                print("✅ Main config loaded")
             else:
                 # Default configuration
                 self.config = {
@@ -132,7 +146,8 @@ class ModernRuleBasedTradingGUI:
         except Exception as e:
             print(f"❌ Config load error: {e}")
             self.config = {}
-            
+            self.rules_config = {"rules": {}}  # ✅ เพิ่ม fallback
+
     def create_gui(self):
         """Create GUI - ใช้ดิไซน์เดิมแต่เพิ่ม 4D"""
         # สไตล์เดิม
@@ -465,27 +480,41 @@ class ModernRuleBasedTradingGUI:
     # ========================================================================================
     
     def scan_mt5_accounts(self):
-        """Scan for available MT5 accounts - เดิม"""
+        """Scan for available MT5 accounts - FIXED: Real MT5 scanning"""
         try:
-            self.log("🔍 Scanning for MT5 accounts...")
+            self.log("🔍 Scanning for running MT5 installations...")
             self.mt5_listbox.delete(0, tk.END)
             
-            # Simulate MT5 account discovery
-            sample_accounts = [
-                "🏦 Broker A - Demo Account #123456 (Balance: $10,000)",
-                "🏦 Broker A - Live Account #789012 (Balance: $5,000)", 
-                "🏦 Broker B - Demo Account #345678 (Balance: $50,000)",
-                "🏦 Broker C - Live Account #901234 (Balance: $25,000)",
-                "🏦 Local MT5 - Terminal #1 (Demo: $100,000)"
-            ]
+            # ใช้ MT5Connector จริง
+            installations = self.mt5_connector.find_running_mt5_installations()
             
-            for account in sample_accounts:
-                self.mt5_listbox.insert(tk.END, account)
+            if not installations:
+                self.log("❌ No running MT5 found")
+                self.log("💡 Please start MT5 terminal first, then try scan again")
+                self.mt5_listbox.insert(tk.END, "⚠️ No MT5 running - Please start MT5 first")
+                return
+            
+            # แสดง installations ที่เจอ
+            for i, installation in enumerate(installations):
+                exe_type = "64-bit" if "64" in installation.executable_type else "32-bit"
+                display_text = f"🟢 {installation.broker} - {exe_type} Terminal"
+                if installation.is_running:
+                    display_text += " (Running)"
                 
-            self.log(f"✅ Found {len(sample_accounts)} MT5 accounts")
+                self.mt5_listbox.insert(tk.END, display_text)
+                
+            self.log(f"✅ Found {len(installations)} running MT5 installations")
+            
+            # Auto-select first if only one
+            if len(installations) == 1:
+                self.mt5_listbox.selection_set(0)
+                self.selected_mt5_index = 0
+                self.connect_btn.config(state='normal')
+                self.log("🎯 Auto-selected single MT5 installation")
             
         except Exception as e:
             self.log(f"❌ MT5 scan error: {e}")
+            self.mt5_listbox.insert(tk.END, "❌ Error scanning MT5 - Check console for details")
             
     def on_mt5_select(self, event):
         """Handle MT5 selection - เดิม"""
@@ -503,10 +532,10 @@ class ModernRuleBasedTradingGUI:
             self.log(f"❌ Selection error: {e}")
             
     def connect_to_mt5(self):
-        """Connect to selected MT5 account - ปรับปรุงให้ใช้งานได้จริง"""
+        """Connect to selected MT5 account - FIXED: Real connection with existing UI flow"""
         try:
             if self.selected_mt5_index is None:
-                self.show_message("Warning", "Please select an MT5 account first", "warning")
+                self.show_message("Warning", "Please select an MT5 installation first", "warning")
                 return
                 
             selected_account = self.mt5_listbox.get(self.selected_mt5_index)
@@ -516,60 +545,70 @@ class ModernRuleBasedTradingGUI:
             self.connect_btn.config(state='disabled', text="⏳ Connecting...")
             self.disconnect_btn.config(state='disabled')
             
-            # Initialize 4D system components
+            # Initialize 4D system components (เก็บการทำงานเดิม)
             self.log("🧠 Initializing 4D AI system...")
             self.initialize_4d_system()
             
-            # Simulate connection process with realistic steps
+            # Real MT5 connection
             self.log("⏳ Establishing connection...")
-            self.root.update()  # Update GUI
-            time.sleep(0.5)  # Simulate connection time
-            
-            self.log("🔐 Authenticating...")
             self.root.update()
-            time.sleep(0.3)
             
-            self.log("📊 Loading account information...")
-            self.root.update()
-            time.sleep(0.2)
+            success = self.mt5_connector.connect_to_installation(self.selected_mt5_index)
             
-            # Update connection status
-            self.is_connected = True
-            self.connection_status_label.config(text="Connected ✓", fg='#00ff88')
-            
-            # Enable/disable buttons
-            self.connect_btn.config(state='disabled', text="🔗 Connect",
-                                  bg='#747d8c')
-            self.disconnect_btn.config(state='normal',
-                                     bg='#ff4757',
-                                     activebackground='#ff3838')
-            self.start_trading_btn.config(state='normal',
-                                        bg='#2ed573',
-                                        activebackground='#26d068')
-            
-            self.log("✅ MT5 connection established successfully")
-            self.log("🧠 4D AI system ready for trading")
-            
-            # Simulate account info - realistic values
-            self.account_info = {
-                "balance": 10000.0,
-                "equity": 10000.0, 
-                "margin": 0.0,
-                "free_margin": 10000.0,
-                "margin_level": 0.0,
-                "currency": "USD"
-            }
-            
-            # Extract account details from selection for display
-            if "Balance:" in selected_account:
-                try:
-                    balance_part = selected_account.split("Balance: ")[1].split(")")[0]
-                    self.log(f"💰 Account Balance: {balance_part}")
-                except:
-                    self.log("💰 Account Balance: $10,000")
+            if success:
+                self.log("🔐 Authentication successful...")
+                self.root.update()
+                time.sleep(0.3)
+                
+                self.log("📊 Loading account information...")
+                self.root.update()
+                
+                # Get real account info
+                real_account_info = self.mt5_connector.get_account_info()
+                
+                if real_account_info:
+                    self.account_info = real_account_info
+                    self.log(f"💰 Account: #{real_account_info.get('login', 'Unknown')}")
+                    self.log(f"💰 Balance: ${real_account_info.get('balance', 0):,.2f}")
+                    self.log(f"🏦 Broker: {real_account_info.get('company', 'Unknown')}")
+                    self.log(f"💵 Currency: {real_account_info.get('currency', 'USD')}")
+                else:
+                    # Fallback to default values if account info fails
+                    self.account_info = {
+                        "balance": 10000.0,
+                        "equity": 10000.0, 
+                        "margin": 0.0,
+                        "free_margin": 10000.0,
+                        "margin_level": 0.0,
+                        "currency": "USD"
+                    }
+                    self.log("⚠️ Using default account values - account info unavailable")
+                
+                # Check gold symbol
+                gold_symbol = self.mt5_connector.get_gold_symbol()
+                if gold_symbol:
+                    self.log(f"🥇 Gold Symbol: {gold_symbol}")
+                else:
+                    self.log("🥇 Symbol: XAUUSD (Gold) - Default")
                     
-            self.log("🥇 Symbol: XAUUSD (Gold)")
-            self.log("📊 Ready for 4D market analysis")
+                # Update connection status
+                self.is_connected = True
+                self.connection_status_label.config(text="Connected ✓", fg='#00ff88')
+                
+                # Enable/disable buttons
+                self.connect_btn.config(state='disabled', text="🔗 Connect", bg='#747d8c')
+                self.disconnect_btn.config(state='normal', bg='#ff4757', activebackground='#ff3838')
+                self.start_trading_btn.config(state='normal', bg='#2ed573', activebackground='#26d068')
+                
+                self.log("✅ MT5 connection established successfully")
+                self.log("🧠 4D AI system ready for trading")
+                self.log("📊 Ready for 4D market analysis")
+                
+            else:
+                # Connection failed
+                self.log("❌ Failed to connect to MT5")
+                self.log("💡 Make sure the selected MT5 terminal is logged in to an account")
+                raise Exception("MT5 connection failed")
             
         except Exception as e:
             self.log(f"❌ Connection error: {e}")
@@ -580,9 +619,9 @@ class ModernRuleBasedTradingGUI:
                                   bg='#2ed573' if self.selected_mt5_index is not None else '#747d8c')
             self.disconnect_btn.config(state='disabled')
             self.is_connected = False
-            
+
     def disconnect_mt5(self):
-        """Disconnect from MT5 - ปรับปรุงให้ครบถ้วน"""
+        """Disconnect from MT5 - FIXED: Real disconnection with existing UI flow"""
         try:
             self.log("❌ Disconnecting from MT5...")
             
@@ -590,7 +629,10 @@ class ModernRuleBasedTradingGUI:
             if self.is_trading:
                 self.stop_trading()
                 time.sleep(0.5)  # Allow trading to stop
-                
+            
+            # Real MT5 disconnection
+            success = self.mt5_connector.disconnect()
+            
             # Update connection status
             self.is_connected = False
             self.connection_status_label.config(text="Disconnected", fg='#ff4757')
@@ -600,10 +642,8 @@ class ModernRuleBasedTradingGUI:
             self.connect_btn.config(state='normal' if self.selected_mt5_index is not None else 'disabled',
                                   text="🔗 Connect",
                                   bg='#2ed573' if self.selected_mt5_index is not None else '#747d8c')
-            self.disconnect_btn.config(state='disabled',
-                                     bg='#747d8c')
-            self.start_trading_btn.config(state='disabled',
-                                        bg='#747d8c')
+            self.disconnect_btn.config(state='disabled', bg='#747d8c')
+            self.start_trading_btn.config(state='disabled', bg='#747d8c')
             self.stop_trading_btn.config(state='disabled')
             
             # Clear account info
@@ -618,7 +658,11 @@ class ModernRuleBasedTradingGUI:
             self.four_d_score_label.config(text="0.000")
             self.market_condition_label.config(text="DISCONNECTED", fg='#ff4757')
             
-            self.log("✅ Disconnected successfully")
+            if success:
+                self.log("✅ Disconnected successfully")
+            else:
+                self.log("⚠️ Disconnect completed with warnings")
+                
             self.log("💡 Select an account and connect to resume trading")
             
         except Exception as e:
@@ -626,51 +670,81 @@ class ModernRuleBasedTradingGUI:
             # Force disconnect even on error
             self.is_connected = False
             self.is_trading = False
-            
+
     # ========================================================================================
     # 🧠 4D SYSTEM METHODS
     # ========================================================================================
     
     def initialize_4d_system(self):
-        """Initialize 4D AI system components"""
+        """Initialize 4D AI system components - FIXED MarketAnalyzer parameters"""
         try:
-            self.log("🚀 Initializing 4D AI components...")
+            self.log("🧠 Loading 4D AI components...")
             
-            # Initialize MT5 Connector
-            self.mt5_connector = MT5Connector(self.config)
+            # Initialize MarketAnalyzer FIRST (ต้องการ mt5_connector และ config)
+            if not self.market_analyzer:
+                # ใช้ self.config แทน self.rules_config สำหรับ MarketAnalyzer
+                self.market_analyzer = MarketAnalyzer(self.mt5_connector, self.config)
+                self.log("✅ Market Analyzer initialized")
             
             # Initialize Performance Tracker
-            self.performance_tracker = PerformanceTracker(self.config)
+            if not self.performance_tracker:
+                self.performance_tracker = PerformanceTracker(self.config)
+                self.log("✅ Performance Tracker initialized")
             
-            # Initialize Market Analyzer
-            self.market_analyzer = MarketAnalyzer(self.mt5_connector, self.config)
+            # Initialize Spacing Manager
+            if not self.spacing_manager:
+                self.spacing_manager = SpacingManager(self.config)
+                self.log("✅ Spacing Manager initialized")
             
-            # Initialize other components
-            self.spacing_manager = SpacingManager(self.config)
+            # Initialize Lot Calculator (ต้องการ account_info และ config)
+            if not self.lot_calculator:
+                # เตรียม account_info
+                account_info = self.account_info if self.account_info else {
+                    "balance": 10000.0, 
+                    "equity": 10000.0, 
+                    "free_margin": 8000.0
+                }
+                self.lot_calculator = LotCalculator(account_info, self.config)
+                self.log("✅ Lot Calculator initialized")
             
-            account_info = {"balance": 10000, "equity": 10000, "free_margin": 8000}
-            self.lot_calculator = LotCalculator(account_info, self.config)
+            # Initialize Order Manager (ต้องการหลาย components)
+            if not self.order_manager:
+                self.order_manager = OrderManager(
+                    self.mt5_connector, 
+                    self.spacing_manager, 
+                    self.lot_calculator, 
+                    self.config
+                )
+                self.log("✅ Order Manager initialized")
             
-            self.order_manager = OrderManager(
-                self.mt5_connector, self.spacing_manager, 
-                self.lot_calculator, self.config
-            )
+            # Initialize Position Manager (ต้องการ mt5_connector และ config)
+            if not self.position_manager:
+                self.position_manager = PositionManager(self.mt5_connector, self.config)
+                self.log("✅ Position Manager initialized")
             
-            self.position_manager = PositionManager(self.mt5_connector, self.config)
+            # Initialize Rule Engine LAST (ต้องมี components อื่นก่อน)
+            if not self.rule_engine:
+                self.rule_engine = ModernRuleEngine(
+                    self.rules_config,        # ใช้ rules_config สำหรับ RuleEngine
+                    self.market_analyzer,
+                    self.order_manager,
+                    self.position_manager,
+                    self.performance_tracker
+                )
+                self.log("✅ Rule Engine initialized")
             
-            # Initialize Rule Engine (last)
-            self.rule_engine = ModernRuleEngine(
-                self.config, self.market_analyzer, self.order_manager,
-                self.position_manager, self.performance_tracker
-            )
-            
-            self.log("✅ 4D AI system ready")
+            self.log("🎉 4D AI system fully initialized")
             
         except Exception as e:
             self.log(f"❌ 4D system initialization error: {e}")
-            
+            self.log("💡 Some components may not work properly")
+            print(f"Full error details: {e}")  # Debug info
+            print(f"MT5 Connector type: {type(self.mt5_connector)}")  # Debug
+            print(f"Config type: {type(self.config)}")  # Debug
+            print(f"Rules Config type: {type(self.rules_config)}")  # Debug
+
     def start_trading(self):
-        """Start 4D AI trading system"""
+        """Start 4D AI trading system - FIXED to actually start RuleEngine"""
         try:
             if not self.is_connected:
                 self.show_message("Warning", "Please connect to MT5 first", "warning")
@@ -678,10 +752,12 @@ class ModernRuleBasedTradingGUI:
                 
             self.log("🚀 Starting 4D AI Trading System...")
             
-            # Start rule engine
+            # FIXED: Actually start rule engine
             if self.rule_engine:
-                # Rule engine will handle its own threading
-                pass
+                self.rule_engine.start()  # ← เพิ่มบรรทัดนี้!
+                self.log("🧠 Rule Engine started")
+            else:
+                self.log("⚠️ Rule Engine not available")
                 
             self.is_trading = True
             self.trading_status_label.config(text="Trading Active ✓", fg='#00ff88')
@@ -690,20 +766,21 @@ class ModernRuleBasedTradingGUI:
             self.start_trading_btn.config(state='disabled')
             self.stop_trading_btn.config(state='normal')
             
-            self.log("✅ 4D AI Trading started")
+            self.log("✅ 4D AI Trading started successfully")
             
         except Exception as e:
             self.log(f"❌ Trading start error: {e}")
+            self.show_message("Error", f"Failed to start trading: {e}", "error")
             
     def stop_trading(self):
-        """Stop 4D AI trading system"""
+        """Stop 4D AI trading system - FIXED to actually stop RuleEngine"""
         try:
             self.log("⏹️ Stopping 4D AI Trading...")
             
-            # Stop rule engine
+            # FIXED: Actually stop rule engine
             if self.rule_engine:
-                # Signal rule engine to stop
-                pass
+                self.rule_engine.stop()  # ← เพิ่มบรรทัดนี้!
+                self.log("🛑 Rule Engine stopped")
                 
             self.is_trading = False
             self.trading_status_label.config(text="Stopped", fg='#ff4757')
@@ -712,11 +789,10 @@ class ModernRuleBasedTradingGUI:
             self.start_trading_btn.config(state='normal')
             self.stop_trading_btn.config(state='disabled')
             
-            self.log("✅ Trading stopped")
+            self.log("✅ 4D AI Trading stopped successfully")
             
         except Exception as e:
-            self.log(f"❌ Trading stop error: {e}")
-            
+            self.log(f"❌ Trading stop error: {e}")            
     # ========================================================================================
     # 🔄 GUI UPDATE METHODS
     # ========================================================================================
