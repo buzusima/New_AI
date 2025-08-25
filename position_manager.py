@@ -244,93 +244,148 @@ class PositionManager:
             self.log(f"❌ Emergency close error: {e}")
             return False
     
-    def get_portfolio_status(self) -> Dict:
-        """
-        🆕 ดึงสถานะ Portfolio ในรูปแบบใหม่สำหรับ Rule Engine
-        
-        Returns:
-            Dict: ข้อมูล portfolio ครบถ้วน
-        """
+    def get_portfolio_status(self) -> Dict[str, Any]:
+        """ดึงสถานะ portfolio ครบถ้วน - แก้ไขให้ส่งข้อมูล positions อย่างถูกต้อง"""
         try:
-            # อัพเดท positions
-            self.update_positions()
+            print("💰 === PORTFOLIO STATUS ANALYSIS ===")
             
-            # แยก positions ตาม profit/loss
-            profitable_positions = [pos for pos in self.active_positions.values() if pos.total_profit > 0]
-            losing_positions = [pos for pos in self.active_positions.values() if pos.total_profit <= 0]
+            # ดึงข้อมูลจาก MT5
+            positions = self.get_active_positions()
+            pending_orders = self.get_pending_orders()
+            account_info = self.get_account_info()
+            
+            print(f"   📊 Raw Data:")
+            print(f"      Active Positions: {len(positions)}")
+            print(f"      Pending Orders: {len(pending_orders)}")
+            
+            # วิเคราะห์ positions อย่างละเอียด
+            buy_positions = []
+            sell_positions = []
+            
+            for pos in positions:
+                print(f"   📍 Position Analysis:")
+                print(f"      Ticket: {pos.get('ticket', 'N/A')}")
+                print(f"      Type: {pos.get('type', 'N/A')}")
+                print(f"      Volume: {pos.get('volume', 0)}")
+                print(f"      Price: {pos.get('price_open', pos.get('price', 0))}")
+                print(f"      Profit: ${pos.get('profit', 0):.2f}")
+                
+                # ปรับการจัดกลุ่มให้ถูกต้อง
+                pos_type = str(pos.get('type', '')).upper()
+                
+                # ตรวจสอบหลายรูปแบบของ position type
+                if (pos_type in ['BUY', 'POSITION_TYPE_BUY', '0'] or 
+                    'BUY' in pos_type or 
+                    pos.get('type') == 0):
+                    buy_positions.append(pos)
+                    print(f"      → Classified as BUY position")
+                    
+                elif (pos_type in ['SELL', 'POSITION_TYPE_SELL', '1'] or 
+                      'SELL' in pos_type or 
+                      pos.get('type') == 1):
+                    sell_positions.append(pos)
+                    print(f"      → Classified as SELL position")
+                else:
+                    print(f"      → Unknown position type: {pos_type}")
+            
+            # วิเคราะห์ pending orders
+            buy_pending = []
+            sell_pending = []
+            
+            for order in pending_orders:
+                order_type = str(order.get('type', '')).upper()
+                print(f"   📋 Pending Order:")
+                print(f"      Ticket: {order.get('ticket', 'N/A')}")
+                print(f"      Type: {order_type}")
+                print(f"      Price: {order.get('price', 0)}")
+                
+                if 'BUY' in order_type:
+                    buy_pending.append(order)
+                    print(f"      → Classified as BUY pending")
+                elif 'SELL' in order_type:
+                    sell_pending.append(order)
+                    print(f"      → Classified as SELL pending")
             
             # คำนวณสถิติ
-            total_positions = len(self.active_positions)
-            buy_positions = len([pos for pos in self.active_positions.values() if pos.type == PositionType.BUY])
-            sell_positions = total_positions - buy_positions
+            total_positions = len(positions)
+            total_pending = len(pending_orders)
+            total_profit = sum(pos.get('profit', 0) for pos in positions)
+            total_volume = sum(pos.get('volume', 0) for pos in positions)
             
-            total_profit = sum(pos.total_profit for pos in profitable_positions)
-            total_loss = sum(pos.total_profit for pos in losing_positions)
-            net_profit = total_profit + total_loss
+            # คำนวณ margin และ equity
+            equity = account_info.get('equity', 0)
+            balance = account_info.get('balance', 0)
+            margin_used = account_info.get('margin', 0)
+            margin_free = account_info.get('margin_free', 0)
+            margin_level = account_info.get('margin_level', 0)
             
-            # คำนวณ balance ratio
-            position_balance = buy_positions / total_positions if total_positions > 0 else 0.5
+            # Portfolio health
+            portfolio_health = self._calculate_portfolio_health(
+                total_profit, equity, balance, margin_level
+            )
             
-            # ดึงข้อมูล account
-            account_info = mt5.account_info()
-            if account_info:
-                equity = account_info.equity
-                balance = account_info.balance
-                margin = account_info.margin
-                free_margin = account_info.margin_free
-                margin_usage = margin / equity if equity > 0 else 0
-            else:
-                equity = balance = free_margin = 10000
-                margin_usage = 0.1
+            print(f"   💰 Portfolio Summary:")
+            print(f"      Total Positions: {total_positions}")
+            print(f"      Total Profit: ${total_profit:.2f}")
+            print(f"      Portfolio Health: {portfolio_health:.1%}")
+            print(f"      BUY Positions: {len(buy_positions)}")
+            print(f"      SELL Positions: {len(sell_positions)}")
+            print(f"      BUY Pending: {len(buy_pending)}")
+            print(f"      SELL Pending: {len(sell_pending)}")
             
-            # คำนวณ risk level
-            risk_level = self._calculate_portfolio_risk_level(losing_positions, equity)
-            
-            # หาโอกาสการแก้ไม้
-            recovery_opportunities = self._analyze_recovery_opportunities(profitable_positions, losing_positions)
-            
-            # สร้าง portfolio status
+            # สร้างข้อมูลส่งกลับ - มีโครงสร้างที่ Rule Engine ต้องการ
             portfolio_status = {
+                # ข้อมูลพื้นฐาน
                 "total_positions": total_positions,
+                "total_pending_orders": total_pending,
+                "total_profit": total_profit,
+                "total_volume": total_volume,
+                "portfolio_health": portfolio_health,
+                
+                # ข้อมูลที่ Rule Engine ต้องการ
+                "positions": positions,  # ส่งข้อมูล positions เต็ม
+                "pending_orders": pending_orders,  # ส่งข้อมูล pending orders เต็ม
+                
+                # การแบ่งกลุ่ม
                 "buy_positions": buy_positions,
                 "sell_positions": sell_positions,
-                "total_profit": total_profit,
-                "total_loss": total_loss,
-                "net_profit": net_profit,
-                "profitable_positions": profitable_positions,
-                "losing_positions": losing_positions,
-                "position_balance": position_balance,
-                "risk_level": risk_level,
-                "margin_usage": margin_usage,
-                "equity": equity,
-                "balance": balance,
-                "free_margin": free_margin,
-                "recovery_opportunities": recovery_opportunities,
-                "last_updated": datetime.now()
+                "buy_pending": buy_pending,
+                "sell_pending": sell_pending,
+                
+                # สถิติการแบ่งกลุ่ม
+                "buy_positions_count": len(buy_positions),
+                "sell_positions_count": len(sell_positions),
+                "buy_pending_count": len(buy_pending),
+                "sell_pending_count": len(sell_pending),
+                
+                # ข้อมูล account
+                "account_info": {
+                    "equity": equity,
+                    "balance": balance,
+                    "margin": margin_used,
+                    "margin_free": margin_free,
+                    "margin_level": margin_level
+                },
+                
+                # เวลาอัพเดท
+                "last_updated": datetime.now(),
+                "analysis_timestamp": datetime.now().isoformat()
             }
             
+            print(f"✅ Portfolio status compiled successfully")
             return portfolio_status
             
         except Exception as e:
             self.log(f"❌ Portfolio status error: {e}")
             return {
+                "error": str(e),
                 "total_positions": 0,
-                "buy_positions": 0,
-                "sell_positions": 0,
                 "total_profit": 0.0,
-                "total_loss": 0.0,
-                "net_profit": 0.0,
-                "profitable_positions": [],
-                "losing_positions": [],
-                "position_balance": 0.5,
-                "risk_level": 0.0,
-                "margin_usage": 0.0,
-                "equity": 10000,
-                "balance": 10000,
-                "free_margin": 9000,
-                "recovery_opportunities": []
+                "positions": [],
+                "pending_orders": [],
+                "account_info": {}
             }
-    
+            
     # ========================================================================================
     # 🔄 EXISTING METHODS (Keep compatibility)
     # ========================================================================================

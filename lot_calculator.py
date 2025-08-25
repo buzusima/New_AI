@@ -119,55 +119,187 @@ class LotCalculator:
     # 🆕 MAIN METHOD FOR MODERN RULE ENGINE
     # ========================================================================================
     
-    def calculate_optimal_lot_size(self, market_data: Dict = None, confidence: float = 0.5,
-                                 order_type: str = "BUY", reasoning: str = "") -> float:
-        """
-        🆕 คำนวณขนาด lot ที่เหมาะสมสำหรับ Modern Rule Engine
-        
-        Args:
-            market_data: ข้อมูลการวิเคราะห์ตลาดจาก Market Analyzer
-            confidence: ระดับความเชื่อมั่น (0.0-1.0)
-            order_type: ประเภทออเดอร์ ("BUY", "SELL")
-            reasoning: เหตุผลการเทรด
-            
-        Returns:
-            ขนาด lot ที่เหมาะสม
-        """
+    def _calculate_hybrid_lot_size(self, params: LotCalculationParams, reasoning: str) -> LotCalculationResult:
+        """คำนวณ lot แบบ hybrid - แก้ไขให้ทำงานได้ถูกต้อง"""
         try:
-            print(f"🔢 === LOT SIZE CALCULATION ===")
-            print(f"   Order Type: {order_type}")
-            print(f"   Confidence: {confidence:.2f}")
-            print(f"   Reasoning: {reasoning}")
+            print("🔢 === HYBRID LOT CALCULATION DEBUG ===")
             
-            # เตรียมพารามิเตอร์การคำนวณ
-            calc_params = self._prepare_calculation_params(market_data, confidence, order_type)
+            # เริ่มจาก base lot
+            base_lot = params.base_lot_size
+            print(f"   Base Lot: {base_lot:.3f}")
             
-            # คำนวณตามวิธีปัจจุบัน
-            if self.current_method == LotCalculationMethod.DYNAMIC_HYBRID:
-                result = self._calculate_hybrid_lot_size(calc_params, reasoning)
-            elif self.current_method == LotCalculationMethod.CONFIDENCE_BASED:
-                result = self._calculate_confidence_based_lot(calc_params)
-            elif self.current_method == LotCalculationMethod.VOLATILITY_ADJUSTED:
-                result = self._calculate_volatility_adjusted_lot(calc_params)
-            else:
-                result = self._calculate_fixed_lot(calc_params)
+            # คำนวณ multipliers แทน components (เพิ่มส่วนที่หายไป)
+            risk_multiplier = self._get_risk_multiplier(params)
+            confidence_multiplier = self._get_confidence_multiplier(params)  
+            volatility_multiplier = self._get_volatility_multiplier(params)
+            market_multiplier = self._get_market_multiplier(params)
             
-            # ตรวจสอบและจำกัดขนาด
-            final_lot = self._validate_and_bound_lot_size(result.lot_size)
+            print(f"   Multipliers:")
+            print(f"     Risk: {risk_multiplier:.3f}")
+            print(f"     Confidence: {confidence_multiplier:.3f}")
+            print(f"     Volatility: {volatility_multiplier:.3f}")
+            print(f"     Market: {market_multiplier:.3f}")
             
-            # บันทึกประวัติ
-            self.calculation_history.append(result)
+            # น้ำหนักแต่ละปัจจัย
+            weights = {
+                "risk": 0.3,
+                "confidence": 0.3,
+                "volatility": 0.2,
+                "market": 0.2
+            }
             
-            print(f"✅ Lot calculated: {final_lot:.3f}")
-            print(f"   Method: {result.calculation_method.value}")
-            print(f"   Risk: ${result.risk_amount:.2f} ({result.risk_percentage:.1f}%)")
+            # คำนวณ combined multiplier แบบ weighted average
+            combined_multiplier = (
+                risk_multiplier * weights["risk"] +
+                confidence_multiplier * weights["confidence"] + 
+                volatility_multiplier * weights["volatility"] +
+                market_multiplier * weights["market"]
+            )
             
-            return final_lot
+            print(f"   Combined Multiplier: {combined_multiplier:.3f}")
+            
+            # จำกัด multiplier ในช่วงที่ปลอดภัย
+            safe_multiplier = max(0.5, min(2.0, combined_multiplier))
+            
+            # คำนวณ lot สุดท้าย
+            weighted_lot = base_lot * safe_multiplier
+            
+            # ปรับตาม reasoning
+            reasoning_adjustment = self._get_reasoning_adjustment(reasoning)
+            final_lot = weighted_lot * reasoning_adjustment
+            
+            print(f"   Final calculation: {base_lot:.3f} × {safe_multiplier:.3f} × {reasoning_adjustment:.3f} = {final_lot:.3f}")
+            
+            # คำนวณความเสี่ยง
+            risk_amount = final_lot * params.account_balance * 0.001
+            risk_percentage = (risk_amount / params.account_balance) * 100
+            
+            return LotCalculationResult(
+                lot_size=final_lot,
+                calculation_method=LotCalculationMethod.DYNAMIC_HYBRID,
+                risk_amount=risk_amount,
+                risk_percentage=risk_percentage,
+                margin_required=final_lot * 1000,
+                confidence_factor=params.confidence_level,
+                volatility_adjustment=params.volatility_factor,
+                reasoning=f"Hybrid: Base {base_lot:.3f} × Combined {safe_multiplier:.3f} × Reasoning {reasoning_adjustment:.3f} = {final_lot:.3f}",
+                warnings=[],
+                calculation_factors={
+                    "base_lot": base_lot,
+                    "safe_multiplier": safe_multiplier,
+                    "reasoning_adjustment": reasoning_adjustment,
+                    "risk_multiplier": risk_multiplier,
+                    "confidence_multiplier": confidence_multiplier,
+                    "volatility_multiplier": volatility_multiplier,
+                    "market_multiplier": market_multiplier
+                },
+                timestamp=datetime.now()
+            )
             
         except Exception as e:
-            print(f"❌ Lot calculation error: {e}")
+            print(f"❌ Hybrid calculation error: {e}")
+            return self._get_fallback_result(params)
+
+    # เพิ่ม helper methods ที่หายไป
+    def _get_risk_multiplier(self, params: LotCalculationParams) -> float:
+        """คำนวณ multiplier จากความเสี่ยง"""
+        try:
+            # ใช้ risk percentage ที่เหมาะสม
+            risk_pct = min(params.max_risk_percentage, 2.0) / 100
+            account_factor = params.free_margin / params.account_balance
+            
+            # คำนวณ multiplier ที่ปลอดภัย
+            risk_mult = 0.8 + (risk_pct * account_factor * 2.0)
+            
+            return max(0.5, min(1.5, risk_mult))
+            
+        except Exception as e:
+            return 1.0
+
+    def _get_confidence_multiplier(self, params: LotCalculationParams) -> float:
+        """คำนวณ multiplier จาก confidence"""
+        try:
+            # ปรับ multiplier ตาม confidence
+            conf_mult = 0.7 + (params.confidence_level * 0.6)  # 0.7-1.3 range
+            
+            return max(0.7, min(1.3, conf_mult))
+            
+        except Exception as e:
+            return 1.0
+
+    def _get_volatility_multiplier(self, params: LotCalculationParams) -> float:
+        """คำนวณ multiplier จาก volatility"""
+        try:
+            vol_factor = params.volatility_factor
+            
+            if vol_factor > 2.0:
+                vol_mult = 0.6  # ลดมากเมื่อ volatile
+            elif vol_factor > 1.5:
+                vol_mult = 0.8
+            elif vol_factor < 0.5:
+                vol_mult = 1.2  # เพิ่มเมื่อเงียบ
+            else:
+                vol_mult = 1.0
+            
+            return vol_mult
+            
+        except Exception as e:
+            return 1.0
+
+    def _get_market_multiplier(self, params: LotCalculationParams) -> float:
+        """คำนวณ multiplier จาก market condition"""
+        try:
+            condition = params.market_condition.upper()
+            
+            # ปรับตาม market condition
+            if "HIGH_VOLATILITY" in condition:
+                market_mult = 0.8
+            elif "LOW_VOLATILITY" in condition:
+                market_mult = 1.1
+            elif "TRENDING" in condition:
+                market_mult = 0.9
+            elif "RANGING" in condition:
+                market_mult = 1.1
+            else:
+                market_mult = 1.0
+            
+            return market_mult
+            
+        except Exception as e:
+            return 1.0
+
+    def _get_reasoning_adjustment(self, reasoning: str) -> float:
+        """ปรับตาม reasoning"""
+        try:
+            reasoning_lower = reasoning.lower()
+            
+            # Priority adjustments
+            if "foundation" in reasoning_lower or "init" in reasoning_lower:
+                return 1.1  # เพิ่มสำหรับการสร้างพื้นฐาน
+            elif "critical" in reasoning_lower or "emergency" in reasoning_lower:
+                return 1.2  # เพิ่มสำหรับสถานการณ์วิกฤต
+            elif "rebalance" in reasoning_lower:
+                return 1.05  # เพิ่มเล็กน้อยสำหรับการปรับสมดุล
+            elif "maintenance" in reasoning_lower:
+                return 0.9  # ลดสำหรับการบำรุงรักษา
+            else:
+                return 1.0  # ปกติ
+                
+        except Exception as e:
+            return 1.0
+
+    def calculate_lot_size(self, **kwargs) -> float:
+        """
+        Alias สำหรับ Modern Rule Engine
+        เรียกใช้ calculate_optimal_lot_size() ที่มีอยู่แล้ว
+        """
+        try:
+            result = self.calculate_optimal_lot_size(**kwargs)
+            return result
+        except Exception as e:
+            print(f"❌ calculate_lot_size error: {e}")
             return self.base_lot_size
-    
+                        
     def _prepare_calculation_params(self, market_data: Dict, confidence: float, order_type: str) -> LotCalculationParams:
         """เตรียมพารามิเตอร์สำหรับการคำนวณ"""
         try:
@@ -210,34 +342,60 @@ class LotCalculator:
     def _calculate_hybrid_lot_size(self, params: LotCalculationParams, reasoning: str) -> LotCalculationResult:
         """คำนวณ lot แบบ hybrid - รวมหลายปัจจัย"""
         try:
-            # ปัจจัยต่างๆ
+            print(f"🔢 === HYBRID LOT CALCULATION DEBUG ===")
+            
+            # ปัจจัยต่างๆ - คำนวณแยก
             risk_component = self._get_risk_component(params)
             confidence_component = self._get_confidence_component(params)
             volatility_component = self._get_volatility_component(params)
             market_component = self._get_market_component(params)
             
-            # น้ำหนักแต่ละปัจจัย
-            weights = {
-                "risk": 0.3,
-                "confidence": 0.25,
-                "volatility": 0.25,
-                "market": 0.2
-            }
+            print(f"   Components before weighting:")
+            print(f"   - Risk: {risk_component:.4f}")
+            print(f"   - Confidence: {confidence_component:.4f}")
+            print(f"   - Volatility: {volatility_component:.4f}")
+            print(f"   - Market: {market_component:.4f}")
             
-            # คำนวณ lot แบบถ่วงน้ำหนัก
-            weighted_lot = (
-                risk_component * weights["risk"] +
-                confidence_component * weights["confidence"] +
-                volatility_component * weights["volatility"] +
-                market_component * weights["market"]
+            # ใช้ base_lot เป็นฐาน แล้วคูณด้วย multipliers แทนการบวก
+            base_lot = params.base_lot_size
+            
+            # คำนวณ multipliers แทน components
+            risk_multiplier = min(2.0, risk_component / base_lot) if base_lot > 0 else 1.0
+            confidence_multiplier = min(1.5, confidence_component / base_lot) if base_lot > 0 else 1.0
+            volatility_multiplier = min(1.2, volatility_component / base_lot) if base_lot > 0 else 1.0
+            market_multiplier = min(1.1, market_component / base_lot) if base_lot > 0 else 1.0
+            
+            print(f"   Multipliers:")
+            print(f"   - Risk: {risk_multiplier:.3f}")
+            print(f"   - Confidence: {confidence_multiplier:.3f}")
+            print(f"   - Volatility: {volatility_multiplier:.3f}")
+            print(f"   - Market: {market_multiplier:.3f}")
+            
+            # คำนวณแบบคูณแทนบวก และลด impact
+            combined_multiplier = (
+                risk_multiplier * 0.4 +      # ลดน้ำหนัก risk
+                confidence_multiplier * 0.3 + # ลดน้ำหนัก confidence
+                volatility_multiplier * 0.2 + # ลดน้ำหนัก volatility
+                market_multiplier * 0.1       # ลดน้ำหนัก market
             )
             
-            # ปรับตาม reasoning
+            # จำกัด multiplier ไม่ให้สูงเกิน
+            safe_multiplier = min(3.0, max(0.5, combined_multiplier))
+            
+            weighted_lot = base_lot * safe_multiplier
+            
+            print(f"   Combined multiplier: {combined_multiplier:.3f} -> Safe: {safe_multiplier:.3f}")
+            
+            # ปรับตาม reasoning (ลดผลกระทบ)
             reasoning_adjustment = self._get_reasoning_adjustment(reasoning)
+            reasoning_adjustment = 0.8 + (reasoning_adjustment - 1.0) * 0.2  # ลดผลกระทบลง
+            
             final_lot = weighted_lot * reasoning_adjustment
             
+            print(f"   Final calculation: {base_lot:.3f} × {safe_multiplier:.3f} × {reasoning_adjustment:.3f} = {final_lot:.3f}")
+            
             # คำนวณความเสี่ยง
-            risk_amount = final_lot * params.account_balance * 0.001  # ประมาณ
+            risk_amount = final_lot * params.account_balance * 0.001
             risk_percentage = (risk_amount / params.account_balance) * 100
             
             return LotCalculationResult(
@@ -245,17 +403,19 @@ class LotCalculator:
                 calculation_method=LotCalculationMethod.DYNAMIC_HYBRID,
                 risk_amount=risk_amount,
                 risk_percentage=risk_percentage,
-                margin_required=final_lot * 1000,  # ประมาณ
+                margin_required=final_lot * 1000,
                 confidence_factor=params.confidence_level,
                 volatility_adjustment=params.volatility_factor,
-                reasoning=f"Hybrid: Risk×{weights['risk']:.0%} + Conf×{weights['confidence']:.0%} + Vol×{weights['volatility']:.0%} + Market×{weights['market']:.0%} = {final_lot:.3f}",
+                reasoning=f"Hybrid: Base {base_lot:.3f} × Combined {safe_multiplier:.3f} × Reasoning {reasoning_adjustment:.3f} = {final_lot:.3f}",
                 warnings=[],
                 calculation_factors={
-                    "risk_component": risk_component,
-                    "confidence_component": confidence_component,
-                    "volatility_component": volatility_component,
-                    "market_component": market_component,
-                    "reasoning_adjustment": reasoning_adjustment
+                    "base_lot": base_lot,
+                    "safe_multiplier": safe_multiplier,
+                    "reasoning_adjustment": reasoning_adjustment,
+                    "risk_multiplier": risk_multiplier,
+                    "confidence_multiplier": confidence_multiplier,
+                    "volatility_multiplier": volatility_multiplier,
+                    "market_multiplier": market_multiplier
                 },
                 timestamp=datetime.now()
             )
@@ -263,17 +423,22 @@ class LotCalculator:
         except Exception as e:
             print(f"❌ Hybrid calculation error: {e}")
             return self._get_fallback_result(params)
-    
+        
     def _get_risk_component(self, params: LotCalculationParams) -> float:
         """คำนวณ component จากความเสี่ยง"""
         try:
-            # ใช้ free margin เป็นฐาน
-            risk_budget = params.free_margin * (params.max_risk_percentage / 100)
+            # ใช้ risk percentage ที่เหมาะสม
+            risk_percentage = min(params.max_risk_percentage, 1.0)  # จำกัดไม่เกิน 1%
             
-            # แปลงเป็น lot size (ประมาณ)
-            lot_per_risk = risk_budget / (params.account_balance * 0.001)
+            # คำนวณ lot จาก risk budget
+            risk_budget = params.account_balance * (risk_percentage / 100)
             
-            return max(self.min_lot_size, min(self.max_lot_size, lot_per_risk))
+            # สมมุติว่า 1 lot = ความเสี่ยง $10 (ปรับได้ตามสินทรัพย์)
+            risk_per_lot = 10
+            calculated_lot = risk_budget / risk_per_lot
+            
+            # จำกัดให้อยู่ในช่วงที่เหมาะสม
+            return max(self.min_lot_size, min(self.max_lot_size * 0.1, calculated_lot))
             
         except Exception as e:
             return self.base_lot_size
@@ -281,8 +446,8 @@ class LotCalculator:
     def _get_confidence_component(self, params: LotCalculationParams) -> float:
         """คำนวณ component จาก confidence"""
         try:
-            # ปรับ base lot ตาม confidence
-            confidence_multiplier = 0.5 + (params.confidence_level * 1.0)  # 0.5-1.5 range
+            # ลด impact ของ confidence
+            confidence_multiplier = 0.8 + (params.confidence_level * 0.4)  # 0.8-1.2 range แทน 0.5-1.5
             
             return params.base_lot_size * confidence_multiplier
             
@@ -572,6 +737,37 @@ class LotCalculator:
         timestamp = datetime.now().strftime("%H:%M:%S")
         print(f"[{timestamp}] 🔢 LotCalculator: {message}")
 
+    def calculate_lot_size(self, **kwargs) -> float:
+            """
+            🆕 Alias สำหรับ Modern Rule Engine
+            เรียกใช้ calculate_optimal_lot_size() ที่มีอยู่แล้ว
+            """
+            try:
+                # แปลงพารามิเตอร์จาก Rule Engine
+                market_data = kwargs.get('market_data', {})
+                confidence = kwargs.get('confidence_level', kwargs.get('confidence', 0.5))
+                order_type = kwargs.get('trade_direction', kwargs.get('order_type', 'BUY'))
+                reasoning = kwargs.get('reasoning', 'Rule Engine calculation')
+                
+                print(f"🔢 calculate_lot_size() called with:")
+                print(f"   Confidence: {confidence:.2f}")
+                print(f"   Order Type: {order_type}")
+                print(f"   Market Data: {market_data}")
+                
+                # เรียกใช้ method หลัก
+                result = self.calculate_optimal_lot_size(
+                    market_data=market_data,
+                    confidence=confidence,
+                    order_type=order_type,
+                    reasoning=reasoning
+                )
+                
+                print(f"✅ Lot size calculated: {result:.3f}")
+                return result
+                
+            except Exception as e:
+                print(f"❌ calculate_lot_size error: {e}")
+                return self.base_lot_size
 
 # ========================================================================================
 # 🧪 TEST FUNCTION

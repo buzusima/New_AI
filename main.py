@@ -753,8 +753,44 @@ class ModernRuleBasedTradingGUI:
         mode = self.trading_mode.get()
         self.log(f"🎯 Trading mode changed to: {mode}")
         
-        if self.rule_engine:
-            self.rule_engine.set_trading_mode(mode)
+        # ส่งไปยัง rule engine
+        self.set_trading_mode(mode)
+
+    def set_trading_mode(self, mode):
+        """Set trading mode"""
+        try:
+            self.log(f"🎯 Setting trading mode to: {mode}")
+            
+            # แปลง string เป็น TradingMode enum
+            if self.rule_engine:
+                from rule_engine import TradingMode
+                
+                if isinstance(mode, str):
+                    # แปลง string เป็น enum
+                    mode_mapping = {
+                        "CONSERVATIVE": TradingMode.CONSERVATIVE,
+                        "MODERATE": TradingMode.MODERATE,
+                        "BALANCED": TradingMode.MODERATE,  # alias สำหรับ BALANCED
+                        "AGGRESSIVE": TradingMode.AGGRESSIVE,
+                        "ADAPTIVE": TradingMode.ADAPTIVE
+                    }
+                    
+                    if mode in mode_mapping:
+                        trading_mode_enum = mode_mapping[mode]
+                    else:
+                        self.log(f"⚠️ Unknown trading mode: {mode}, using MODERATE")
+                        trading_mode_enum = TradingMode.MODERATE
+                else:
+                    trading_mode_enum = mode
+                
+                # ส่งไปยัง rule engine
+                self.rule_engine.set_trading_mode(trading_mode_enum)
+                self.log(f"✅ Trading mode set to: {trading_mode_enum.value}")
+            else:
+                self.log("⚠️ Rule engine not initialized yet")
+                
+        except Exception as e:
+            self.log(f"❌ Set trading mode error: {e}")
     
     def initialize_rule_engine(self):
         """Initialize the rule engine and components - NO MOCK"""
@@ -800,8 +836,9 @@ class ModernRuleBasedTradingGUI:
                 performance_tracker=self.performance_tracker
             )
             
-            # Set initial mode
-            self.rule_engine.set_trading_mode(self.trading_mode.get())
+            # Set initial mode - แก้ไขตรงนี้
+            initial_mode = self.trading_mode.get()  # ดึงจาก StringVar
+            self.set_trading_mode(initial_mode)     # ใช้ method ใหม่ที่แก้ไขแล้ว
             
             self.log("✅ Rule Engine initialized successfully")
             self.rule_status_label.config(text="● Active", fg=self.success_color)
@@ -900,7 +937,7 @@ class ModernRuleBasedTradingGUI:
             self.show_message("Error", f"Trading start error: {e}", "error")
 
     def execute_rule_cycle(self):
-        """Execute one rule cycle with enhanced control"""
+        """Execute one rule cycle with enhanced control and debug logging"""
         try:
             if not self.is_trading or not self.rule_engine:
                 return
@@ -927,7 +964,7 @@ class ModernRuleBasedTradingGUI:
                     self.root.after(30000, self.execute_rule_cycle)  # รอ 30 วินาที
                 return
             
-            # *** ดำเนินการปกติ ***
+            # *** ดำเนินการปกติ พร้อม Enhanced Debugging ***
             
             # Get market and portfolio data
             try:
@@ -945,9 +982,22 @@ class ModernRuleBasedTradingGUI:
                 if self.position_manager:
                     portfolio_data = self.position_manager.get_portfolio_status()
                     self.rule_engine.last_portfolio_data = portfolio_data
+                    
+                    # *** Debug การนับ positions ***
                     positions = portfolio_data.get('total_positions', 0)
                     profit = portfolio_data.get('total_profit', 0)
-                    self.log(f"💰 Portfolio: {positions} positions, ${profit:.2f} profit")
+                    
+                    # Debug แสดงข้อมูลละเอียด
+                    buy_pos_count = portfolio_data.get('buy_positions_count', 0)
+                    sell_pos_count = portfolio_data.get('sell_positions_count', 0)
+                    buy_pending_count = portfolio_data.get('buy_pending_count', 0)
+                    sell_pending_count = portfolio_data.get('sell_pending_count', 0)
+                    
+                    self.log(f"💰 Portfolio Detail:")
+                    self.log(f"   Positions: {positions} total, ${profit:.2f} profit")
+                    self.log(f"   BUY: {buy_pos_count} positions + {buy_pending_count} pending = {buy_pos_count + buy_pending_count} total")
+                    self.log(f"   SELL: {sell_pos_count} positions + {sell_pending_count} pending = {sell_pos_count + sell_pending_count} total")
+                    
                 else:
                     self.log("⚠️ No position manager")
                     
@@ -962,8 +1012,13 @@ class ModernRuleBasedTradingGUI:
                     self.log(f"🎯 Rule Decision: {decision_result.decision.value} (confidence: {decision_result.confidence:.1%})")
                     self.log(f"💭 Reasoning: {decision_result.reasoning}")
                     
+                    # *** Debug Grid State ***
+                    grid_phase = self.rule_engine.grid_state.current_phase.value
+                    self.log(f"🏗️ Grid Phase: {grid_phase}")
+                    
                     # Execute the decision
-                    self.rule_engine._execute_trading_decision(decision_result)
+                    success = self.rule_engine._execute_trading_decision(decision_result)
+                    self.log(f"🎯 Decision Execution: {'✅ Success' if success else '❌ Failed'}")
                     
                     # Track decision
                     if hasattr(self.rule_engine, 'decision_history'):
@@ -973,6 +1028,13 @@ class ModernRuleBasedTradingGUI:
                         
                 else:
                     self.log("🔄 No decision made this cycle")
+                    
+                    # *** Debug why no decision ***
+                    if hasattr(self.rule_engine, 'last_portfolio_data'):
+                        portfolio = self.rule_engine.last_portfolio_data
+                        total_positions = portfolio.get('total_positions', 0)
+                        total_pending = portfolio.get('total_pending_orders', 0)
+                        self.log(f"🔍 Debug: {total_positions} positions, {total_pending} pending orders")
                     
             except Exception as e:
                 self.log(f"❌ Rule execution error: {e}")
@@ -984,15 +1046,15 @@ class ModernRuleBasedTradingGUI:
             except Exception as e:
                 self.log(f"⚠️ Performance update error: {e}")
             
-            # Schedule next cycle (ปรับเวลาให้เหมาะสม)
-            next_cycle_delay = self._calculate_next_cycle_delay()
+            # Schedule next cycle
             if self.is_trading:
+                next_cycle_delay = self._calculate_next_cycle_delay()
                 self.root.after(next_cycle_delay, self.execute_rule_cycle)
                 
         except Exception as e:
             self.log(f"❌ Rule cycle error: {e}")
             if self.is_trading:
-                self.root.after(30000, self.execute_rule_cycle)  # รอนานกว่าเมื่อมี error
+                self.root.after(20000, self.execute_rule_cycle)  # Retry in 20s
 
     def _check_market_readiness(self) -> bool:
         """เช็คว่าตลาดพร้อมสำหรับการเทรดหรือไม่"""

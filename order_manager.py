@@ -867,7 +867,284 @@ class OrderManager:
         """Log message with timestamp"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         print(f"[{timestamp}] 🎯 OrderManager: {message}")
+    
+    def place_buy_order(self, price: float, lot_size: float, order_type: str = "BUY_LIMIT", 
+                       reason: str = "") -> Dict:
+        """
+        🆕 Alias สำหรับ Modern Rule Engine
+        เรียกใช้ place_smart_buy_order() ที่มีอยู่แล้ว
+        """
+        try:
+            print(f"🎯 place_buy_order() called:")
+            print(f"   Price: {price:.5f}")
+            print(f"   Lot Size: {lot_size:.3f}")
+            print(f"   Order Type: {order_type}")
+            print(f"   Reason: {reason}")
+            
+            # เตรียม market_data พิเศษสำหรับ Rule Engine
+            market_data = {
+                "target_price": price,           # ราคาที่ Rule Engine ต้องการ
+                "rule_volume": lot_size,         # ขนาดที่ Rule Engine คำนวณแล้ว
+                "current_price": price - 50 * 0.01,  # สมมุติราคาปัจจุบันสูงกว่า target
+                "order_type_preference": order_type,
+                "rule_engine_mode": True
+            }
+            
+            # เรียกใช้ method ที่มีอยู่
+            result = self.place_smart_buy_order(
+                confidence=0.85,  # ใช้ confidence สูงจาก Rule Engine
+                reasoning=reason,
+                market_data=market_data
+            )
+            
+            # ส่งผลลัพธ์กลับในรูปแบบที่ Rule Engine ต้องการ
+            return {
+                "success": result,
+                "order_type": order_type,
+                "direction": "BUY",
+                "price": price,
+                "volume": lot_size,
+                "error": "Order placement failed" if not result else None
+            }
+            
+        except Exception as e:
+            print(f"❌ place_buy_order error: {e}")
+            return {"success": False, "error": str(e)}
 
+    def place_sell_order(self, price: float, lot_size: float, order_type: str = "SELL_LIMIT", 
+                        reason: str = "") -> Dict:
+        """
+        🆕 Alias สำหรับ Modern Rule Engine
+        เรียกใช้ place_smart_sell_order() ที่มีอยู่แล้ว
+        """
+        try:
+            print(f"🎯 place_sell_order() called:")
+            print(f"   Price: {price:.5f}")
+            print(f"   Lot Size: {lot_size:.3f}")
+            print(f"   Order Type: {order_type}")
+            print(f"   Reason: {reason}")
+            
+            # เตรียม market_data พิเศษสำหรับ Rule Engine
+            market_data = {
+                "target_price": price,           # ราคาที่ Rule Engine ต้องการ
+                "rule_volume": lot_size,         # ขนาดที่ Rule Engine คำนวณแล้ว
+                "current_price": price + 50 * 0.01,  # สมมุติราคาปัจจุบันต่ำกว่า target
+                "order_type_preference": order_type,
+                "rule_engine_mode": True
+            }
+            
+            # เรียกใช้ method ที่มีอยู่
+            result = self.place_smart_sell_order(
+                confidence=0.85,  # ใช้ confidence สูงจาก Rule Engine
+                reasoning=reason,
+                market_data=market_data
+            )
+            
+            # ส่งผลลัพธ์กลับในรูปแบบที่ Rule Engine ต้องการ
+            return {
+                "success": result,
+                "order_type": order_type,
+                "direction": "SELL",
+                "price": price,
+                "volume": lot_size,
+                "error": "Order placement failed" if not result else None
+            }
+            
+        except Exception as e:
+            print(f"❌ place_sell_order error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def place_smart_buy_order(self, confidence: float = 0.5, reasoning: str = "",
+                             market_data: Dict = None) -> bool:
+        """Updated: รองรับ target_price จาก Rule Engine"""
+        try:
+            print(f"🎯 === PLACE SMART BUY ORDER ===")
+            print(f"   Confidence: {confidence:.2f}")
+            print(f"   Reasoning: {reasoning}")
+            
+            # Validate MT5 connection
+            if not self.mt5_connector.is_connected:
+                self.log("❌ Cannot place BUY order - MT5 not connected")
+                return False
+            
+            # ใช้ข้อมูลจาก Rule Engine ถ้ามี
+            if market_data and market_data.get("rule_engine_mode"):
+                target_price = market_data.get("target_price")
+                volume = market_data.get("rule_volume", 0.01)
+                
+                print(f"🎯 Using Rule Engine parameters:")
+                print(f"   Target Price: {target_price:.5f}")
+                print(f"   Volume: {volume:.3f}")
+                
+                if target_price and target_price > 0:
+                    # สร้าง order request โดยตรง
+                    order_request = OrderRequest(
+                        order_type=OrderType.BUY_LIMIT,
+                        volume=volume,
+                        price=target_price,
+                        sl=0.0,  # ไม่ใช้ stop loss
+                        tp=0.0,  # ไม่ใช้ take profit
+                        reason=OrderReason.GRID_EXPANSION,
+                        confidence=confidence,
+                        reasoning=reasoning,
+                        max_slippage=10
+                    )
+                    
+                    # Execute order
+                    result = self._execute_real_order(order_request)
+                    
+                    if result.success:
+                        self.log(f"✅ BUY order placed: Ticket {result.ticket} @ {target_price:.5f}")
+                        self._track_order_performance(OrderReason.GRID_EXPANSION, True)
+                        return True
+                    else:
+                        self.log(f"❌ BUY order failed: {result.error_message}")
+                        self._track_order_performance(OrderReason.GRID_EXPANSION, False)
+                        return False
+            
+            # ถ้าไม่มีข้อมูลจาก Rule Engine ใช้วิธีเดิม
+            else:
+                # Get market data
+                if market_data is None:
+                    market_data = self._get_current_market_data()
+                
+                if not market_data:
+                    self.log("❌ Cannot get market data for buy order")
+                    return False
+                
+                # Calculate order parameters
+                order_params = self._calculate_smart_buy_parameters(confidence, market_data, reasoning)
+                
+                if not order_params:
+                    self.log("❌ Cannot calculate buy order parameters")
+                    return False
+                
+                # Determine order type
+                order_type = self._determine_buy_order_type(market_data, confidence)
+                
+                # Create and execute order
+                order_request = OrderRequest(
+                    order_type=order_type,
+                    volume=order_params["volume"],
+                    price=order_params["price"],
+                    sl=order_params.get("sl", 0.0),
+                    tp=order_params.get("tp", 0.0),
+                    reason=order_params["reason"],
+                    confidence=confidence,
+                    reasoning=reasoning,
+                    max_slippage=order_params.get("slippage", 10)
+                )
+                
+                result = self._execute_real_order(order_request)
+                
+                if result.success:
+                    self.log(f"✅ BUY order placed: Ticket {result.ticket} @ {order_request.price:.5f}")
+                    self._track_order_performance(order_request.reason, True)
+                    return True
+                else:
+                    self.log(f"❌ BUY order failed: {result.error_message}")
+                    self._track_order_performance(order_request.reason, False)
+                    return False
+                
+        except Exception as e:
+            self.log(f"❌ Smart buy order error: {e}")
+            return False
+
+    def place_smart_sell_order(self, confidence: float = 0.5, reasoning: str = "",
+                              market_data: Dict = None) -> bool:
+        """Updated: รองรับ target_price จาก Rule Engine"""
+        try:
+            print(f"🎯 === PLACE SMART SELL ORDER ===")
+            print(f"   Confidence: {confidence:.2f}")
+            print(f"   Reasoning: {reasoning}")
+            
+            # Validate MT5 connection
+            if not self.mt5_connector.is_connected:
+                self.log("❌ Cannot place SELL order - MT5 not connected")
+                return False
+            
+            # ใช้ข้อมูลจาก Rule Engine ถ้ามี
+            if market_data and market_data.get("rule_engine_mode"):
+                target_price = market_data.get("target_price")
+                volume = market_data.get("rule_volume", 0.01)
+                
+                print(f"🎯 Using Rule Engine parameters:")
+                print(f"   Target Price: {target_price:.5f}")
+                print(f"   Volume: {volume:.3f}")
+                
+                if target_price and target_price > 0:
+                    # สร้าง order request โดยตรง
+                    order_request = OrderRequest(
+                        order_type=OrderType.SELL_LIMIT,
+                        volume=volume,
+                        price=target_price,
+                        sl=0.0,  # ไม่ใช้ stop loss
+                        tp=0.0,  # ไม่ใช้ take profit
+                        reason=OrderReason.GRID_EXPANSION,
+                        confidence=confidence,
+                        reasoning=reasoning,
+                        max_slippage=10
+                    )
+                    
+                    # Execute order
+                    result = self._execute_real_order(order_request)
+                    
+                    if result.success:
+                        self.log(f"✅ SELL order placed: Ticket {result.ticket} @ {target_price:.5f}")
+                        self._track_order_performance(OrderReason.GRID_EXPANSION, True)
+                        return True
+                    else:
+                        self.log(f"❌ SELL order failed: {result.error_message}")
+                        self._track_order_performance(OrderReason.GRID_EXPANSION, False)
+                        return False
+            
+            # ถ้าไม่มีข้อมูลจาก Rule Engine ใช้วิธีเดิม
+            else:
+                # Get market data
+                if market_data is None:
+                    market_data = self._get_current_market_data()
+                
+                if not market_data:
+                    self.log("❌ Cannot get market data for sell order")
+                    return False
+                
+                # Calculate order parameters
+                order_params = self._calculate_smart_sell_parameters(confidence, market_data, reasoning)
+                
+                if not order_params:
+                    self.log("❌ Cannot calculate sell order parameters")
+                    return False
+                
+                # Determine order type
+                order_type = self._determine_sell_order_type(market_data, confidence)
+                
+                # Create and execute order
+                order_request = OrderRequest(
+                    order_type=order_type,
+                    volume=order_params["volume"],
+                    price=order_params["price"],
+                    sl=order_params.get("sl", 0.0),
+                    tp=order_params.get("tp", 0.0),
+                    reason=order_params["reason"],
+                    confidence=confidence,
+                    reasoning=reasoning,
+                    max_slippage=order_params.get("slippage", 10)
+                )
+                
+                result = self._execute_real_order(order_request)
+                
+                if result.success:
+                    self.log(f"✅ SELL order placed: Ticket {result.ticket} @ {order_request.price:.5f}")
+                    self._track_order_performance(order_request.reason, True)
+                    return True
+                else:
+                    self.log(f"❌ SELL order failed: {result.error_message}")
+                    self._track_order_performance(order_request.reason, False)
+                    return False
+                
+        except Exception as e:
+            self.log(f"❌ Smart sell order error: {e}")
+            return False
 
 # ========================================================================================
 # 🧪 TEST FUNCTION
