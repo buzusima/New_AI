@@ -107,6 +107,7 @@ class ModernRuleEngine:
             position_manager: Position management component
             performance_tracker: Performance tracking component
         """
+
         self.config = config
         self.market_analyzer = market_analyzer
         self.order_manager = order_manager
@@ -114,7 +115,7 @@ class ModernRuleEngine:
         self.performance_tracker = performance_tracker
         
         # Engine state
-        self.is_running = False
+        self.is_running = True
         self.current_mode = TradingMode.BALANCED
         self.last_decision = TradingDecision.WAIT
         self.last_decision_time = datetime.now()

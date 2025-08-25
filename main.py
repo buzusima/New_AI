@@ -60,8 +60,8 @@ class ModernRuleBasedTradingGUI:
     def init_variables(self):
         """Initialize variables - Modern Architecture"""
         # Connection states
-        self.is_connected = False
-        self.is_trading = False
+        self.is_connected = True
+        self.is_trading = True
         self.account_info = {}
         
         # Modern Rule-based Components (ใช้ Mock สำหรับ testing)
@@ -135,8 +135,8 @@ class ModernRuleBasedTradingGUI:
         return {
             "system": {
                 "mode": "TESTING",
-                "enable_real_trading": False,
-                "enable_mock_mode": True
+                "enable_real_trading": True,
+                "enable_mock_mode": False
             },
             "trading": {
                 "symbol": "XAUUSD",
@@ -767,7 +767,7 @@ class ModernRuleBasedTradingGUI:
             self.log("🧠 Initializing Modern Rule Engine...")
             
             # Initialize components based on system mode
-            enable_mock = self.config.get("system", {}).get("enable_mock_mode", True)
+            enable_mock = self.config.get("system", {}).get("enable_mock_mode", False)
             
             if enable_mock:
                 self.log("🧪 Using mock components for testing")
