@@ -1,46 +1,118 @@
 {
-  "system": {
-    "mode": "PRODUCTION",
-    "enable_real_trading": true,
-    "debug_level": "INFO",
-    "aggressive_mode": true
-  },
   "trading": {
     "symbol": "XAUUSD.v",
     "base_lot_size": 0.01,
-    "max_lot_size": 0.05,
     "min_lot_size": 0.01,
-    "max_positions": 15,
-    "min_spacing_points": 60,
-    "max_spacing_points": 150,
-    "emergency_stop_loss": 1500,
-    "target_orders_per_hour": 8
-  },
-  "api": {
-    "backend_url": "http://123.253.62.50:8080/api",
-    "timeout": 8,
-    "check_interval": 15,
-    "bot_name": "Modern_Grid_Trader",
-    "bot_version": "1.1.0"
+    "max_lot_size": 1.0,
+    "lot_step": 0.01,
+    "base_spacing": 100,
+    "min_spacing_points": 50,
+    "max_spacing_points": 300,
+    "max_positions": 25,
+    "max_daily_orders": 100,
+    "magic_number": 100001,
+    "order_timeout_minutes": 60,
+    "max_slippage_points": 20
   },
   "risk_management": {
-    "max_risk_percentage": 1.5,
-    "max_drawdown_percentage": 12.0,
-    "margin_usage_limit": 40.0,
-    "balance_protection_threshold": 2000,
-    "max_loss_per_position": 80,
-    "emergency_drawdown_limit": 8.0
+    "max_risk_percentage": 2.0,
+    "max_daily_risk": 5.0,
+    "margin_usage_limit": 70.0,
+    "position_size_limit": 0.1,
+    "emergency_stop_percentage": 10.0,
+    "drawdown_limit": 15.0,
+    "risk_per_trade": 1.0,
+    "portfolio_heat": 0.02
   },
-  "performance": {
-    "analytics_update_interval": 180,
-    "performance_window": 30,
-    "learning_rate": 0.15,
-    "optimization_threshold": 0.6
+  "market_analysis": {
+    "analysis_period": 100,
+    "rsi_period": 14,
+    "bollinger_period": 20,
+    "bollinger_deviation": 2.0,
+    "ma_fast_period": 10,
+    "ma_slow_period": 30,
+    "atr_period": 14,
+    "support_resistance_period": 100,
+    "trend_confirmation_bars": 2,
+    "volatility_lookback": 20
   },
-  "ui": {
-    "update_interval": 1,
-    "log_max_lines": 1500,
-    "auto_scroll_log": true,
-    "show_debug_info": true
+  "spacing_management": {
+    "base_spacing": 100,
+    "volatility_multiplier": 1.5,
+    "trend_multiplier": 1.2,
+    "session_multipliers": {
+      "ASIAN": 0.8,
+      "LONDON": 1.2,
+      "NY": 1.1,
+      "OVERLAP": 1.4,
+      "QUIET": 0.6
+    },
+    "adaptive_spacing": true,
+    "learning_rate": 0.1,
+    "performance_window": 50
+  },
+  "lot_calculation": {
+    "method": "DYNAMIC_HYBRID",
+    "confidence_weight": 0.25,
+    "volatility_weight": 0.25,
+    "risk_weight": 0.3,
+    "market_weight": 0.2,
+    "progressive_factor": 1.2,
+    "kelly_enabled": false,
+    "max_kelly_fraction": 0.25
+  },
+  "gui_settings": {
+    "update_interval_ms": 1000,
+    "log_max_lines": 1000,
+    "chart_update_interval": 5,
+    "performance_display_period": 24,
+    "color_theme": "dark",
+    "font_size": 9
+  },
+  "system": {
+    "debug_mode": false,
+    "verbose_logging": true,
+    "performance_monitoring": true,
+    "auto_backup": true,
+    "backup_interval_hours": 6,
+    "log_retention_days": 30,
+    "max_log_file_size_mb": 100
+  },
+  "grid_system": {
+    "phase_system_enabled": true,
+    "initialization_target_per_side": 3,
+    "monitoring_balance_range": [0.3, 0.7],
+    "rebalancing_urgency_threshold": [0.25, 0.75],
+    "maintenance_quality_threshold": 0.6,
+    "grid_template_enabled": true,
+    "zone_based_management": true,
+    "adaptive_grid_sizing": true,
+    "capital_based_sizing": true
+  },
+  "market_sessions": {
+    "timezone": "UTC",
+    "session_definitions": {
+      "ASIAN": {"start": 1, "end": 7},
+      "LONDON": {"start": 8, "end": 12},
+      "OVERLAP": {"start": 13, "end": 17},
+      "NEW_YORK": {"start": 18, "end": 22},
+      "QUIET": {"start": 23, "end": 0}
+    },
+    "session_trading_enabled": {
+      "ASIAN": true,
+      "LONDON": true,
+      "OVERLAP": true,
+      "NEW_YORK": true,
+      "QUIET": false
+    }
+  },
+  "performance_tracking": {
+    "decision_evaluation_delay_seconds": 300,
+    "profit_evaluation_delay_seconds": 1800,
+    "performance_window_decisions": 50,
+    "daily_stats_retention_days": 30,
+    "rule_learning_enabled": true,
+    "auto_weight_adjustment": true,
+    "performance_based_optimization": true
   }
 }

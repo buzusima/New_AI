@@ -1,20 +1,26 @@
 """
-🧠 Modern Rule-based Trading Engine
+🧠 Modern Rule Engine - Complete Flexible System
 rule_engine.py
-หัวใจของระบบ AI ที่ใช้ Rule-based Architecture แบบทันสมัย
-รองรับการเรียนรู้และปรับตัวแบบ Adaptive
+สำหรับ Modern AI Gold Grid Trading System - ระบบ Rule-based ที่ยืดหยุ่นและเป็นระบบ
+รองรับ Dynamic Spacing, Adaptive Grid Size, และ Smart Resource Management
+** PRODUCTION READY - NO MOCK DATA **
 """
 
 import time
 import threading
 from datetime import datetime, timedelta
-from typing import Dict, List, Tuple, Optional, Any
-from dataclasses import dataclass
-from enum import Enum
+from typing import Dict, List, Tuple, Optional, Any, Union
+from dataclasses import dataclass, field
+from enum import Enum, auto
 import json
 import numpy as np
-from collections import deque
+from collections import deque, defaultdict
 import statistics
+import math
+
+# ========================================================================================
+# 🎯 ENUMS และ DATA CLASSES
+# ========================================================================================
 
 class TradingDecision(Enum):
     """ประเภทการตัดสินใจเทรด"""
@@ -22,24 +28,40 @@ class TradingDecision(Enum):
     SELL = "SELL"
     CLOSE_PROFITABLE = "CLOSE_PROFITABLE"
     CLOSE_LOSING = "CLOSE_LOSING"
-    WAIT = "WAIT"
+    CLOSE_ALL = "CLOSE_ALL"
+    HOLD = "HOLD"
     EMERGENCY_STOP = "EMERGENCY_STOP"
-
-class MarketCondition(Enum):
-    """สภาวะตลาด"""
-    TRENDING_UP = "TRENDING_UP"
-    TRENDING_DOWN = "TRENDING_DOWN"
-    RANGING = "RANGING"
-    HIGH_VOLATILITY = "HIGH_VOLATILITY"
-    LOW_VOLATILITY = "LOW_VOLATILITY"
-    UNKNOWN = "UNKNOWN"
 
 class TradingMode(Enum):
     """โหมดการเทรด"""
     CONSERVATIVE = "CONSERVATIVE"
-    BALANCED = "BALANCED"
+    MODERATE = "MODERATE" 
     AGGRESSIVE = "AGGRESSIVE"
     ADAPTIVE = "ADAPTIVE"
+    EMERGENCY = "EMERGENCY"
+
+class GridPhase(Enum):
+    """เฟสของการจัดการกริด - 4 Phase System"""
+    INITIALIZATION = "INITIALIZATION"    # Phase 1: เริ่มต้นระบบ
+    MONITORING = "MONITORING"            # Phase 2: ตรวจสอบความสมดุล
+    REBALANCING = "REBALANCING"          # Phase 3: ปรับสมดุลอัจฉริยะ
+    MAINTENANCE = "MAINTENANCE"          # Phase 4: บำรุงรักษากริด
+
+class MarketSession(Enum):
+    """เซสชันตลาด"""
+    ASIAN = "ASIAN"
+    LONDON = "LONDON"
+    NEW_YORK = "NEW_YORK"
+    OVERLAP = "OVERLAP"
+    QUIET = "QUIET"
+
+class RiskLevel(Enum):
+    """ระดับความเสี่ยง"""
+    VERY_LOW = "VERY_LOW"
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
 
 @dataclass
 class RuleResult:
@@ -48,249 +70,315 @@ class RuleResult:
     decision: TradingDecision
     confidence: float  # 0.0 - 1.0
     reasoning: str
-    supporting_data: Dict[str, Any]
+    supporting_data: Dict = field(default_factory=dict)
     weight: float = 1.0
-    timestamp: datetime = None
+    execution_priority: int = 1  # 1=highest, 5=lowest
+    market_context: Dict = field(default_factory=dict)
+    risk_assessment: Dict = field(default_factory=dict)
     
-    def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = datetime.now()
+    @property
+    def weighted_confidence(self) -> float:
+        """ความเชื่อมั่นถ่วงน้ำหนัก"""
+        return self.confidence * self.weight
 
 @dataclass
-class RulePerformance:
-    """ประสิทธิภาพของ Rule"""
-    rule_name: str
-    total_signals: int = 0
-    successful_signals: int = 0
-    total_profit: float = 0.0
-    avg_confidence: float = 0.0
-    last_updated: datetime = None
-    performance_history: List[float] = None
-    
-    def __post_init__(self):
-        if self.last_updated is None:
-            self.last_updated = datetime.now()
-        if self.performance_history is None:
-            self.performance_history = []
+class GridState:
+    """สถานะของ Grid ปัจจุบัน"""
+    current_phase: GridPhase
+    buy_levels: List[float] = field(default_factory=list)
+    sell_levels: List[float] = field(default_factory=list)
+    missing_buy_slots: List[float] = field(default_factory=list)
+    missing_sell_slots: List[float] = field(default_factory=list)
+    grid_balance_ratio: float = 0.5  # 0.0=all sell, 1.0=all buy
+    grid_completeness: float = 0.0   # 0.0-1.0
+    last_grid_action: datetime = field(default_factory=datetime.now)
+    quality_score: float = 0.0       # คุณภาพของกริดปัจจุบัน
+    spacing_efficiency: float = 0.0  # ประสิทธิภาพของ spacing
     
     @property
-    def success_rate(self) -> float:
-        """อัตราความสำเร็จ"""
-        return self.successful_signals / max(self.total_signals, 1)
+    def total_orders(self) -> int:
+        """จำนวนออเดอร์รวม"""
+        return len(self.buy_levels) + len(self.sell_levels)
     
     @property
-    def average_profit(self) -> float:
-        """กำไรเฉลี่ย"""
-        return self.total_profit / max(self.total_signals, 1)
+    def is_balanced(self) -> bool:
+        """เช็คว่ากริดสมดุลหรือไม่"""
+        return 0.3 <= self.grid_balance_ratio <= 0.7
+
+@dataclass
+class CapitalAllocation:
+    """การจัดสรรเงินทุน"""
+    total_balance: float
+    available_margin: float
+    used_margin: float
+    free_margin: float
+    max_grid_allocation: float  # % ของเงินทุนที่ใช้กับกริด
+    optimal_grid_size: int     # จำนวนออเดอร์ที่เหมาะสม
+    risk_budget: float         # งบความเสี่ยงที่เหลือ
+    
+    @property
+    def margin_usage_ratio(self) -> float:
+        """อัตราการใช้ margin"""
+        return self.used_margin / self.available_margin if self.available_margin > 0 else 0
+    
+    @property
+    def can_expand_grid(self) -> bool:
+        """เช็คว่าสามารถขยายกริดได้หรือไม่"""
+        return self.margin_usage_ratio < 0.7 and self.risk_budget > 0
+
+@dataclass
+class MarketContext:
+    """บริบทตลาดปัจจุบัน"""
+    session: MarketSession
+    volatility_level: str  # VERY_LOW, LOW, MEDIUM, HIGH, VERY_HIGH
+    trend_direction: str   # UP, DOWN, SIDEWAYS
+    trend_strength: float  # 0.0-1.0
+    liquidity_level: str   # HIGH, MEDIUM, LOW
+    spread_condition: str  # NORMAL, WIDE, VERY_WIDE
+    momentum: float        # -1.0 to 1.0
+    
+    @property
+    def is_favorable_for_grid(self) -> bool:
+        """เช็คว่าสภาพตลาดเหมาะกับกริดหรือไม่"""
+        return (self.volatility_level in ["LOW", "MEDIUM"] and 
+                self.liquidity_level in ["HIGH", "MEDIUM"] and
+                self.spread_condition == "NORMAL")
+
+# ========================================================================================
+# 🧠 MODERN RULE ENGINE CLASS
+# ========================================================================================
 
 class ModernRuleEngine:
     """
-    🧠 Modern Rule-based Trading Engine
+    🧠 Modern Rule Engine - Flexible & Adaptive Edition
     
-    ความสามารถหลัก:
-    - Multi-rule decision making with weighted scoring
-    - Adaptive learning from performance
-    - Context-aware rule execution
-    - Real-time confidence adjustment
-    - Emergency protection mechanisms
+    ความสามารถใหม่:
+    - 4-Phase Grid Management System
+    - Dynamic Spacing ตาม Volatility  
+    - Adaptive Grid Size ตามเงินทุน
+    - Smart Resource Allocation
+    - Context-Aware Decision Making
+    - Flexible Balance Management
+    - Quality-Driven Grid Building
+    ** NO STOP LOSS - FOCUS ON PROFIT & RECOVERY **
     """
     
     def __init__(self, config: Dict, market_analyzer, order_manager, 
                  position_manager, performance_tracker):
-        """
-        Initialize Modern Rule Engine
-        
-        Args:
-            config: Configuration from rules_config.json
-            market_analyzer: Market analysis component
-            order_manager: Order management component
-            position_manager: Position management component
-            performance_tracker: Performance tracking component
-        """
-
-        self.config = config
+        # Core components - REAL connections only
+        self.rules_config = config
         self.market_analyzer = market_analyzer
         self.order_manager = order_manager
         self.position_manager = position_manager
         self.performance_tracker = performance_tracker
         
+        # Grid state management
+        self.grid_state = GridState(current_phase=GridPhase.INITIALIZATION)
+        self.capital_allocation = None
+        self.market_context = None
+        
         # Engine state
-        self.is_running = True
-        self.current_mode = TradingMode.BALANCED
-        self.last_decision = TradingDecision.WAIT
-        self.last_decision_time = datetime.now()
-        
-        # Rules configuration
-        self.rules_config = config.get("rules", {})
-        self.adaptive_config = config.get("adaptive_settings", {})
-        
-        # Performance tracking
-        self.rule_performances: Dict[str, RulePerformance] = {}
-        self.decision_history = deque(maxlen=100)
-        self.recent_decisions = deque(maxlen=10)
-        
-        # Adaptive parameters
-        self.learning_rate = self.adaptive_config.get("learning_rate", 0.1)
-        self.performance_window = self.adaptive_config.get("performance_window", 50)
-        self.confidence_adjustment_rate = self.adaptive_config.get("confidence_adjustment_rate", 0.05)
-        
-        # Initialize rule performances
-        self._initialize_rule_performances()
-        
-        # Threading
+        self.is_running = False
+        self.current_mode = TradingMode.MODERATE
         self.engine_thread = None
+        
+        # Data tracking
         self.last_market_data = {}
         self.last_portfolio_data = {}
+        self.recent_decisions = deque(maxlen=100)
+        self.decision_history = []
         
-        print("🧠 Modern Rule Engine initialized")
-        print(f"   Rules loaded: {list(self.rules_config.keys())}")
-        print(f"   Learning rate: {self.learning_rate}")
-        print(f"   Performance window: {self.performance_window}")
-    
-    def _initialize_rule_performances(self):
-        """Initialize rule performance tracking"""
-        for rule_name in self.rules_config.keys():
-            self.rule_performances[rule_name] = RulePerformance(rule_name=rule_name)
-    
-    def set_trading_mode(self, mode: str):
-        """Set trading mode and adjust rule weights"""
-        try:
-            self.current_mode = TradingMode(mode)
-            self._adjust_weights_for_mode()
-            print(f"🎯 Trading mode set to: {mode}")
-        except ValueError:
-            print(f"❌ Invalid trading mode: {mode}")
-            self.current_mode = TradingMode.BALANCED
-    
-    def _adjust_weights_for_mode(self):
-        """Adjust rule weights based on trading mode"""
-        mode_adjustments = {
-            TradingMode.CONSERVATIVE: {
-                "trend_following": 0.4,      # เพิ่มความระมัดระวัง
-                "mean_reversion": 0.3,
-                "support_resistance": 0.2,
-                "volatility_breakout": 0.05,  # ลดการเสี่ยง
-                "portfolio_balance": 0.05
-            },
-            TradingMode.BALANCED: {
-                "trend_following": 0.3,
-                "mean_reversion": 0.25,
-                "support_resistance": 0.2,
-                "volatility_breakout": 0.15,
-                "portfolio_balance": 0.1
-            },
-            TradingMode.AGGRESSIVE: {
-                "trend_following": 0.25,
-                "mean_reversion": 0.2,
-                "support_resistance": 0.15,
-                "volatility_breakout": 0.3,   # เพิ่มการเสี่ยง
-                "portfolio_balance": 0.1
-            },
-            TradingMode.ADAPTIVE: {
-                # ใช้ performance-based weights
-                "dynamic": True
-            }
-        }
+        # Performance tracking
+        self.rule_performances = defaultdict(lambda: {
+            "success_count": 0,
+            "total_count": 0,
+            "avg_confidence": 0.0,
+            "last_updated": datetime.now()
+        })
         
-        if self.current_mode == TradingMode.ADAPTIVE:
-            self._calculate_adaptive_weights()
-        else:
-            adjustments = mode_adjustments.get(self.current_mode, {})
-            for rule_name, weight in adjustments.items():
-                if rule_name in self.rules_config:
-                    self.rules_config[rule_name]["weight"] = weight
+        # Grid management
+        self.last_grid_analysis_time = datetime.now()
+        self.grid_analysis_interval = 30  # วินาที
+        self.spacing_history = deque(maxlen=50)
+        
+        print("🧠 Modern Rule Engine initialized with Flexible Grid System")
     
-    def _calculate_adaptive_weights(self):
-        """Calculate weights based on recent performance"""
-        total_performance = 0
-        rule_scores = {}
-        
-        # Calculate performance scores for each rule
-        for rule_name, performance in self.rule_performances.items():
-            if performance.total_signals > 5:  # Minimum signals for reliability
-                # Combined score: success rate * average profit * recent performance
-                success_factor = performance.success_rate
-                profit_factor = max(0, performance.average_profit) / 100  # Normalize
-                recent_factor = np.mean(performance.performance_history[-10:]) if len(performance.performance_history) > 0 else 0.5
-                
-                score = (success_factor * 0.4 + profit_factor * 0.3 + recent_factor * 0.3)
-                rule_scores[rule_name] = max(0.05, score)  # Minimum weight
-                total_performance += rule_scores[rule_name]
-            else:
-                # Default weight for rules without enough data
-                rule_scores[rule_name] = 0.2
-                total_performance += 0.2
-        
-        # Normalize weights
-        if total_performance > 0:
-            for rule_name in rule_scores:
-                if rule_name in self.rules_config:
-                    self.rules_config[rule_name]["weight"] = rule_scores[rule_name] / total_performance
+    # ========================================================================================
+    # 🎮 ENGINE CONTROL METHODS
+    # ========================================================================================
     
     def start(self):
-        """Start the rule engine"""
+        """เริ่มต้น Rule Engine"""
         if self.is_running:
             print("⚠️ Rule engine already running")
             return
-        
+            
         self.is_running = True
         self.engine_thread = threading.Thread(target=self._engine_loop, daemon=True)
         self.engine_thread.start()
-        print("🚀 Rule engine started")
+        print("🚀 Flexible Rule Engine started")
     
     def stop(self):
-        """Stop the rule engine"""
+        """หยุด Rule Engine"""
         self.is_running = False
         if self.engine_thread:
             self.engine_thread.join(timeout=5)
         print("🛑 Rule engine stopped")
     
+    def set_trading_mode(self, mode: TradingMode):
+        """ตั้งค่าโหมดการเทรด"""
+        self.current_mode = mode
+        print(f"🎯 Trading mode set to: {mode.value}")
+    
+    # ========================================================================================
+    # 🔄 MAIN ENGINE LOOP  
+    # ========================================================================================
+    
     def _engine_loop(self):
-        """Main engine loop"""
+        """Main engine loop - ลูปหลักที่ทำงานอย่างต่อเนื่อง"""
         while self.is_running:
             try:
-                # Get current market and portfolio data
-                self.last_market_data = self.market_analyzer.get_comprehensive_analysis()
-                self.last_portfolio_data = self.position_manager.get_portfolio_status()
+                # อัพเดทข้อมูลตลาดและ portfolio
+                self._update_market_and_portfolio_data()
                 
-                # Execute rule-based decision making
+                # วิเคราะห์บริบทตลาดปัจจุบัน  
+                self._analyze_market_context()
+                
+                # คำนวณการจัดสรรเงินทุน
+                self._calculate_capital_allocation()
+                
+                # ตัดสินใจตาม Rule-based system
                 decision_result = self._execute_rule_based_decision()
                 
                 if decision_result:
-                    # Execute the decision
+                    # ดำเนินการตามการตัดสินใจ
                     self._execute_trading_decision(decision_result)
                     
-                    # Track decision
+                    # บันทึกการตัดสินใจ
                     self.decision_history.append(decision_result)
                     self.recent_decisions.append(decision_result)
                 
-                # Update rule performances
+                # อัพเดทประสิทธิภาพของ rules
                 self._update_rule_performances()
                 
-                # Adaptive learning
+                # Adaptive learning (เรียนรู้และปรับปรุง)
                 if self.current_mode == TradingMode.ADAPTIVE:
                     self._adaptive_learning_update()
                 
-                # Sleep before next iteration
-                time.sleep(5)  # 5-second intervals
+                # หยุดพักระหว่างรอบ
+                time.sleep(5)  # 5 วินาทีต่อรอบ
                 
             except Exception as e:
                 print(f"❌ Rule engine error: {e}")
-                time.sleep(10)  # Longer sleep on error
+                time.sleep(10)  # พักนานขึ้นเมื่อเกิดข้อผิดพลาด
+    
+    def _update_market_and_portfolio_data(self):
+        """อัพเดทข้อมูลตลาดและ portfolio"""
+        try:
+            # ดึงข้อมูลตลาดแบบครบถ้วน
+            self.last_market_data = self.market_analyzer.get_comprehensive_analysis()
+            
+            # ดึงสถานะ portfolio
+            self.last_portfolio_data = self.position_manager.get_portfolio_status()
+            
+        except Exception as e:
+            print(f"❌ Data update error: {e}")
+    
+    def _analyze_market_context(self):
+        """วิเคราะห์บริบทตลาดปัจจุบัน"""
+        try:
+            market_data = self.last_market_data
+            
+            # ระบุ market session
+            current_hour = datetime.now().hour
+            if 1 <= current_hour <= 7:
+                session = MarketSession.ASIAN
+            elif 8 <= current_hour <= 12:
+                session = MarketSession.LONDON
+            elif 13 <= current_hour <= 17:
+                session = MarketSession.OVERLAP
+            elif 18 <= current_hour <= 22:
+                session = MarketSession.NEW_YORK
+            else:
+                session = MarketSession.QUIET
+            
+            # สร้าง market context
+            self.market_context = MarketContext(
+                session=session,
+                volatility_level=market_data.get("volatility_level", "MEDIUM"),
+                trend_direction=market_data.get("trend_direction", "SIDEWAYS"),
+                trend_strength=market_data.get("trend_strength", 0.5),
+                liquidity_level=market_data.get("liquidity_level", "MEDIUM"),
+                spread_condition=market_data.get("spread_condition", "NORMAL"),
+                momentum=market_data.get("momentum", 0.0)
+            )
+            
+        except Exception as e:
+            print(f"❌ Market context analysis error: {e}")
+    
+    def _calculate_capital_allocation(self):
+        """คำนวณการจัดสรรเงินทุนอย่างยืดหยุ่น"""
+        try:
+            portfolio_data = self.last_portfolio_data
+            
+            # ข้อมูลเงินทุน
+            balance = portfolio_data.get("balance", 10000)
+            equity = portfolio_data.get("equity", balance)
+            margin = portfolio_data.get("margin", 0)
+            free_margin = portfolio_data.get("free_margin", balance)
+            
+            # คำนวณ optimal grid size ตามเงินทุน
+            if balance < 1000:
+                optimal_size = max(2, int(balance / 200))  # เงินน้อย กริดน้อย
+                max_allocation = 0.3  # ใช้แค่ 30%
+            elif balance < 5000:
+                optimal_size = max(4, int(balance / 400))  # เงินปานกลาง
+                max_allocation = 0.5  # ใช้ 50%
+            elif balance < 20000:
+                optimal_size = max(6, int(balance / 800))  # เงินพอใช้
+                max_allocation = 0.6  # ใช้ 60%
+            else:
+                optimal_size = max(8, min(15, int(balance / 1500)))  # เงินเยอะ แต่ไม่ให้เกิน 15
+                max_allocation = 0.7  # ใช้ 70%
+            
+            # ปรับตาม market condition
+            if self.market_context and self.market_context.volatility_level == "HIGH":
+                optimal_size = max(3, int(optimal_size * 0.7))  # ลดกริดเมื่อ volatile
+                max_allocation *= 0.8
+            elif self.market_context and self.market_context.volatility_level == "VERY_LOW":
+                optimal_size = min(20, int(optimal_size * 1.3))  # เพิ่มกริดเมื่อตลาดเงียบ
+            
+            # สร้าง capital allocation
+            self.capital_allocation = CapitalAllocation(
+                total_balance=balance,
+                available_margin=free_margin,
+                used_margin=margin,
+                free_margin=free_margin,
+                max_grid_allocation=max_allocation,
+                optimal_grid_size=optimal_size,
+                risk_budget=free_margin * 0.1  # 10% ของ free margin
+            )
+            
+        except Exception as e:
+            print(f"❌ Capital allocation error: {e}")
+    
+    # ========================================================================================
+    # 🎯 MAIN DECISION MAKING SYSTEM
+    # ========================================================================================
     
     def _execute_rule_based_decision(self) -> Optional[RuleResult]:
         """
-        Execute rule-based decision making process
+        ระบบการตัดสินใจตาม Rules - หัวใจของระบบ
         
         Returns:
-            RuleResult if decision should be made, None otherwise
+            RuleResult ถ้าต้องการดำเนินการ, None ถ้าไม่ต้องทำอะไร
         """
         try:
-            # Collect results from all active rules
+            # เก็บผลลัพธ์จากทุก rules
             rule_results = []
             
-            # Execute each rule
-            for rule_name, rule_config in self.rules_config.items():
+            # ดำเนินการแต่ละ rule
+            for rule_name, rule_config in self.rules_config.get("rules", {}).items():
                 if not rule_config.get("enabled", True):
                     continue
                 
@@ -301,7 +389,7 @@ class ModernRuleEngine:
             if not rule_results:
                 return None
             
-            # Weighted decision making
+            # ตัดสินใจขั้นสุดท้ายด้วยระบบถ่วงน้ำหนัก
             final_decision = self._make_weighted_decision(rule_results)
             
             return final_decision
@@ -312,21 +400,25 @@ class ModernRuleEngine:
     
     def _execute_individual_rule(self, rule_name: str, rule_config: Dict) -> Optional[RuleResult]:
         """
-        Execute individual rule
+        ดำเนินการ rule แต่ละตัว
         
         Args:
-            rule_name: Name of the rule
-            rule_config: Configuration for the rule
+            rule_name: ชื่อ rule
+            rule_config: การตั้งค่า rule
             
         Returns:
-            RuleResult if rule triggers, None otherwise
+            RuleResult ถ้า rule trigger, None ถ้าไม่
         """
         try:
             confidence_threshold = rule_config.get("confidence_threshold", 0.6)
             weight = rule_config.get("weight", 1.0)
             
-            # Execute specific rule logic
-            if rule_name == "trend_following":
+            # ดำเนินการ rule logic เฉพาะ
+            if rule_name == "grid_expansion":
+                return self._rule_grid_expansion(rule_config, weight)
+            elif rule_name == "portfolio_balance":
+                return self._rule_portfolio_balance(rule_config, weight)
+            elif rule_name == "trend_following":
                 return self._rule_trend_following(rule_config, weight)
             elif rule_name == "mean_reversion":
                 return self._rule_mean_reversion(rule_config, weight)
@@ -334,10 +426,6 @@ class ModernRuleEngine:
                 return self._rule_support_resistance(rule_config, weight)
             elif rule_name == "volatility_breakout":
                 return self._rule_volatility_breakout(rule_config, weight)
-            elif rule_name == "portfolio_balance":
-                return self._rule_portfolio_balance(rule_config, weight)
-            elif rule_name == "grid_expansion":
-                return self._rule_grid_expansion(rule_config, weight)
             else:
                 print(f"❌ Unknown rule: {rule_name}")
                 return None
@@ -345,124 +433,137 @@ class ModernRuleEngine:
         except Exception as e:
             print(f"❌ Rule {rule_name} execution error: {e}")
             return None
-
+    
+    # ========================================================================================
+    # 🏗️ MODERN GRID EXPANSION RULE - 4 PHASE SYSTEM
+    # ========================================================================================
+    
     def _rule_grid_expansion(self, config: Dict, weight: float) -> Optional[RuleResult]:
-        """🧠 Systematic Grid Expansion - มีแผนการวางกริดที่ชัดเจน"""
+        """
+        🏗️ Modern Grid Expansion - 4 Phase Flexible System
+        
+        Phase 1: Initialization (เริ่มต้นระบบ)
+        Phase 2: Monitoring (ตรวจสอบความสมดุล)  
+        Phase 3: Rebalancing (ปรับสมดุลอัจฉริยะ)
+        Phase 4: Maintenance (บำรุงรักษากริด)
+        """
         try:
-            print("🔍 SYSTEMATIC GRID ANALYSIS...")
+            print("🔍 === MODERN GRID EXPANSION ANALYSIS ===")
             
-            # Get current market price
+            # ตรวจสอบข้อมูลพื้นฐาน
             current_price = self.last_market_data.get("current_price", 0)
             if current_price == 0:
                 print("❌ No current price available")
                 return None
             
-            # *** ดึง point_value จาก Order Manager ***
-            point_value = 0.01
-            if self.order_manager and hasattr(self.order_manager, 'point_value'):
-                point_value = self.order_manager.point_value
+            # ตรวจสอบเงินทุน
+            if not self.capital_allocation or not self.capital_allocation.can_expand_grid:
+                print("💰 Insufficient capital for grid expansion")
+                return None
             
-            # *** Configuration ***
-            base_spacing = config["parameters"].get("min_spacing_points", 100)
-            max_grid_per_side = config["parameters"].get("initial_grid_per_side", 5)
-            spacing_value = base_spacing * point_value
+            # คำนวณ dynamic parameters
+            dynamic_params = self._calculate_dynamic_grid_parameters()
             
-            # *** วิเคราะห์กริดปัจจุบัน ***
-            grid_analysis = self._analyze_current_grid(current_price, spacing_value)
+            # วิเคราะห์สถานะกริดปัจจุบัน
+            grid_analysis = self._analyze_current_grid_state(current_price, dynamic_params)
             
-            print(f"📊 Grid Analysis:")
-            print(f"   Current price: {current_price:.2f}")
-            print(f"   BUY side: {grid_analysis['buy_orders']}/{max_grid_per_side} orders")
-            print(f"   SELL side: {grid_analysis['sell_orders']}/{max_grid_per_side} orders")
-            print(f"   Next BUY slot: {grid_analysis['next_buy_price']:.2f}" if grid_analysis['next_buy_price'] else "   Next BUY slot: None")
-            print(f"   Next SELL slot: {grid_analysis['next_sell_price']:.2f}" if grid_analysis['next_sell_price'] else "   Next SELL slot: None")
+            # อัพเดท grid state
+            self._update_grid_state(grid_analysis, dynamic_params)
             
-            # *** ตัดสินใจแบบมีระบบ ***
+            # ตัดสินใจตาม Phase ปัจจุบัน
+            decision = self._execute_grid_phase_logic(grid_analysis, dynamic_params, weight)
             
-            # Priority 1: สร้างกริดพื้นฐาน (ฝั่งละ 3 ไม้ก่อน)
-            if grid_analysis['buy_orders'] < 3 and grid_analysis['next_buy_price']:
-                return RuleResult(
-                    rule_name="grid_expansion",
-                    decision=TradingDecision.BUY,
-                    confidence=0.85,
-                    reasoning=f"🏗️ SYSTEMATIC GRID: Build BUY foundation ({grid_analysis['buy_orders']}/3)",
-                    supporting_data={
-                        "target_price": grid_analysis['next_buy_price'],
-                        "grid_phase": "FOUNDATION",
-                        "direction": "BUY",
-                        "grid_position": grid_analysis['buy_orders'] + 1
-                    },
-                    weight=weight
-                )
-            
-            if grid_analysis['sell_orders'] < 3 and grid_analysis['next_sell_price']:
-                return RuleResult(
-                    rule_name="grid_expansion",
-                    decision=TradingDecision.SELL,
-                    confidence=0.85,
-                    reasoning=f"🏗️ SYSTEMATIC GRID: Build SELL foundation ({grid_analysis['sell_orders']}/3)",
-                    supporting_data={
-                        "target_price": grid_analysis['next_sell_price'],
-                        "grid_phase": "FOUNDATION",
-                        "direction": "SELL",
-                        "grid_position": grid_analysis['sell_orders'] + 1
-                    },
-                    weight=weight
-                )
-            
-            # Priority 2: ขยายกริดแบบสมดุล (หลังจากมีพื้นฐานแล้ว)
-            if grid_analysis['buy_orders'] >= 3 and grid_analysis['sell_orders'] >= 3:
-                
-                # เช็คความสมดุล
-                total_orders = grid_analysis['buy_orders'] + grid_analysis['sell_orders']
-                buy_ratio = grid_analysis['buy_orders'] / total_orders
-                
-                print(f"⚖️ Grid Balance Analysis:")
-                print(f"   BUY ratio: {buy_ratio:.1%}")
-                print(f"   Total orders: {total_orders}")
-                
-                # มี BUY น้อยเกินไป
-                if buy_ratio < 0.4 and grid_analysis['buy_orders'] < max_grid_per_side and grid_analysis['next_buy_price']:
-                    return RuleResult(
-                        rule_name="grid_expansion",
-                        decision=TradingDecision.BUY,
-                        confidence=0.65,
-                        reasoning=f"⚖️ BALANCE GRID: Rebalance BUY side ({buy_ratio:.1%} ratio)",
-                        supporting_data={
-                            "target_price": grid_analysis['next_buy_price'],
-                            "grid_phase": "BALANCE",
-                            "direction": "BUY"
-                        },
-                        weight=weight
-                    )
-                
-                # มี SELL น้อยเกินไป
-                elif buy_ratio > 0.6 and grid_analysis['sell_orders'] < max_grid_per_side and grid_analysis['next_sell_price']:
-                    return RuleResult(
-                        rule_name="grid_expansion",
-                        decision=TradingDecision.SELL,
-                        confidence=0.65,
-                        reasoning=f"⚖️ BALANCE GRID: Rebalance SELL side ({buy_ratio:.1%} ratio)",
-                        supporting_data={
-                            "target_price": grid_analysis['next_sell_price'],
-                            "grid_phase": "BALANCE",
-                            "direction": "SELL"
-                        },
-                        weight=weight
-                    )
-            
-            # Priority 3: กริดเต็มหรือไม่มีช่องว่าง
-            print("✅ GRID COMPLETE: Systematic grid is complete or no suitable slots")
-            return None
+            return decision
             
         except Exception as e:
-            print(f"❌ Systematic grid expansion error: {e}")
+            print(f"❌ Grid expansion error: {e}")
             return None
-
-    def _analyze_current_grid(self, current_price: float, spacing: float) -> Dict:
-        """วิเคราะห์สถานะกริดปัจจุบันอย่างเป็นระบบ"""
+    
+    def _calculate_dynamic_grid_parameters(self) -> Dict:
+        """คำนวณพารามิเตอร์กริดแบบ Dynamic - ยืดหยุ่นตามสภาพตลาด"""
         try:
-            # *** ดึงข้อมูลจริงจาก MT5 ***
+            market_data = self.last_market_data
+            
+            # Base parameters
+            base_spacing = 100  # points
+            base_grid_size = 5  # ออเดอร์ต่อฝั่ง
+            
+            # === DYNAMIC SPACING ตาม VOLATILITY ===
+            volatility_factor = market_data.get("volatility_factor", 1.0)
+            
+            if volatility_factor < 0.5:  # ตลาดเงียบมาก
+                spacing_multiplier = 0.7  # กริดหนาขึ้น
+                risk_multiplier = 1.2     # เสี่ยงได้มากขึ้น
+            elif volatility_factor < 0.8:  # ตลาดเงียบ
+                spacing_multiplier = 0.85
+                risk_multiplier = 1.1
+            elif volatility_factor > 2.0:  # ตลาดผันผวนมาก
+                spacing_multiplier = 1.8  # กริดเบาลง
+                risk_multiplier = 0.6     # ลดความเสี่ยง
+            elif volatility_factor > 1.5:  # ตลาดผันผวน
+                spacing_multiplier = 1.4
+                risk_multiplier = 0.8
+            else:  # ตลาดปกติ
+                spacing_multiplier = 1.0
+                risk_multiplier = 1.0
+            
+            # === ADAPTIVE GRID SIZE ตามเงินทุน ===
+            optimal_size = self.capital_allocation.optimal_grid_size
+            
+            # ปรับตาม market session
+            if self.market_context:
+                if self.market_context.session == MarketSession.OVERLAP:
+                    optimal_size = min(optimal_size + 2, 15)  # เพิ่มในช่วงคึกคัก
+                elif self.market_context.session == MarketSession.QUIET:
+                    optimal_size = max(optimal_size - 2, 3)   # ลดในช่วงเงียบ
+            
+            # คำนวณ spacing สุดท้าย
+            dynamic_spacing = int(base_spacing * spacing_multiplier)
+            dynamic_spacing = max(50, min(300, dynamic_spacing))  # จำกัดไว้ 50-300 points
+            
+            # คำนวณระยะห่างขั้นต่ำ
+            min_distance = max(30, int(dynamic_spacing * 0.4))
+            
+            # เก็บประวัติ spacing
+            self.spacing_history.append(dynamic_spacing)
+            
+            params = {
+                "dynamic_spacing": dynamic_spacing,
+                "optimal_grid_size": optimal_size,
+                "min_distance_points": min_distance,
+                "spacing_multiplier": spacing_multiplier,
+                "risk_multiplier": risk_multiplier,
+                "volatility_factor": volatility_factor,
+                "point_value": getattr(self.order_manager, 'point_value', 0.01)
+            }
+            
+            print(f"📊 Dynamic Grid Parameters:")
+            print(f"   Volatility Factor: {volatility_factor:.2f}")
+            print(f"   Dynamic Spacing: {dynamic_spacing} points (base: {base_spacing})")
+            print(f"   Optimal Grid Size: {optimal_size} orders per side")
+            print(f"   Min Distance: {min_distance} points")
+            print(f"   Market Session: {self.market_context.session.value if self.market_context else 'UNKNOWN'}")
+            
+            return params
+            
+        except Exception as e:
+            print(f"❌ Dynamic parameters calculation error: {e}")
+            return {
+                "dynamic_spacing": 100,
+                "optimal_grid_size": 5,
+                "min_distance_points": 50,
+                "spacing_multiplier": 1.0,
+                "risk_multiplier": 1.0,
+                "volatility_factor": 1.0,
+                "point_value": 0.01
+            }
+    
+    def _analyze_current_grid_state(self, current_price: float, params: Dict) -> Dict:
+        """วิเคราะห์สถานะกริดปัจจุบันอย่างละเอียด"""
+        try:
+            print("🗺️ === GRID STATE ANALYSIS ===")
+            
+            # ดึงข้อมูลจริงจาก MT5
             positions = []
             pending_orders = []
             
@@ -473,178 +574,1126 @@ class ModernRuleEngine:
             if self.order_manager:
                 pending_orders = self.order_manager.get_pending_orders()
             
-            # *** สร้าง Grid Map ***
-            buy_levels = set()
-            sell_levels = set()
+            # === สร้าง Grid Map ===
+            buy_levels = []
+            sell_levels = []
             
-            # จาก positions
+            # จาก positions (ออเดอร์ที่ fill แล้ว)
             for pos in positions:
-                price = pos.open_price
+                price = round(pos.open_price, 2)
                 if pos.type.value == "BUY":
-                    buy_levels.add(round(price, 2))
+                    buy_levels.append(price)
                 elif pos.type.value == "SELL":
-                    sell_levels.add(round(price, 2))
+                    sell_levels.append(price)
             
-            # จาก pending orders
+            # จาก pending orders (ออเดอร์ที่รออยู่)
             for order in pending_orders:
                 order_type = order.get("type", "")
                 price = round(order.get("price", 0), 2)
                 if price > 0:
                     if "BUY" in order_type:
-                        buy_levels.add(price)
+                        buy_levels.append(price)
                     elif "SELL" in order_type:
-                        sell_levels.add(price)
+                        sell_levels.append(price)
             
-            # *** คำนวณ Grid Slots ที่ควรมี ***
-            expected_buy_levels = set()
-            expected_sell_levels = set()
+            # เรียงลำดับ
+            buy_levels = sorted(set(buy_levels), reverse=True)  # สูงไปต่ำ
+            sell_levels = sorted(set(sell_levels))             # ต่ำไปสูง
             
-            # สร้าง grid slots อย่างเป็นระบบ
-            for i in range(1, 6):  # 5 levels ต่อฝั่ง
-                buy_price = round(current_price - (spacing * i), 2)
-                sell_price = round(current_price + (spacing * i), 2)
+            # === คำนวณ Grid Template ที่เหมาะสม ===
+            spacing_value = params["dynamic_spacing"] * params["point_value"]
+            optimal_size = params["optimal_grid_size"]
+            
+            # สร้าง expected levels
+            expected_buy_levels = []
+            expected_sell_levels = []
+            
+            for i in range(1, optimal_size + 1):
+                buy_price = round(current_price - (spacing_value * i), 2)
+                sell_price = round(current_price + (spacing_value * i), 2)
                 
-                expected_buy_levels.add(buy_price)
-                expected_sell_levels.add(sell_price)
+                expected_buy_levels.append(buy_price)
+                expected_sell_levels.append(sell_price)
             
-            # *** หา slots ที่ยังว่าง ***
-            missing_buy_slots = expected_buy_levels - buy_levels
-            missing_sell_slots = expected_sell_levels - sell_levels
+            # === หา Missing Slots ===
+            missing_buy_slots = [p for p in expected_buy_levels if p not in buy_levels]
+            missing_sell_slots = [p for p in expected_sell_levels if p not in sell_levels]
             
-            # เลือก slot ถัดไปที่ใกล้ current price ที่สุด
-            next_buy_price = None
-            next_sell_price = None
+            # เลือก slot ถัดไปที่ดีที่สุด
+            next_buy_slot = self._select_best_grid_slot(missing_buy_slots, current_price, "BUY")
+            next_sell_slot = self._select_best_grid_slot(missing_sell_slots, current_price, "SELL")
             
-            if missing_buy_slots:
-                next_buy_price = max(missing_buy_slots)  # เลือกที่ใกล้ current price ที่สุด
+            # === คำนวณ Grid Quality ===
+            grid_quality = self._calculate_grid_quality(buy_levels, sell_levels, 
+                                                       expected_buy_levels, expected_sell_levels)
             
-            if missing_sell_slots:
-                next_sell_price = min(missing_sell_slots)  # เลือกที่ใกล้ current price ที่สุด
+            # === Grid Balance Analysis ===
+            total_orders = len(buy_levels) + len(sell_levels)
+            buy_ratio = len(buy_levels) / total_orders if total_orders > 0 else 0.5
             
-            print(f"🗺️ Grid Map:")
-            print(f"   Expected BUY levels: {sorted(expected_buy_levels, reverse=True)}")
-            print(f"   Occupied BUY levels: {sorted(buy_levels, reverse=True)}")
-            print(f"   Missing BUY slots: {sorted(missing_buy_slots, reverse=True)}")
-            print(f"   Expected SELL levels: {sorted(expected_sell_levels)}")
-            print(f"   Occupied SELL levels: {sorted(sell_levels)}")
-            print(f"   Missing SELL slots: {sorted(missing_sell_slots)}")
-            
-            return {
+            analysis = {
+                "current_price": current_price,
+                "buy_levels": buy_levels,
+                "sell_levels": sell_levels,
                 "buy_orders": len(buy_levels),
                 "sell_orders": len(sell_levels),
-                "next_buy_price": next_buy_price,
-                "next_sell_price": next_sell_price,
-                "buy_levels": sorted(buy_levels, reverse=True),
-                "sell_levels": sorted(sell_levels),
-                "missing_buy_slots": len(missing_buy_slots),
-                "missing_sell_slots": len(missing_sell_slots),
-                "grid_completeness": (len(buy_levels) + len(sell_levels)) / 10  # 10 = 5+5 เป้าหมาย
+                "total_orders": total_orders,
+                "buy_ratio": buy_ratio,
+                "expected_buy_levels": expected_buy_levels,
+                "expected_sell_levels": expected_sell_levels,
+                "missing_buy_slots": missing_buy_slots,
+                "missing_sell_slots": missing_sell_slots,
+                "next_buy_slot": next_buy_slot,
+                "next_sell_slot": next_sell_slot,
+                "grid_completeness": len(buy_levels + sell_levels) / (optimal_size * 2),
+                "grid_quality_score": grid_quality,
+                "spacing_efficiency": self._calculate_spacing_efficiency(buy_levels, sell_levels, spacing_value),
+                "optimal_grid_size": optimal_size
             }
+            
+            print(f"📊 Grid State:")
+            print(f"   Current Price: {current_price:.2f}")
+            print(f"   BUY: {len(buy_levels)}/{optimal_size} | SELL: {len(sell_levels)}/{optimal_size}")
+            print(f"   Balance Ratio: {buy_ratio:.1%} (BUY)")
+            print(f"   Completeness: {analysis['grid_completeness']:.1%}")
+            print(f"   Quality Score: {grid_quality:.2f}/1.0")
+            print(f"   Next BUY Slot: {next_buy_slot:.2f}" if next_buy_slot else "   Next BUY Slot: None")
+            print(f"   Next SELL Slot: {next_sell_slot:.2f}" if next_sell_slot else "   Next SELL Slot: None")
+            
+            return analysis
             
         except Exception as e:
-            print(f"❌ Grid analysis error: {e}")
-            return {
-                "buy_orders": 0, "sell_orders": 0,
-                "next_buy_price": None, "next_sell_price": None
+            print(f"❌ Grid state analysis error: {e}")
+            return {}
+    
+    def _select_best_grid_slot(self, available_slots: List[float], current_price: float, direction: str) -> Optional[float]:
+        """เลือก grid slot ที่ดีที่สุด"""
+        if not available_slots:
+            return None
+        
+        # เรียงตามระยะห่างจาก current price
+        if direction == "BUY":
+            # เลือก BUY slot ที่ใกล้ current price ที่สุด (ราคาสูงสุด)
+            return max(available_slots)
+        else:
+            # เลือก SELL slot ที่ใกล้ current price ที่สุด (ราคาต่ำสุด)  
+            return min(available_slots)
+    
+    def _calculate_grid_quality(self, buy_levels: List[float], sell_levels: List[float],
+                               expected_buy: List[float], expected_sell: List[float]) -> float:
+        """คำนวณคุณภาพของกริด (0.0-1.0)"""
+        try:
+            if not expected_buy and not expected_sell:
+                return 0.0
+            
+            # คำนวณความครบถ้วน
+            buy_completeness = len([b for b in expected_buy if b in buy_levels]) / len(expected_buy) if expected_buy else 0
+            sell_completeness = len([s for s in expected_sell if s in sell_levels]) / len(expected_sell) if expected_sell else 0
+            completeness = (buy_completeness + sell_completeness) / 2
+            
+            # คำนวณความสม่ำเสมอของ spacing
+            spacing_uniformity = self._calculate_spacing_uniformity(buy_levels + sell_levels)
+            
+            # คำนวณความสมดุล
+            total = len(buy_levels) + len(sell_levels)
+            balance_score = 1.0 - abs(0.5 - (len(buy_levels) / total)) * 2 if total > 0 else 0.5
+            
+            # รวมคะแนน
+            quality = (completeness * 0.4 + spacing_uniformity * 0.3 + balance_score * 0.3)
+            
+            return min(1.0, max(0.0, quality))
+            
+        except Exception as e:
+            print(f"❌ Grid quality calculation error: {e}")
+            return 0.0
+    
+    def _calculate_spacing_uniformity(self, levels: List[float]) -> float:
+        """คำนวณความสม่ำเสมอของระยะห่าง"""
+        if len(levels) < 2:
+            return 1.0
+        
+        try:
+            levels = sorted(levels)
+            spacings = [levels[i+1] - levels[i] for i in range(len(levels)-1)]
+            
+            if not spacings:
+                return 1.0
+            
+            avg_spacing = statistics.mean(spacings)
+            spacing_variance = statistics.variance(spacings) if len(spacings) > 1 else 0
+            
+            # ยิ่ง variance น้อย ยิ่งสม่ำเสมอ
+            uniformity = 1.0 / (1.0 + spacing_variance / (avg_spacing ** 2)) if avg_spacing > 0 else 0
+            
+            return min(1.0, max(0.0, uniformity))
+            
+        except Exception as e:
+            return 0.5
+    
+    def _calculate_spacing_efficiency(self, buy_levels: List[float], sell_levels: List[float], 
+                                    expected_spacing: float) -> float:
+        """คำนวณประสิทธิภาพของ spacing"""
+        try:
+            all_levels = sorted(buy_levels + sell_levels)
+            if len(all_levels) < 2:
+                return 1.0
+            
+            actual_spacings = [all_levels[i+1] - all_levels[i] for i in range(len(all_levels)-1)]
+            
+            # เปรียบเทียบกับ expected spacing
+            efficiency_scores = []
+            for spacing in actual_spacings:
+                ratio = min(spacing, expected_spacing) / max(spacing, expected_spacing)
+                efficiency_scores.append(ratio)
+            
+            return statistics.mean(efficiency_scores) if efficiency_scores else 0.0
+            
+        except Exception as e:
+            return 0.0
+    
+    def _update_grid_state(self, analysis: Dict, params: Dict):
+        """อัพเดทสถานะกริด"""
+        try:
+            self.grid_state.buy_levels = analysis.get("buy_levels", [])
+            self.grid_state.sell_levels = analysis.get("sell_levels", [])
+            self.grid_state.missing_buy_slots = analysis.get("missing_buy_slots", [])
+            self.grid_state.missing_sell_slots = analysis.get("missing_sell_slots", [])
+            self.grid_state.grid_balance_ratio = analysis.get("buy_ratio", 0.5)
+            self.grid_state.grid_completeness = analysis.get("grid_completeness", 0.0)
+            self.grid_state.quality_score = analysis.get("grid_quality_score", 0.0)
+            self.grid_state.spacing_efficiency = analysis.get("spacing_efficiency", 0.0)
+            
+            # กำหนด phase ตามสถานการณ์
+            total_orders = analysis.get("total_orders", 0)
+            optimal_size = params.get("optimal_grid_size", 5)
+            
+            if total_orders < optimal_size:
+                self.grid_state.current_phase = GridPhase.INITIALIZATION
+            elif self.grid_state.quality_score < 0.6:
+                self.grid_state.current_phase = GridPhase.MAINTENANCE
+            elif not self.grid_state.is_balanced:
+                self.grid_state.current_phase = GridPhase.REBALANCING
+            else:
+                self.grid_state.current_phase = GridPhase.MONITORING
+            
+        except Exception as e:
+            print(f"❌ Grid state update error: {e}")
+    
+    # ========================================================================================
+    # 🏗️ 4-PHASE GRID LOGIC SYSTEM
+    # ========================================================================================
+    
+    def _execute_grid_phase_logic(self, analysis: Dict, params: Dict, weight: float) -> Optional[RuleResult]:
+        """ดำเนินการตาม Phase ของกริด"""
+        try:
+            current_phase = self.grid_state.current_phase
+            
+            print(f"🎯 EXECUTING PHASE: {current_phase.value}")
+            
+            if current_phase == GridPhase.INITIALIZATION:
+                return self._phase_1_initialization(analysis, params, weight)
+            elif current_phase == GridPhase.MONITORING:
+                return self._phase_2_monitoring(analysis, params, weight)
+            elif current_phase == GridPhase.REBALANCING:
+                return self._phase_3_rebalancing(analysis, params, weight)
+            elif current_phase == GridPhase.MAINTENANCE:
+                return self._phase_4_maintenance(analysis, params, weight)
+            else:
+                print(f"❌ Unknown grid phase: {current_phase}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Grid phase execution error: {e}")
+            return None
+    
+    def _phase_1_initialization(self, analysis: Dict, params: Dict, weight: float) -> Optional[RuleResult]:
+        """
+        🏗️ Phase 1: Grid Initialization - สร้างกริดเริ่มต้นอย่างเป็นระบบ
+        
+        เป้าหมาย:
+        - สร้างกริดพื้นฐานที่เป็นระเบียบ
+        - วางออเดอร์ทั้งสองฝั่งแบบสมดุล
+        - ใช้ dynamic spacing ตาม volatility
+        """
+        try:
+            print("🏗️ === PHASE 1: GRID INITIALIZATION ===")
+            
+            current_price = analysis["current_price"]
+            total_orders = analysis["total_orders"]
+            optimal_size = params["optimal_grid_size"]
+            
+            # เป้าหมายเริ่มต้น: สร้างกริดพื้นฐานฝั่งละ 40% ของ optimal size
+            initial_target_per_side = max(2, int(optimal_size * 0.4))
+            
+            print(f"🎯 Initialization Target: {initial_target_per_side} orders per side")
+            print(f"   Current: BUY={analysis['buy_orders']} SELL={analysis['sell_orders']}")
+            
+            # Priority 1: สร้างกริดพื้นฐานให้ครบ
+            if analysis["buy_orders"] < initial_target_per_side and analysis["next_buy_slot"]:
+                confidence = 0.85  # ความเชื่อมั่นสูงในการสร้างพื้นฐาน
+                return RuleResult(
+                    rule_name="grid_expansion",
+                    decision=TradingDecision.BUY,
+                    confidence=confidence,
+                    reasoning=f"🏗️ INIT: Build BUY foundation ({analysis['buy_orders']}/{initial_target_per_side})",
+                    supporting_data={
+                        "target_price": analysis["next_buy_slot"],
+                        "grid_phase": "INITIALIZATION",
+                        "direction": "BUY",
+                        "slot_priority": "FOUNDATION",
+                        "spacing_used": params["dynamic_spacing"]
+                    },
+                    weight=weight,
+                    execution_priority=1
+                )
+            
+            if analysis["sell_orders"] < initial_target_per_side and analysis["next_sell_slot"]:
+                confidence = 0.85
+                return RuleResult(
+                    rule_name="grid_expansion",
+                    decision=TradingDecision.SELL,
+                    confidence=confidence,
+                    reasoning=f"🏗️ INIT: Build SELL foundation ({analysis['sell_orders']}/{initial_target_per_side})",
+                    supporting_data={
+                        "target_price": analysis["next_sell_slot"],
+                        "grid_phase": "INITIALIZATION",
+                        "direction": "SELL",
+                        "slot_priority": "FOUNDATION",
+                        "spacing_used": params["dynamic_spacing"]
+                    },
+                    weight=weight,
+                    execution_priority=1
+                )
+            
+            # มีพื้นฐานครบแล้ว - เปลี่ยนไป phase 2
+            print("✅ INIT COMPLETE: Foundation grid established")
+            self.grid_state.current_phase = GridPhase.MONITORING
+            return None
+            
+        except Exception as e:
+            print(f"❌ Phase 1 error: {e}")
+            return None
+    
+    def _phase_2_monitoring(self, analysis: Dict, params: Dict, weight: float) -> Optional[RuleResult]:
+        """
+        👁️ Phase 2: Grid Balance Monitoring - ตรวจสอบความสมดุลและขยายแบบชาญฉลาด
+        
+        เป้าหมาย:
+        - ตรวจสอบความสมดุล BUY/SELL
+        - ขยายกริดอย่างมีแผน
+        - รักษาคุณภาพกริด
+        """
+        try:
+            print("👁️ === PHASE 2: GRID MONITORING ===")
+            
+            buy_ratio = analysis["buy_ratio"]
+            total_orders = analysis["total_orders"]
+            optimal_size = params["optimal_grid_size"]
+            max_total_orders = optimal_size * 2
+            
+            print(f"⚖️ Balance Analysis:")
+            print(f"   BUY Ratio: {buy_ratio:.1%}")
+            print(f"   Grid Size: {total_orders}/{max_total_orders}")
+            print(f"   Quality: {analysis['grid_quality_score']:.2f}")
+            
+            # === เงื่อนไขการขยายกริด ===
+            
+            # 1. เช็ค market condition
+            if not self._is_market_suitable_for_expansion():
+                print("⏸️ Market not suitable for expansion")
+                return None
+            
+            # 2. เช็คงบประมาณ
+            if not self.capital_allocation.can_expand_grid:
+                print("💰 Capital limit reached")
+                return None
+            
+            # 3. ขยายกริดอย่างสมดุล
+            if total_orders < max_total_orders:
+                
+                # ให้ความสำคัญกับฝั่งที่มีน้อยกว่า
+                if buy_ratio < 0.35 and analysis["next_buy_slot"]:  # BUY น้อยเกินไป
+                    confidence = 0.75
+                    return RuleResult(
+                        rule_name="grid_expansion",
+                        decision=TradingDecision.BUY,
+                        confidence=confidence,
+                        reasoning=f"⚖️ REBALANCE: Strengthen BUY side ({buy_ratio:.1%} → target 50%)",
+                        supporting_data={
+                            "target_price": analysis["next_buy_slot"],
+                            "grid_phase": "MONITORING",
+                            "direction": "BUY",
+                            "balance_action": "STRENGTHEN_WEAK_SIDE",
+                            "spacing_used": params["dynamic_spacing"]
+                        },
+                        weight=weight,
+                        execution_priority=2
+                    )
+                
+                elif buy_ratio > 0.65 and analysis["next_sell_slot"]:  # SELL น้อยเกินไป
+                    confidence = 0.75
+                    return RuleResult(
+                        rule_name="grid_expansion",
+                        decision=TradingDecision.SELL,
+                        confidence=confidence,
+                        reasoning=f"⚖️ REBALANCE: Strengthen SELL side ({buy_ratio:.1%} → target 50%)",
+                        supporting_data={
+                            "target_price": analysis["next_sell_slot"],
+                            "grid_phase": "MONITORING",
+                            "direction": "SELL",
+                            "balance_action": "STRENGTHEN_WEAK_SIDE",
+                            "spacing_used": params["dynamic_spacing"]
+                        },
+                        weight=weight,
+                        execution_priority=2
+                    )
+                
+                # ขยายกริดแบบสมดุล (เมื่อสมดุลดีอยู่แล้ว)
+                elif 0.4 <= buy_ratio <= 0.6:
+                    # เลือกฝั่งที่มีน้อยกว่าเล็กน้อย
+                    if analysis["buy_orders"] <= analysis["sell_orders"] and analysis["next_buy_slot"]:
+                        confidence = 0.6
+                        return RuleResult(
+                            rule_name="grid_expansion",
+                            decision=TradingDecision.BUY,
+                            confidence=confidence,
+                            reasoning=f"📈 EXPAND: Balanced BUY expansion ({total_orders}/{max_total_orders})",
+                            supporting_data={
+                                "target_price": analysis["next_buy_slot"],
+                                "grid_phase": "MONITORING",
+                                "direction": "BUY",
+                                "balance_action": "BALANCED_EXPANSION",
+                                "spacing_used": params["dynamic_spacing"]
+                            },
+                            weight=weight,
+                            execution_priority=3
+                        )
+                    
+                    elif analysis["sell_orders"] < analysis["buy_orders"] and analysis["next_sell_slot"]:
+                        confidence = 0.6
+                        return RuleResult(
+                            rule_name="grid_expansion",
+                            decision=TradingDecision.SELL,
+                            confidence=confidence,
+                            reasoning=f"📈 EXPAND: Balanced SELL expansion ({total_orders}/{max_total_orders})",
+                            supporting_data={
+                                "target_price": analysis["next_sell_slot"],
+                                "grid_phase": "MONITORING",
+                                "direction": "SELL",
+                                "balance_action": "BALANCED_EXPANSION",
+                                "spacing_used": params["dynamic_spacing"]
+                            },
+                            weight=weight,
+                            execution_priority=3
+                        )
+            
+            # กริดเต็มแล้วหรือไม่มีช่องที่เหมาะสม
+            print("✅ MONITORING: Grid is optimal or complete")
+            return None
+            
+        except Exception as e:
+            print(f"❌ Phase 2 error: {e}")
+            return None
+    
+    def _phase_3_rebalancing(self, analysis: Dict, params: Dict, weight: float) -> Optional[RuleResult]:
+        """
+        ⚖️ Phase 3: Smart Rebalancing - ปรับสมดุลอัจฉริยะ
+        
+        เป้าหมาย:
+        - แก้ไขความไม่สมดุลของกริด
+        - ไม่ใช้การปิดออเดอร์ เน้นการปรับแต่ง
+        - รักษาคุณภาพกริดโดยรวม
+        """
+        try:
+            print("⚖️ === PHASE 3: SMART REBALANCING ===")
+            
+            buy_ratio = analysis["buy_ratio"]
+            
+            print(f"📊 Balance Status:")
+            print(f"   BUY Ratio: {buy_ratio:.1%}")
+            print(f"   Target Range: 30% - 70%")
+            print(f"   Action: {'STRENGTHEN BUY' if buy_ratio < 0.3 else 'STRENGTHEN SELL' if buy_ratio > 0.7 else 'MINOR ADJUSTMENT'}")
+            
+            # === Critical Imbalance Correction ===
+            
+            # BUY น้อยมากเกินไป (< 30%)
+            if buy_ratio < 0.3 and analysis["next_buy_slot"]:
+                confidence = 0.8  # ความเชื่อมั่นสูงสำหรับการแก้ไข
+                return RuleResult(
+                    rule_name="grid_expansion",
+                    decision=TradingDecision.BUY,
+                    confidence=confidence,
+                    reasoning=f"🚨 CRITICAL REBALANCE: Fix BUY shortage ({buy_ratio:.1%})",
+                    supporting_data={
+                        "target_price": analysis["next_buy_slot"],
+                        "grid_phase": "REBALANCING",
+                        "direction": "BUY",
+                        "urgency": "CRITICAL",
+                        "balance_target": "30-70%",
+                        "spacing_used": params["dynamic_spacing"]
+                    },
+                    weight=weight,
+                    execution_priority=1
+                )
+            
+            # SELL น้อยมากเกินไป (> 70% BUY)
+            elif buy_ratio > 0.7 and analysis["next_sell_slot"]:
+                confidence = 0.8
+                return RuleResult(
+                    rule_name="grid_expansion",
+                    decision=TradingDecision.SELL,
+                    confidence=confidence,
+                    reasoning=f"🚨 CRITICAL REBALANCE: Fix SELL shortage ({buy_ratio:.1%})",
+                    supporting_data={
+                        "target_price": analysis["next_sell_slot"],
+                        "grid_phase": "REBALANCING",
+                        "direction": "SELL",
+                        "urgency": "CRITICAL",
+                        "balance_target": "30-70%",
+                        "spacing_used": params["dynamic_spacing"]
+                    },
+                    weight=weight,
+                    execution_priority=1
+                )
+            
+            # === Moderate Imbalance Correction ===
+            
+            # BUY น้อยเล็กน้อย (30-40%)
+            elif 0.3 <= buy_ratio < 0.4 and analysis["next_buy_slot"]:
+                confidence = 0.65
+                return RuleResult(
+                    rule_name="grid_expansion", 
+                    decision=TradingDecision.BUY,
+                    confidence=confidence,
+                    reasoning=f"📊 MODERATE REBALANCE: Improve BUY side ({buy_ratio:.1%})",
+                    supporting_data={
+                        "target_price": analysis["next_buy_slot"],
+                        "grid_phase": "REBALANCING",
+                        "direction": "BUY",
+                        "urgency": "MODERATE",
+                        "spacing_used": params["dynamic_spacing"]
+                    },
+                    weight=weight,
+                    execution_priority=2
+                )
+            
+            # SELL น้อยเล็กน้อย (60-70% BUY)
+            elif 0.6 < buy_ratio <= 0.7 and analysis["next_sell_slot"]:
+                confidence = 0.65
+                return RuleResult(
+                    rule_name="grid_expansion",
+                    decision=TradingDecision.SELL,
+                    confidence=confidence,
+                    reasoning=f"📊 MODERATE REBALANCE: Improve SELL side ({buy_ratio:.1%})",
+                    supporting_data={
+                        "target_price": analysis["next_sell_slot"],
+                        "grid_phase": "REBALANCING", 
+                        "direction": "SELL",
+                        "urgency": "MODERATE",
+                        "spacing_used": params["dynamic_spacing"]
+                    },
+                    weight=weight,
+                    execution_priority=2
+                )
+            
+            # สมดุลแล้ว - เปลี่ยนไป monitoring
+            else:
+                print("✅ REBALANCING COMPLETE: Grid is now balanced")
+                self.grid_state.current_phase = GridPhase.MONITORING
+                return None
+            
+        except Exception as e:
+            print(f"❌ Phase 3 error: {e}")
+            return None
+    
+    def _phase_4_maintenance(self, analysis: Dict, params: Dict, weight: float) -> Optional[RuleResult]:
+        """
+        🔧 Phase 4: Grid Maintenance - บำรุงรักษากริดให้มีคุณภาพ
+        
+        เป้าหมาย:
+        - ปรับปรุงคุณภาพกริด
+        - จัดระเบียบ spacing ที่เสียรูป
+        - เติมช่องว่างที่สำคัญ
+        """
+        try:
+            print("🔧 === PHASE 4: GRID MAINTENANCE ===")
+            
+            quality_score = analysis["grid_quality_score"]
+            spacing_efficiency = analysis["spacing_efficiency"]
+            
+            print(f"🛠️ Maintenance Analysis:")
+            print(f"   Quality Score: {quality_score:.2f}/1.0")
+            print(f"   Spacing Efficiency: {spacing_efficiency:.2f}/1.0")
+            
+            # === Quality Improvement Actions ===
+            
+            # 1. ปรับปรุงคุณภาพโดยรวม
+            if quality_score < 0.6:
+                # หาช่องว่างที่สำคัญที่สุด
+                critical_gap = self._find_critical_grid_gap(analysis, params)
+                
+                if critical_gap:
+                    confidence = 0.7
+                    direction = critical_gap["direction"]
+                    target_price = critical_gap["price"]
+                    
+                    decision = TradingDecision.BUY if direction == "BUY" else TradingDecision.SELL
+                    
+                    return RuleResult(
+                        rule_name="grid_expansion",
+                        decision=decision,
+                        confidence=confidence,
+                        reasoning=f"🔧 MAINTENANCE: Fill critical gap @ {target_price:.2f} (Quality: {quality_score:.2f})",
+                        supporting_data={
+                            "target_price": target_price,
+                            "grid_phase": "MAINTENANCE",
+                            "direction": direction,
+                            "maintenance_type": "QUALITY_IMPROVEMENT",
+                            "gap_importance": critical_gap["importance"],
+                            "spacing_used": params["dynamic_spacing"]
+                        },
+                        weight=weight,
+                        execution_priority=2
+                    )
+            
+            # 2. ปรับปรุง spacing efficiency
+            elif spacing_efficiency < 0.7:
+                # หาจุดที่ spacing ไม่ดี
+                spacing_fix = self._find_spacing_improvement(analysis, params)
+                
+                if spacing_fix:
+                    confidence = 0.6
+                    return RuleResult(
+                        rule_name="grid_expansion",
+                        decision=TradingDecision.BUY if spacing_fix["direction"] == "BUY" else TradingDecision.SELL,
+                        confidence=confidence,
+                        reasoning=f"📏 SPACING FIX: Improve spacing efficiency ({spacing_efficiency:.2f})",
+                        supporting_data={
+                            "target_price": spacing_fix["price"],
+                            "grid_phase": "MAINTENANCE",
+                            "direction": spacing_fix["direction"],
+                            "maintenance_type": "SPACING_IMPROVEMENT",
+                            "spacing_used": params["dynamic_spacing"]
+                        },
+                        weight=weight,
+                        execution_priority=3
+                    )
+            
+            # 3. คุณภาพดีแล้ว - กลับไป monitoring
+            else:
+                print("✅ MAINTENANCE COMPLETE: Grid quality is good")
+                self.grid_state.current_phase = GridPhase.MONITORING
+                return None
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Phase 4 error: {e}")
+            return None
+    
+    def _find_critical_grid_gap(self, analysis: Dict, params: Dict) -> Optional[Dict]:
+        """หาช่องว่างที่สำคัญที่สุดในกริด"""
+        try:
+            current_price = analysis["current_price"]
+            spacing_value = params["dynamic_spacing"] * params["point_value"]
+            
+            # ตรวจสอบช่องว่างใกล้ current price
+            critical_gaps = []
+            
+            # เช็ค BUY side
+            for slot in analysis["missing_buy_slots"]:
+                distance = abs(current_price - slot)
+                importance = 1.0 / (1.0 + distance / spacing_value)  # ยิ่งใกล้ ยิ่งสำคัญ
+                critical_gaps.append({
+                    "direction": "BUY",
+                    "price": slot,
+                    "distance": distance,
+                    "importance": importance
+                })
+            
+            # เช็ค SELL side
+            for slot in analysis["missing_sell_slots"]:
+                distance = abs(current_price - slot)
+                importance = 1.0 / (1.0 + distance / spacing_value)
+                critical_gaps.append({
+                    "direction": "SELL",
+                    "price": slot,
+                    "distance": distance,
+                    "importance": importance
+                })
+            
+            # เลือกช่องว่างที่สำคัญที่สุด
+            if critical_gaps:
+                critical_gaps.sort(key=lambda x: x["importance"], reverse=True)
+                return critical_gaps[0]
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Critical gap finding error: {e}")
+            return None
+    
+    def _find_spacing_improvement(self, analysis: Dict, params: Dict) -> Optional[Dict]:
+        """หาจุดที่ต้องปรับปรุง spacing"""
+        try:
+            # วิเคราะห์ spacing ปัจจุบัน
+            all_levels = sorted(analysis["buy_levels"] + analysis["sell_levels"])
+            expected_spacing = params["dynamic_spacing"] * params["point_value"]
+            
+            # หาช่องว่างที่ใหญ่เกินไป
+            for i in range(len(all_levels) - 1):
+                gap = all_levels[i+1] - all_levels[i]
+                if gap > expected_spacing * 1.8:  # ช่องว่างใหญ่เกินไป
+                    # หาราคาที่ควรเติม
+                    fill_price = all_levels[i] + expected_spacing
+                    direction = "BUY" if fill_price < analysis["current_price"] else "SELL"
+                    
+                    return {
+                        "direction": direction,
+                        "price": round(fill_price, 2),
+                        "gap_size": gap,
+                        "improvement_type": "FILL_LARGE_GAP"
+                    }
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Spacing improvement error: {e}")
+            return None
+    
+    def _is_market_suitable_for_expansion(self) -> bool:
+        """เช็คว่าสภาพตลาดเหมาะสมสำหรับการขยายกริดหรือไม่"""
+        try:
+            if not self.market_context:
+                return True  # ถ้าไม่มีข้อมูล ให้ผ่าน
+            
+            market_data = self.last_market_data
+            
+            # เช็คเงื่อนไขที่ไม่เหมาะสม
+            unsuitable_conditions = []
+            
+            # 1. Spread กว้างเกินไป
+            spread = market_data.get("spread", 0)
+            normal_spread = market_data.get("avg_spread", 5)
+            if spread > normal_spread * 3:
+                unsuitable_conditions.append(f"Wide spread: {spread}")
+            
+            # 2. Volatility สูงเกินไป
+            volatility = market_data.get("volatility_factor", 1.0)
+            if volatility > 3.0:
+                unsuitable_conditions.append(f"Extreme volatility: {volatility:.2f}")
+            
+            # 3. Low liquidity
+            if self.market_context.liquidity_level == "LOW":
+                unsuitable_conditions.append("Low liquidity")
+            
+            # 4. News events หรือ market gaps
+            if market_data.get("news_impact", 0) > 0.7:
+                unsuitable_conditions.append("High news impact")
+            
+            # 5. เช็ค momentum แรงเกินไป (ราคาวิ่งแรง)
+            momentum = abs(market_data.get("momentum", 0))
+            if momentum > 0.8:
+                unsuitable_conditions.append(f"Strong momentum: {momentum:.2f}")
+            
+            # แสดงผลการตรวจสอบ
+            if unsuitable_conditions:
+                print(f"⚠️ Market unsuitable for expansion:")
+                for condition in unsuitable_conditions:
+                    print(f"   - {condition}")
+                return False
+            
+            print("✅ Market conditions favorable for grid expansion")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Market suitability check error: {e}")
+            return True  # ถ้าเกิดข้อผิดพลาด ให้ผ่าน
+
+    def _make_weighted_decision(self, rule_results: List[RuleResult]) -> Optional[RuleResult]:
+        """ตัดสินใจขั้นสุดท้ายด้วยระบบถ่วงน้ำหนักที่ยืดหยุ่น"""
+        try:
+            if not rule_results:
+                return None
+            
+            print(f"🎯 === WEIGHTED DECISION ANALYSIS ===")
+            print(f"📊 Processing {len(rule_results)} rule results:")
+            
+            # จัดกลุ่มตาม decision type
+            decision_groups = defaultdict(list)
+            
+            for result in rule_results:
+                decision_groups[result.decision].append(result)
+                weighted_conf = result.weighted_confidence
+                print(f"   {result.rule_name}: {result.decision.value} "
+                        f"(conf: {result.confidence:.2f} × weight: {result.weight:.2f} = {weighted_conf:.3f})")
+            
+            # คำนวณคะแนนรวมแต่ละ decision
+            decision_scores = {}
+            decision_details = {}
+            
+            for decision, results in decision_groups.items():
+                total_score = sum(r.weighted_confidence for r in results)
+                avg_confidence = statistics.mean([r.confidence for r in results])
+                avg_priority = statistics.mean([r.execution_priority for r in results])
+                
+                decision_scores[decision] = total_score
+                decision_details[decision] = {
+                    "total_score": total_score,
+                    "avg_confidence": avg_confidence,
+                    "avg_priority": avg_priority,
+                    "rule_count": len(results),
+                    "results": results
+                }
+            
+            # หา decision ที่ดีที่สุด
+            if not decision_scores:
+                return None
+            
+            best_decision = max(decision_scores.keys(), key=lambda d: decision_scores[d])
+            best_score = decision_scores[best_decision]
+            best_details = decision_details[best_decision]
+            
+            # เช็ค threshold ที่ยืดหยุ่น
+            min_threshold = 0.15  # ลดลงเพื่อให้ grid ทำงานได้
+            
+            # ปรับ threshold ตาม urgency
+            if any("CRITICAL" in r.supporting_data.get("urgency", "") for r in best_details["results"]):
+                min_threshold = 0.1  # ลด threshold สำหรับ critical actions
+            elif any("FOUNDATION" in r.supporting_data.get("slot_priority", "") for r in best_details["results"]):
+                min_threshold = 0.2  # เพิ่ม threshold สำหรับ foundation building
+            
+            print(f"🏆 Best Decision: {best_decision.value}")
+            print(f"   Total Score: {best_score:.3f} (threshold: {min_threshold:.3f})")
+            print(f"   Avg Confidence: {best_details['avg_confidence']:.2f}")
+            print(f"   Rule Count: {best_details['rule_count']}")
+            
+            if best_score >= min_threshold:
+                # เลือก result ที่ดีที่สุดจากกลุ่ม
+                best_result = max(best_details["results"], 
+                                key=lambda r: (r.confidence, -r.execution_priority))
+                
+                print(f"✅ DECISION APPROVED: {best_result.reasoning}")
+                return best_result
+            else:
+                print(f"❌ DECISION REJECTED: Score too low ({best_score:.3f} < {min_threshold:.3f})")
+                return None
+            
+        except Exception as e:
+            print(f"❌ Weighted decision error: {e}")
+            return None
+
+    def _execute_trading_decision(self, decision_result: RuleResult):
+        """ดำเนินการตามการตัดสินใจ"""
+        try:
+            print(f"⚡ === EXECUTING DECISION ===")
+            print(f"🎯 Decision: {decision_result.decision.value}")
+            print(f"🧠 Reasoning: {decision_result.reasoning}")
+            print(f"📊 Confidence: {decision_result.confidence:.2f}")
+            
+            # ดำเนินการตาม decision type
+            if decision_result.decision == TradingDecision.BUY:
+                self._execute_buy_decision(decision_result)
+            elif decision_result.decision == TradingDecision.SELL:
+                self._execute_sell_decision(decision_result)
+            elif decision_result.decision == TradingDecision.CLOSE_PROFITABLE:
+                self._execute_close_profitable(decision_result)
+            elif decision_result.decision == TradingDecision.CLOSE_LOSING:
+                print("⚠️ CLOSE_LOSING skipped - no stop loss system")
+            elif decision_result.decision == TradingDecision.CLOSE_ALL:
+                self._execute_close_all(decision_result)
+            elif decision_result.decision == TradingDecision.EMERGENCY_STOP:
+                self._execute_emergency_stop(decision_result)
+            
+            # อัพเดท grid state
+            self.grid_state.last_grid_action = datetime.now()
+            
+        except Exception as e:
+            print(f"❌ Decision execution error: {e}")
+
+    def _execute_buy_decision(self, decision: RuleResult):
+        """ดำเนินการวาง BUY order"""
+        try:
+            supporting_data = decision.supporting_data
+            target_price = supporting_data.get("target_price")
+            
+            if not target_price or target_price <= 0:
+                print("❌ Invalid BUY target price")
+                return
+            
+            # คำนวณ lot size ตามสถานการณ์
+            lot_size = self._calculate_adaptive_lot_size(decision)
+            
+            # สร้าง order request
+            order_request = {
+                "order_type": "BUY_LIMIT",
+                "volume": lot_size,
+                "price": target_price,
+                "reasoning": decision.reasoning,
+                "confidence": decision.confidence
             }
-                        
+            
+            # ส่งไปยัง Order Manager
+            if self.order_manager:
+                result = self.order_manager.place_smart_order(**order_request)
+                
+                if result and result.get("success"):
+                    print(f"✅ BUY order placed: {lot_size:.3f} lots @ {target_price:.2f}")
+                    self._track_rule_performance(decision.rule_name, True)
+                else:
+                    print(f"❌ BUY order failed: {result.get('error', 'Unknown error')}")
+                    self._track_rule_performance(decision.rule_name, False)
+        
+        except Exception as e:
+            print(f"❌ BUY execution error: {e}")
+
+    def _execute_sell_decision(self, decision: RuleResult):
+        """ดำเนินการวาง SELL order"""
+        try:
+            supporting_data = decision.supporting_data
+            target_price = supporting_data.get("target_price")
+            
+            if not target_price or target_price <= 0:
+                print("❌ Invalid SELL target price")
+                return
+            
+            # คำนวณ lot size ตามสถานการณ์
+            lot_size = self._calculate_adaptive_lot_size(decision)
+            
+            # สร้าง order request
+            order_request = {
+                "order_type": "SELL_LIMIT",
+                "volume": lot_size,
+                "price": target_price,
+                "reasoning": decision.reasoning,
+                "confidence": decision.confidence
+            }
+            
+            # ส่งไปยัง Order Manager
+            if self.order_manager:
+                result = self.order_manager.place_smart_order(**order_request)
+                
+                if result and result.get("success"):
+                    print(f"✅ SELL order placed: {lot_size:.3f} lots @ {target_price:.2f}")
+                    self._track_rule_performance(decision.rule_name, True)
+                else:
+                    print(f"❌ SELL order failed: {result.get('error', 'Unknown error')}")
+                    self._track_rule_performance(decision.rule_name, False)
+        
+        except Exception as e:
+            print(f"❌ SELL execution error: {e}")
+
+    def _calculate_adaptive_lot_size(self, decision: RuleResult) -> float:
+        """คำนวณ lot size แบบ adaptive ตามสถานการณ์"""
+        try:
+            # Base lot จาก Lot Calculator
+            base_lot = 0.01
+            if self.lot_calculator:
+                base_lot = self.lot_calculator.calculate_optimal_lot_size()
+            
+            # ปรับตาม confidence
+            confidence_multiplier = 0.5 + (decision.confidence * 0.5)  # 0.5-1.0
+            
+            # ปรับตาม grid phase
+            phase_multipliers = {
+                GridPhase.INITIALIZATION: 1.0,    # ขนาดปกติสำหรับพื้นฐาน
+                GridPhase.MONITORING: 0.8,       # เล็กลงเล็กน้อย
+                GridPhase.REBALANCING: 1.2,      # ใหญ่ขึ้นเพื่อแก้ไขสมดุล
+                GridPhase.MAINTENANCE: 0.7       # เล็กลงสำหรับการปรับปรุง
+            }
+            
+            phase_multiplier = phase_multipliers.get(self.grid_state.current_phase, 1.0)
+            
+            # ปรับตาม volatility
+            volatility = self.last_market_data.get("volatility_factor", 1.0)
+            if volatility > 2.0:
+                volatility_multiplier = 0.6  # ลดขนาดเมื่อ volatile
+            elif volatility < 0.5:
+                volatility_multiplier = 1.3  # เพิ่มขนาดเมื่อเงียบ
+            else:
+                volatility_multiplier = 1.0
+            
+            # ปรับตามงบประมาณที่เหลือ
+            budget_ratio = self.capital_allocation.risk_budget / self.capital_allocation.total_balance
+            budget_multiplier = min(1.5, max(0.5, budget_ratio * 10))
+            
+            # คำนวณ lot size สุดท้าย
+            final_lot = base_lot * confidence_multiplier * phase_multiplier * volatility_multiplier * budget_multiplier
+            
+            # จำกัดขนาดขั้นต่ำและสูงสุด
+            min_lot = 0.01
+            max_lot = min(1.0, self.capital_allocation.available_margin / 1000)  # ขึ้นกับ margin
+            
+            final_lot = max(min_lot, min(max_lot, round(final_lot, 2)))
+            
+            print(f"💰 Adaptive Lot Calculation:")
+            print(f"   Base: {base_lot:.3f}")
+            print(f"   Confidence: ×{confidence_multiplier:.2f}")
+            print(f"   Phase: ×{phase_multiplier:.2f}")
+            print(f"   Volatility: ×{volatility_multiplier:.2f}")
+            print(f"   Budget: ×{budget_multiplier:.2f}")
+            print(f"   Final: {final_lot:.3f} lots")
+            
+            return final_lot
+            
+        except Exception as e:
+            print(f"❌ Adaptive lot calculation error: {e}")
+            return 0.01
+
+# ========================================================================================
+# 🎯 OTHER TRADING RULES
+# ========================================================================================
+
+    def _rule_portfolio_balance(self, config: Dict, weight: float) -> Optional[RuleResult]:
+        """📊 Portfolio Balance Rule - เน้นการเก็บกำไรและการแก้ไม้"""
+        try:
+            portfolio_data = self.last_portfolio_data
+            
+            # ดึงข้อมูล positions
+            profitable_positions = portfolio_data.get("profitable_positions", [])
+            losing_positions = portfolio_data.get("losing_positions", [])
+            
+            total_profit = sum(pos.get("profit", 0) for pos in profitable_positions)
+            total_loss = sum(pos.get("profit", 0) for pos in losing_positions)
+            net_profit = total_profit + total_loss
+            
+            print(f"💰 Portfolio Analysis:")
+            print(f"   Profitable: {len(profitable_positions)} positions (+{total_profit:.2f})")
+            print(f"   Losing: {len(losing_positions)} positions ({total_loss:.2f})")
+            print(f"   Net P&L: {net_profit:.2f}")
+            
+            # === เก็บกำไรเมื่อมีโอกาส ===
+            profit_threshold = config["parameters"].get("profit_take_threshold", 50.0)
+            
+            if total_profit >= profit_threshold and len(profitable_positions) > 0:
+                confidence = min(0.9, 0.5 + (total_profit / profit_threshold) * 0.4)
+                
+                return RuleResult(
+                    rule_name="portfolio_balance",
+                    decision=TradingDecision.CLOSE_PROFITABLE,
+                    confidence=confidence,
+                    reasoning=f"💰 PROFIT TAKE: Secure ${total_profit:.2f} profit (threshold: ${profit_threshold})",
+                    supporting_data={
+                        "profitable_count": len(profitable_positions),
+                        "total_profit": total_profit,
+                        "profit_threshold": profit_threshold,
+                        "action_type": "PROFIT_SECURING"
+                    },
+                    weight=weight,
+                    execution_priority=1
+                )
+            
+            # === การแก้ไม้อัจฉริยะ ===
+            # หาโอกาสแก้ไม้โดยใช้กำไรจากฝั่งหนึ่งไปปิดขาดทุนอีกฝั่ง
+            if total_profit > 0 and total_loss < 0 and abs(total_loss) < total_profit * 0.8:
+                hedge_confidence = 0.7
+                
+                return RuleResult(
+                    rule_name="portfolio_balance",
+                    decision=TradingDecision.CLOSE_PROFITABLE,  # ปิดทั้งคู่เป็น net profit
+                    confidence=hedge_confidence,
+                    reasoning=f"🔄 SMART HEDGE: Use ${total_profit:.2f} profit to offset ${total_loss:.2f} loss",
+                    supporting_data={
+                        "hedge_type": "PROFIT_OFFSET",
+                        "profit_amount": total_profit,
+                        "loss_amount": total_loss,
+                        "net_result": net_profit,
+                        "action_type": "HEDGE_RECOVERY"
+                    },
+                    weight=weight,
+                    execution_priority=2
+                )
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Portfolio balance rule error: {e}")
+            return None
+
     def _rule_trend_following(self, config: Dict, weight: float) -> Optional[RuleResult]:
-        """Trend Following Rule"""
+        """📈 Trend Following Rule - เน้นความยืดหยุ่น"""
         try:
             market_data = self.last_market_data
+            
             trend_strength = market_data.get("trend_strength", 0)
+            trend_direction = market_data.get("trend_direction", "SIDEWAYS")
             rsi = market_data.get("rsi", 50)
-            market_condition = market_data.get("condition", MarketCondition.UNKNOWN)
             
-            # Rule parameters
-            rsi_oversold = config["parameters"].get("rsi_oversold", 30)
-            rsi_overbought = config["parameters"].get("rsi_overbought", 70)
-            trend_threshold = config["parameters"].get("trend_strength_threshold", 0.5)
-            
-            confidence = 0.0
-            decision = TradingDecision.WAIT
-            reasoning = "Trend analysis"
-            
-            # Strong uptrend + oversold RSI = BUY signal
-            if (market_condition == MarketCondition.TRENDING_UP and 
-                trend_strength > trend_threshold and rsi < rsi_oversold):
-                decision = TradingDecision.BUY
-                confidence = min(0.9, 0.5 + trend_strength * 0.4)
-                reasoning = f"Strong uptrend detected (strength: {trend_strength:.2f}) with oversold RSI ({rsi:.1f})"
-            
-            # Strong downtrend + overbought RSI = SELL signal
-            elif (market_condition == MarketCondition.TRENDING_DOWN and 
-                  trend_strength > trend_threshold and rsi > rsi_overbought):
-                decision = TradingDecision.SELL
-                confidence = min(0.9, 0.5 + trend_strength * 0.4)
-                reasoning = f"Strong downtrend detected (strength: {trend_strength:.2f}) with overbought RSI ({rsi:.1f})"
-            
-            # Check if confidence meets threshold
-            if confidence >= config.get("confidence_threshold", 0.6):
-                return RuleResult(
-                    rule_name="trend_following",
-                    decision=decision,
-                    confidence=confidence,
-                    reasoning=reasoning,
-                    supporting_data={
-                        "trend_strength": trend_strength,
-                        "rsi": rsi,
-                        "market_condition": market_condition.value
-                    },
-                    weight=weight
-                )
+            # เงื่อนไขที่ยืดหยุ่น
+            if trend_strength > 0.6 and trend_direction != "SIDEWAYS":
+                
+                if trend_direction == "UP" and rsi < 70:
+                    confidence = min(0.8, trend_strength)
+                    return RuleResult(
+                        rule_name="trend_following",
+                        decision=TradingDecision.BUY,
+                        confidence=confidence,
+                        reasoning=f"📈 TREND BUY: {trend_direction} trend (strength: {trend_strength:.2f})",
+                        supporting_data={
+                            "trend_direction": trend_direction,
+                            "trend_strength": trend_strength,
+                            "rsi": rsi
+                        },
+                        weight=weight
+                    )
+                
+                elif trend_direction == "DOWN" and rsi > 30:
+                    confidence = min(0.8, trend_strength)
+                    return RuleResult(
+                        rule_name="trend_following",
+                        decision=TradingDecision.SELL,
+                        confidence=confidence,
+                        reasoning=f"📉 TREND SELL: {trend_direction} trend (strength: {trend_strength:.2f})",
+                        supporting_data={
+                            "trend_direction": trend_direction,
+                            "trend_strength": trend_strength,
+                            "rsi": rsi
+                        },
+                        weight=weight
+                    )
             
             return None
             
         except Exception as e:
             print(f"❌ Trend following rule error: {e}")
             return None
-    
+
     def _rule_mean_reversion(self, config: Dict, weight: float) -> Optional[RuleResult]:
-        """Mean Reversion Rule"""
+        """🔄 Mean Reversion Rule"""
         try:
             market_data = self.last_market_data
-            bb_position = market_data.get("bollinger_position", 0.5)  # 0 = bottom, 1 = top
-            price_deviation = market_data.get("price_deviation_from_mean", 0)
-            volatility = market_data.get("volatility_factor", 1.0)
             
-            # Rule parameters
-            bb_lower_threshold = 0.1  # Near lower band
-            bb_upper_threshold = 0.9  # Near upper band
-            deviation_threshold = 2.0  # Standard deviations
+            bb_position = market_data.get("bollinger_position", 0.5)  # 0=lower, 1=upper
+            rsi = market_data.get("rsi", 50)
             
-            confidence = 0.0
-            decision = TradingDecision.WAIT
-            reasoning = "Mean reversion analysis"
-            
-            # Price near lower Bollinger Band = potential BUY
-            if bb_position < bb_lower_threshold and price_deviation < -deviation_threshold:
-                decision = TradingDecision.BUY
-                confidence = min(0.85, 0.4 + abs(price_deviation) * 0.1)
-                reasoning = f"Price oversold - near lower BB ({bb_position:.2f}) with high deviation ({price_deviation:.2f})"
-            
-            # Price near upper Bollinger Band = potential SELL
-            elif bb_position > bb_upper_threshold and price_deviation > deviation_threshold:
-                decision = TradingDecision.SELL
-                confidence = min(0.85, 0.4 + abs(price_deviation) * 0.1)
-                reasoning = f"Price overbought - near upper BB ({bb_position:.2f}) with high deviation ({price_deviation:.2f})"
-            
-            # Adjust confidence based on volatility
-            if volatility > 2.0:  # High volatility reduces confidence
-                confidence *= 0.7
-                reasoning += " (reduced due to high volatility)"
-            
-            # Check confidence threshold
-            if confidence >= config.get("confidence_threshold", 0.7):
+            # Oversold condition
+            if bb_position < 0.2 and rsi < 35:
+                confidence = 0.7
                 return RuleResult(
                     rule_name="mean_reversion",
-                    decision=decision,
+                    decision=TradingDecision.BUY,
                     confidence=confidence,
-                    reasoning=reasoning,
+                    reasoning=f"🔄 MEAN REVERSION BUY: Oversold (BB: {bb_position:.2f}, RSI: {rsi:.1f})",
                     supporting_data={
                         "bollinger_position": bb_position,
-                        "price_deviation": price_deviation,
-                        "volatility": volatility
+                        "rsi": rsi,
+                        "reversion_type": "OVERSOLD"
+                    },
+                    weight=weight
+                )
+            
+            # Overbought condition
+            elif bb_position > 0.8 and rsi > 65:
+                confidence = 0.7
+                return RuleResult(
+                    rule_name="mean_reversion",
+                    decision=TradingDecision.SELL,
+                    confidence=confidence,
+                    reasoning=f"🔄 MEAN REVERSION SELL: Overbought (BB: {bb_position:.2f}, RSI: {rsi:.1f})",
+                    supporting_data={
+                        "bollinger_position": bb_position,
+                        "rsi": rsi,
+                        "reversion_type": "OVERBOUGHT"
                     },
                     weight=weight
                 )
@@ -654,106 +1703,60 @@ class ModernRuleEngine:
         except Exception as e:
             print(f"❌ Mean reversion rule error: {e}")
             return None
-    
+
     def _rule_support_resistance(self, config: Dict, weight: float) -> Optional[RuleResult]:
-        """Support/Resistance Rule"""
+        """🏛️ Support Resistance Rule"""
         try:
             market_data = self.last_market_data
             current_price = market_data.get("current_price", 0)
+            
             support_levels = market_data.get("support_levels", [])
             resistance_levels = market_data.get("resistance_levels", [])
             
-            # Rule parameters
-            touch_tolerance = config["parameters"].get("touch_tolerance", 5)  # points
-            strength_threshold = config["parameters"].get("strength_threshold", 3)
+            # หา level ที่ใกล้ที่สุด
+            closest_support = None
+            closest_resistance = None
             
-            confidence = 0.0
-            decision = TradingDecision.WAIT
-            reasoning = "Support/resistance analysis"
+            for level in support_levels:
+                distance = abs(current_price - level["level"])
+                if distance < 50 * 0.01:  # ใกล้ support
+                    closest_support = level
+                    break
             
-            # Check for support bounce
-            for support in support_levels:
-                if abs(current_price - support["level"]) <= touch_tolerance:
-                    if support["strength"] >= strength_threshold:
-                        decision = TradingDecision.BUY
-                        confidence = min(0.8, 0.5 + (support["strength"] / 10) * 0.3)
-                        reasoning = f"Strong support level ({support['level']}) with strength {support['strength']}"
-                        break
+            for level in resistance_levels:
+                distance = abs(current_price - level["level"])
+                if distance < 50 * 0.01:  # ใกล้ resistance
+                    closest_resistance = level
+                    break
             
-            # Check for resistance rejection
-            if decision == TradingDecision.WAIT:  # Only if no support signal
-                for resistance in resistance_levels:
-                    if abs(current_price - resistance["level"]) <= touch_tolerance:
-                        if resistance["strength"] >= strength_threshold:
-                            decision = TradingDecision.SELL
-                            confidence = min(0.8, 0.5 + (resistance["strength"] / 10) * 0.3)
-                            reasoning = f"Strong resistance level ({resistance['level']}) with strength {resistance['strength']}"
-                            break
-            
-            # Check confidence threshold
-            if confidence >= config.get("confidence_threshold", 0.6):
+            # Near support = BUY opportunity
+            if closest_support and current_price <= closest_support["level"] + 20 * 0.01:
+                confidence = min(0.8, closest_support["strength"])
                 return RuleResult(
                     rule_name="support_resistance",
-                    decision=decision,
+                    decision=TradingDecision.BUY,
                     confidence=confidence,
-                    reasoning=reasoning,
+                    reasoning=f"🏛️ SUPPORT BUY: Near support @ {closest_support['level']:.2f}",
                     supporting_data={
-                        "current_price": current_price,
-                        "support_levels": len(support_levels),
-                        "resistance_levels": len(resistance_levels)
+                        "level": closest_support["level"],
+                        "strength": closest_support["strength"],
+                        "level_type": "SUPPORT"
                     },
                     weight=weight
                 )
             
-            return None
-            
-        except Exception as e:
-            print(f"❌ Support/resistance rule error: {e}")
-            return None
-    
-    def _rule_volatility_breakout(self, config: Dict, weight: float) -> Optional[RuleResult]:
-        """Volatility Breakout Rule"""
-        try:
-            market_data = self.last_market_data
-            atr = market_data.get("atr", 0)
-            avg_atr = market_data.get("avg_atr", atr)
-            price_movement = market_data.get("recent_price_movement", 0)
-            volume_surge = market_data.get("volume_surge", False)
-            
-            # Rule parameters
-            atr_multiplier = config["parameters"].get("volatility_threshold", 1.5)
-            confirmation_bars = config["parameters"].get("breakout_confirmation", 2)
-            
-            confidence = 0.0
-            decision = TradingDecision.WAIT
-            reasoning = "Volatility breakout analysis"
-            
-            # High volatility detected
-            if atr > avg_atr * atr_multiplier and volume_surge:
-                # Bullish breakout
-                if price_movement > atr * 0.5:
-                    decision = TradingDecision.BUY
-                    confidence = min(0.9, 0.6 + (atr / avg_atr - 1) * 0.3)
-                    reasoning = f"Bullish volatility breakout - ATR: {atr:.1f} (avg: {avg_atr:.1f}), movement: {price_movement:.1f}"
-                
-                # Bearish breakout
-                elif price_movement < -atr * 0.5:
-                    decision = TradingDecision.SELL
-                    confidence = min(0.9, 0.6 + (atr / avg_atr - 1) * 0.3)
-                    reasoning = f"Bearish volatility breakout - ATR: {atr:.1f} (avg: {avg_atr:.1f}), movement: {price_movement:.1f}"
-            
-            # Check confidence threshold
-            if confidence >= config.get("confidence_threshold", 0.8):
+            # Near resistance = SELL opportunity
+            elif closest_resistance and current_price >= closest_resistance["level"] - 20 * 0.01:
+                confidence = min(0.8, closest_resistance["strength"])
                 return RuleResult(
-                    rule_name="volatility_breakout",
-                    decision=decision,
+                    rule_name="support_resistance",
+                    decision=TradingDecision.SELL,
                     confidence=confidence,
-                    reasoning=reasoning,
+                    reasoning=f"🏛️ RESISTANCE SELL: Near resistance @ {closest_resistance['level']:.2f}",
                     supporting_data={
-                        "atr": atr,
-                        "avg_atr": avg_atr,
-                        "price_movement": price_movement,
-                        "volume_surge": volume_surge
+                        "level": closest_resistance["level"],
+                        "strength": closest_resistance["strength"],
+                        "level_type": "RESISTANCE"
                     },
                     weight=weight
                 )
@@ -761,592 +1764,96 @@ class ModernRuleEngine:
             return None
             
         except Exception as e:
-            print(f"❌ Volatility breakout rule error: {e}")
-            return None
-    
-    def _rule_portfolio_balance(self, config: Dict, weight: float) -> Optional[RuleResult]:
-        """Enhanced Portfolio Balance with Hedge Protection"""
-        try:
-            portfolio_data = self.last_portfolio_data
-            buy_positions = portfolio_data.get("buy_positions", 0)
-            sell_positions = portfolio_data.get("sell_positions", 0)
-            total_positions = buy_positions + sell_positions
-            total_profit = portfolio_data.get("total_profit", 0)
-            
-            confidence = 0.0
-            decision = TradingDecision.WAIT
-            reasoning = "Portfolio balance analysis"
-            
-            # === HEDGE PROTECTION LOGIC === 
-            hedge_enabled = config["parameters"].get("hedge_protection_enabled", True)
-            hedge_trigger = config["parameters"].get("hedge_trigger_loss", -200.0)
-            emergency_trigger = config["parameters"].get("emergency_hedge_loss", -400.0)
-            
-            if hedge_enabled and total_profit <= hedge_trigger:
-                # คำนวณกำไร/ขาดทุนแยก
-                profitable_total = self._get_profitable_positions_total()
-                losing_total = self._get_losing_positions_total() 
-                min_profitable = config["parameters"].get("min_profitable_for_hedge", 50.0)
-                
-                if profitable_total >= min_profitable:
-                    hedge_ratio = config["parameters"].get("hedge_with_profit_ratio", 0.75)
-                    
-                    # Emergency hedge (ขาดทุนมากมาย)
-                    if total_profit <= emergency_trigger:
-                        confidence = 0.85
-                        decision = TradingDecision.CLOSE_PROFITABLE
-                        reasoning = f"🚨 EMERGENCY HEDGE: Total loss ${abs(total_profit):.0f} - Close profitable positions for protection"
-                    
-                    # Normal hedge protection
-                    else:
-                        # หา hedge opportunity ที่ดีที่สุด
-                        hedge_opportunity = self._calculate_hedge_opportunity(
-                            profitable_total, abs(losing_total), hedge_ratio
-                        )
-                        
-                        if hedge_opportunity["net_result"] >= 10:  # คุ้มค่าขั้นต่ำ
-                            confidence = 0.72 + min(0.15, abs(total_profit) / 1000)
-                            decision = TradingDecision.CLOSE_PROFITABLE
-                            reasoning = f"🛡️ HEDGE PROTECTION: Net ${hedge_opportunity['net_result']:.0f} - Reduce exposure smartly"
-            
-            # === NORMAL PROFIT TAKING ===
-            elif total_profit >= 25:  # กำไรปกติ
-                confidence = 0.58 + min(0.25, total_profit / 200)
-                decision = TradingDecision.CLOSE_PROFITABLE
-                reasoning = f"💰 TAKE PROFIT: Total ${total_profit:.0f} - Secure gains"
-            
-            # === BALANCED OPPORTUNITIES ===
-            elif total_positions >= 5:
-                balanced_opportunity = self._find_balanced_opportunity()
-                if balanced_opportunity and balanced_opportunity["net_profit"] >= 15:
-                    confidence = 0.50 + min(0.15, balanced_opportunity["net_profit"] / 100)
-                    decision = TradingDecision.CLOSE_PROFITABLE
-                    reasoning = f"⚖️ BALANCED CLOSE: Net ${balanced_opportunity['net_profit']:.0f}"
-            
-            # === PORTFOLIO REBALANCING ===
-            elif total_positions > 0:
-                max_exposure = config["parameters"].get("max_exposure_ratio", 0.8)
-                buy_ratio = buy_positions / total_positions
-                sell_ratio = sell_positions / total_positions
-                
-                if buy_ratio > max_exposure:
-                    confidence = 0.35 + (buy_ratio - max_exposure) * 1.5
-                    decision = TradingDecision.SELL
-                    reasoning = f"📊 REBALANCE: Too many BUY positions ({buy_ratio:.1%})"
-                elif sell_ratio > max_exposure:
-                    confidence = 0.35 + (sell_ratio - max_exposure) * 1.5
-                    decision = TradingDecision.BUY
-                    reasoning = f"📊 REBALANCE: Too many SELL positions ({sell_ratio:.1%})"
-            
-            # Check confidence threshold
-            if confidence >= config.get("confidence_threshold", 0.05):
-                return RuleResult(
-                    rule_name="portfolio_balance",
-                    decision=decision,
-                    confidence=confidence,
-                    reasoning=reasoning,
-                    supporting_data={
-                        "total_profit": total_profit,
-                        "hedge_protection": hedge_enabled and total_profit <= hedge_trigger,
-                        "emergency_level": total_profit <= emergency_trigger,
-                        "buy_positions": buy_positions,
-                        "sell_positions": sell_positions
-                    },
-                    weight=weight
-                )
-            
-            return None
-            
-        except Exception as e:
-            print(f"❌ Portfolio balance rule error: {e}")
+            print(f"❌ Support resistance rule error: {e}")
             return None
 
-    def _rule_trend_protection(self, config: Dict, weight: float) -> Optional[RuleResult]:
-        """Trend Protection Rule - ป้องกันการเทรดทวนเทรนด์มากเกินไป"""
-        try:
-            market_data = self.last_market_data
-            portfolio_data = self.last_portfolio_data
-            
-            trend_strength = market_data.get("trend_strength", 0)
-            trend_direction = market_data.get("trend_direction", "SIDEWAYS")
-            strong_trend_threshold = config["parameters"].get("strong_trend_threshold", 0.65)
-            
-            if trend_strength < strong_trend_threshold:
-                return None  # เทรนด์ไม่แรงพอ ไม่ต้องป้องกัน
-            
-            # นับ positions ที่ทวนเทรนด์
-            buy_positions = portfolio_data.get("buy_positions", 0)
-            sell_positions = portfolio_data.get("sell_positions", 0)
-            
-            opposite_positions = 0
-            if trend_direction == "UP":
-                opposite_positions = sell_positions
-                follow_direction = TradingDecision.BUY
-            elif trend_direction == "DOWN":
-                opposite_positions = buy_positions
-                follow_direction = TradingDecision.SELL
-            else:
-                return None
-            
-            max_opposite = config["parameters"].get("max_opposite_positions", 6)
-            warning_level = config["parameters"].get("opposite_position_warning", 4)
-            emergency_strength = config["parameters"].get("emergency_trend_strength", 0.8)
-            
-            confidence = 0.0
-            decision = TradingDecision.WAIT
-            reasoning = "Trend protection analysis"
-            
-            # Emergency trend following
-            if trend_strength >= emergency_strength and opposite_positions >= max_opposite:
-                confidence = 0.80
-                decision = follow_direction
-                reasoning = f"🚨 EMERGENCY TREND FOLLOW: Very strong {trend_direction} trend ({trend_strength:.1%}) - Too many opposite positions ({opposite_positions})"
-            
-            # Strong trend following  
-            elif opposite_positions >= warning_level:
-                confidence = 0.45 + (trend_strength - strong_trend_threshold) * 0.5
-                decision = follow_direction
-                reasoning = f"🌊 TREND PROTECTION: Strong {trend_direction} trend ({trend_strength:.1%}) - Follow trend to balance risk"
-            
-            # Check confidence threshold
-            if confidence >= config.get("confidence_threshold", 0.25):
-                return RuleResult(
-                    rule_name="trend_protection",
-                    decision=decision,
-                    confidence=confidence,
-                    reasoning=reasoning,
-                    supporting_data={
-                        "trend_direction": trend_direction,
-                        "trend_strength": trend_strength,
-                        "opposite_positions": opposite_positions,
-                        "max_opposite": max_opposite
-                    },
-                    weight=weight
-                )
-            
-            return None
-            
-        except Exception as e:
-            print(f"❌ Trend protection rule error: {e}")
-            return None
+# ========================================================================================
+# 🎖️ PERFORMANCE AND LEARNING SYSTEM
+# ========================================================================================
 
-    def _calculate_hedge_opportunity(self, profitable_total: float, losing_total: float, hedge_ratio: float) -> Dict:
-        """คำนวณโอกาส hedge ที่ดีที่สุด"""
-        try:
-            # จำนวนที่จะใช้ hedge
-            hedge_amount = profitable_total * hedge_ratio
-            
-            # หา losing positions ที่เหมาะสมจะปิด
-            suitable_losses = min(hedge_amount * 0.8, losing_total * 0.4)  # ปิดไม่เกิน 40% ของขาดทุน
-            
-            # คำนวณผลลัพธ์
-            net_result = hedge_amount - suitable_losses
-            exposure_reduction = (hedge_amount + suitable_losses) / (profitable_total + losing_total)
-            
-            return {
-                "hedge_amount": hedge_amount,
-                "suitable_losses": suitable_losses,
-                "net_result": net_result,
-                "exposure_reduction": exposure_reduction,
-                "is_worthwhile": net_result >= 10 and exposure_reduction >= 0.2
-            }
-            
-        except Exception as e:
-            print(f"❌ Hedge calculation error: {e}")
-            return {"net_result": 0, "is_worthwhile": False}
-    
-    def _rule_position_aging(self, config: Dict, weight: float) -> Optional[RuleResult]:
-        """Position Aging Rule - ปิดไม้ที่อายุมากเกินไป"""
-        try:
-            if not hasattr(self, 'position_manager'):
-                return None
-                
-            # หา positions ที่อายุมากเกินไป
-            max_age_hours = config["parameters"].get("max_age_hours", 168)  # 7 วัน
-            aged_positions = []
-            
-            # สมมติว่ามีฟังก์ชันดึง position details
-            positions = self.position_manager.get_active_positions()
-            for pos in positions:
-                if pos.get("age_hours", 0) >= max_age_hours:
-                    aged_positions.append(pos)
-            
-            if aged_positions:
-                confidence = 0.75  # แน่นอนว่าต้องปิด
-                decision = TradingDecision.CLOSE_LOSING  # ส่วนใหญ่จะขาดทุน
-                reasoning = f"Close {len(aged_positions)} aged positions (>{max_age_hours}h)"
-                
-                return RuleResult(
-                    rule_name="position_aging",
-                    decision=decision,
-                    confidence=confidence,
-                    reasoning=reasoning,
-                    supporting_data={
-                        "aged_positions": len(aged_positions),
-                        "max_age_hours": max_age_hours
-                    },
-                    weight=weight
-                )
-            
-            return None
-            
-        except Exception as e:
-            print(f"❌ Position aging rule error: {e}")
-            return None
-    
-    def _make_weighted_decision(self, rule_results: List[RuleResult]) -> Optional[RuleResult]:
-        """
-        Make final decision based on weighted rule results
-        MODIFIED: ลด min_threshold เพื่อให้ Grid Expansion ทำงานได้
-        """
-        try:
-            if not rule_results:
-                print("❌ No rule results to process")
-                return None
-            
-            print(f"🎯 Processing {len(rule_results)} rule results:")
-            for result in rule_results:
-                weighted_conf = result.confidence * result.weight
-                print(f"   {result.rule_name}: {result.confidence:.1%} × {result.weight:.2f} = {weighted_conf:.3f}")
-            
-            # Group by decision type
-            decision_scores = {}
-            decision_reasons = {}
-            decision_data = {}
-            
-            for result in rule_results:
-                decision = result.decision
-                weighted_confidence = result.confidence * result.weight
-                
-                if decision not in decision_scores:
-                    decision_scores[decision] = 0
-                    decision_reasons[decision] = []
-                    decision_data[decision] = []
-                
-                decision_scores[decision] += weighted_confidence
-                decision_reasons[decision].append(f"{result.rule_name}: {result.reasoning}")
-                decision_data[decision].append(result.supporting_data)
-            
-            # Find the decision with highest score
-            if not decision_scores:
-                print("❌ No decision scores calculated")
-                return None
-            
-            best_decision = max(decision_scores.keys(), key=lambda k: decision_scores[k])
-            best_score = decision_scores[best_decision]
-            
-            print(f"🏆 Decision scores:")
-            for decision, score in decision_scores.items():
-                print(f"   {decision.value}: {score:.3f}")
-            print(f"🎯 Best decision: {best_decision.value} (score: {best_score:.3f})")
-            
-            # MODIFIED: ลด threshold มากเพื่อให้ Grid ทำงานได้
-            min_threshold = 0.02  # ลดจาก 0.25 เป็น 0.02 (2%)
-            
-            if best_score < min_threshold:
-                print(f"❌ Best score {best_score:.3f} below min threshold {min_threshold:.3f}")
-                return None
-            
-            print(f"✅ Decision approved: {best_decision.value} (score: {best_score:.3f} > {min_threshold:.3f})")
-            
-            # Create final result
-            final_result = RuleResult(
-                rule_name="weighted_decision",
-                decision=best_decision,
-                confidence=min(1.0, best_score),
-                reasoning=" | ".join(decision_reasons[best_decision]),
-                supporting_data={
-                    "decision_scores": {k.value: v for k, v in decision_scores.items()},
-                    "contributing_rules": len(decision_reasons[best_decision]),
-                    "total_weight": sum(r.weight for r in rule_results),
-                    "threshold_used": min_threshold
-                }
-            )
-            
-            return final_result
-            
-        except Exception as e:
-            print(f"❌ Weighted decision error: {e}")
-            return None
-        
-    def _execute_trading_decision(self, decision_result: RuleResult):
-        """Execute the trading decision with target price from rule"""
-        try:
-            decision = decision_result.decision
-            confidence = decision_result.confidence
-            reasoning = decision_result.reasoning
-            supporting_data = decision_result.supporting_data  # ← เพิ่มตรงนี้
-            
-            print(f"🎯 Executing decision: {decision.value} (confidence: {confidence:.1%})")
-            print(f"💭 Reasoning: {reasoning}")
-            
-            # *** เตรียม market_data ที่มี target_price ***
-            enhanced_market_data = self.last_market_data.copy() if self.last_market_data else {}
-            
-            # เพิ่ม target_price จาก rule ใน market_data
-            if "target_price" in supporting_data:
-                enhanced_market_data["target_price"] = supporting_data["target_price"]
-                print(f"🎯 Using rule target price: {supporting_data['target_price']:.5f}")
-            
-            # Execute based on decision type
-            if decision == TradingDecision.BUY:
-                success = self.order_manager.place_smart_buy_order(
-                    confidence=confidence,
-                    reasoning=reasoning,
-                    market_data=enhanced_market_data  # ← ส่ง market_data ที่มี target_price
-                )
-            elif decision == TradingDecision.SELL:
-                success = self.order_manager.place_smart_sell_order(
-                    confidence=confidence,
-                    reasoning=reasoning,
-                    market_data=enhanced_market_data  # ← ส่ง market_data ที่มี target_price
-                )
-            elif decision == TradingDecision.CLOSE_PROFITABLE:
-                success = self.position_manager.close_profitable_positions(
-                    confidence=confidence,
-                    reasoning=reasoning
-                )
-            elif decision == TradingDecision.CLOSE_LOSING:
-                success = self.position_manager.close_losing_positions(
-                    confidence=confidence,
-                    reasoning=reasoning
-                )
-            elif decision == TradingDecision.EMERGENCY_STOP:
-                success = self.position_manager.emergency_close_all()
-            else:
-                success = True  # WAIT decision
-            
-            # Update last decision
-            self.last_decision = decision
-            self.last_decision_time = datetime.now()
-            
-            # Track execution
-            if hasattr(self, 'performance_tracker') and self.performance_tracker:
-                self.performance_tracker.track_decision(decision_result, success)
-            
-        except Exception as e:
-            print(f"❌ Decision execution error: {e}")
-
-    def _update_rule_performances(self):
-        """Update rule performance metrics"""
-        try:
-            # Update based on recent decisions and their outcomes
-            for decision in list(self.recent_decisions):
-                if decision.timestamp < datetime.now() - timedelta(minutes=30):
-                    # Decision is old enough to evaluate
-                    outcome = self.performance_tracker.get_decision_outcome(decision)
-                    if outcome is not None:
-                        self._update_rule_performance(decision.rule_name, outcome)
-                        self.recent_decisions.remove(decision)
-        
-        except Exception as e:
-            print(f"❌ Performance update error: {e}")
-    
-    def _update_rule_performance(self, rule_name: str, outcome: bool):
-        """Update individual rule performance"""
+    def _track_rule_performance(self, rule_name: str, success: bool):
+        """ติดตามประสิทธิภาพของ rule"""
         try:
             if rule_name not in self.rule_performances:
-                self.rule_performances[rule_name] = RulePerformance(rule_name=rule_name)
+                self.rule_performances[rule_name] = {
+                    "success_count": 0,
+                    "total_count": 0,
+                    "avg_confidence": 0.0,
+                    "last_updated": datetime.now()
+                }
             
-            performance = self.rule_performances[rule_name]
-            performance.total_signals += 1
+            perf = self.rule_performances[rule_name]
+            perf["total_count"] += 1
+            if success:
+                perf["success_count"] += 1
+            perf["last_updated"] = datetime.now()
             
-            if outcome:
-                performance.successful_signals += 1
-                performance.total_profit += 10  # Simplified profit tracking
-            
-            # Update performance history
-            current_success_rate = performance.success_rate
-            performance.performance_history.append(current_success_rate)
-            
-            # Keep history manageable
-            if len(performance.performance_history) > self.performance_window:
-                performance.performance_history.pop(0)
-            
-            performance.last_updated = datetime.now()
+            success_rate = perf["success_count"] / perf["total_count"]
+            print(f"📊 Rule Performance Update: {rule_name}")
+            print(f"   Success Rate: {success_rate:.1%} ({perf['success_count']}/{perf['total_count']})")
             
         except Exception as e:
-            print(f"❌ Rule performance update error: {e}")
-    
+            print(f"❌ Performance tracking error: {e}")
+
     def _adaptive_learning_update(self):
-        """Update adaptive learning parameters"""
+        """อัพเดทการเรียนรู้แบบ adaptive"""
         try:
-            # Adjust confidence thresholds based on performance
-            for rule_name, performance in self.rule_performances.items():
-                if rule_name in self.rules_config and performance.total_signals > 10:
-                    current_threshold = self.rules_config[rule_name].get("confidence_threshold", 0.6)
-                    
-                    # Increase threshold for poorly performing rules
-                    if performance.success_rate < 0.4:
-                        new_threshold = min(0.9, current_threshold + self.confidence_adjustment_rate)
-                        self.rules_config[rule_name]["confidence_threshold"] = new_threshold
-                    
-                    # Decrease threshold for well-performing rules
-                    elif performance.success_rate > 0.7:
-                        new_threshold = max(0.3, current_threshold - self.confidence_adjustment_rate)
-                        self.rules_config[rule_name]["confidence_threshold"] = new_threshold
+            if not self.rule_performances:
+                return
             
-            # Recalculate adaptive weights
-            self._calculate_adaptive_weights()
+            print("🧠 === ADAPTIVE LEARNING UPDATE ===")
+            
+            # ปรับ weight ตามประสิทธิภาพ
+            for rule_name, perf in self.rule_performances.items():
+                if perf["total_count"] >= 5:  # มีข้อมูลเพียงพอ
+                    success_rate = perf["success_count"] / perf["total_count"]
+                    
+                    # ปรับ weight ใน config
+                    if rule_name in self.rules_config.get("rules", {}):
+                        current_weight = self.rules_config["rules"][rule_name].get("weight", 1.0)
+                        
+                        if success_rate > 0.7:
+                            new_weight = min(2.0, current_weight * 1.1)  # เพิ่ม weight
+                        elif success_rate < 0.4:
+                            new_weight = max(0.3, current_weight * 0.9)  # ลด weight
+                        else:
+                            new_weight = current_weight
+                        
+                        self.rules_config["rules"][rule_name]["weight"] = new_weight
+                        
+                        if new_weight != current_weight:
+                            print(f"⚡ Weight Update: {rule_name}")
+                            print(f"   Success Rate: {success_rate:.1%}")
+                            print(f"   Weight: {current_weight:.2f} → {new_weight:.2f}")
             
         except Exception as e:
             print(f"❌ Adaptive learning error: {e}")
-    
-    # === Public Interface Methods ===
-    
-    def get_system_status(self) -> Dict[str, Any]:
-        """Get comprehensive system status"""
+
+    def get_rule_engine_status(self) -> Dict:
+        """ดึงสถานะของ Rule Engine"""
         try:
-            portfolio_data = self.last_portfolio_data
-            
             return {
-                "rule_confidence": self.get_overall_confidence(),
-                "market_condition": self.last_market_data.get("condition", "UNKNOWN"),
-                "portfolio_health": self._calculate_portfolio_health(),
-                "total_profit": portfolio_data.get("total_profit", 0),
-                "active_positions": portfolio_data.get("total_positions", 0),
-                "pending_orders": self.order_manager.get_pending_orders_count() if self.order_manager else 0,
-                "risk_level": portfolio_data.get("risk_level", 0),
-                "last_action": self.last_decision.value,
-                "action_reason": self._get_last_action_reason(),
-                "survivability_usage": portfolio_data.get("survivability_usage", 0),
-                "engine_running": self.is_running,
-                "trading_mode": self.current_mode.value
+                "is_running": self.is_running,
+                "current_mode": self.current_mode.value,
+                "grid_phase": self.grid_state.current_phase.value,
+                "grid_quality": self.grid_state.quality_score,
+                "grid_balance": self.grid_state.grid_balance_ratio,
+                "grid_completeness": self.grid_state.grid_completeness,
+                "total_decisions": len(self.decision_history),
+                "recent_decisions": len(self.recent_decisions),
+                "rule_performances": dict(self.rule_performances),
+                "capital_allocation": {
+                    "optimal_grid_size": self.capital_allocation.optimal_grid_size if self.capital_allocation else 0,
+                    "can_expand": self.capital_allocation.can_expand_grid if self.capital_allocation else False,
+                    "margin_usage": self.capital_allocation.margin_usage_ratio if self.capital_allocation else 0
+                } if self.capital_allocation else {},
+                "market_context": {
+                    "session": self.market_context.session.value if self.market_context else "UNKNOWN",
+                    "volatility": self.market_context.volatility_level if self.market_context else "UNKNOWN",
+                    "suitable_for_expansion": self._is_market_suitable_for_expansion()
+                } if self.market_context else {}
             }
+            
         except Exception as e:
-            print(f"❌ Status error: {e}")
+            print(f"❌ Status retrieval error: {e}")
             return {"error": str(e)}
-    
-    def get_overall_confidence(self) -> float:
-        """Get overall rule engine confidence"""
-        try:
-            if not self.rule_performances:
-                return 0.0
-            
-            total_weight = 0
-            weighted_confidence = 0
-            
-            for rule_name, rule_config in self.rules_config.items():
-                if rule_name in self.rule_performances:
-                    performance = self.rule_performances[rule_name]
-                    weight = rule_config.get("weight", 1.0)
-                    confidence = performance.success_rate if performance.total_signals > 0 else 0.5
-                    
-                    weighted_confidence += confidence * weight
-                    total_weight += weight
-            
-            return weighted_confidence / max(total_weight, 1)
-            
-        except Exception as e:
-            print(f"❌ Confidence calculation error: {e}")
-            return 0.0
-    
-    def get_rules_status(self) -> Dict[str, Dict]:
-        """Get status of all rules"""
-        try:
-            status = {}
-            
-            for rule_name, rule_config in self.rules_config.items():
-                performance = self.rule_performances.get(rule_name)
-                
-                status[rule_name] = {
-                    "weight": rule_config.get("weight", 1.0),
-                    "confidence": performance.success_rate if performance and performance.total_signals > 0 else 0.5,
-                    "active": rule_config.get("enabled", True),
-                    "total_signals": performance.total_signals if performance else 0,
-                    "success_rate": performance.success_rate if performance else 0.0,
-                    "confidence_threshold": rule_config.get("confidence_threshold", 0.6)
-                }
-            
-            return status
-            
-        except Exception as e:
-            print(f"❌ Rules status error: {e}")
-            return {}
-    
-    def _calculate_portfolio_health(self) -> float:
-        """Calculate overall portfolio health (0.0 - 1.0)"""
-        try:
-            portfolio_data = self.last_portfolio_data
-            
-            # Factors: profit ratio, position balance, risk level
-            profit_factor = max(0, min(1, (portfolio_data.get("total_profit", 0) + 100) / 200))
-            balance_factor = 1 - abs(0.5 - portfolio_data.get("position_balance", 0.5)) * 2
-            risk_factor = 1 - portfolio_data.get("risk_level", 0)
-            
-            return (profit_factor * 0.4 + balance_factor * 0.3 + risk_factor * 0.3)
-            
-        except Exception as e:
-            print(f"❌ Portfolio health calculation error: {e}")
-            return 0.5
-    
-    def _get_last_action_reason(self) -> str:
-        """Get reasoning for last action"""
-        try:
-            if self.decision_history:
-                last_decision = self.decision_history[-1]
-                return last_decision.reasoning
-            return "No actions taken yet"
-        except:
-            return "Unknown"
-
-# Test function
-def test_rule_engine():
-    """Test the rule engine with mock components"""
-    print("🧪 Testing Modern Rule Engine...")
-    
-    # Mock configurations
-    config = {
-        "rules": {
-            "trend_following": {
-                "weight": 0.3,
-                "confidence_threshold": 0.6,
-                "parameters": {"rsi_period": 14, "rsi_oversold": 30, "rsi_overbought": 70}
-            }
-        },
-        "adaptive_settings": {
-            "learning_rate": 0.1,
-            "performance_window": 50
-        }
-    }
-    
-    # Mock components (would be real in actual implementation)
-    class MockAnalyzer:
-        def get_comprehensive_analysis(self):
-            return {"condition": "TRENDING_UP", "trend_strength": 0.7, "rsi": 25}
-    
-    class MockOrderManager:
-        def place_smart_buy_order(self, **kwargs): return True
-        def get_pending_orders_count(self): return 0
-    
-    class MockPositionManager:
-        def get_portfolio_status(self): return {"total_profit": 50, "total_positions": 3}
-    
-    class MockTracker:
-        def track_decision(self, decision, success): pass
-        def get_decision_outcome(self, decision): return True
-    
-    # Initialize engine
-    engine = ModernRuleEngine(
-        config=config,
-        market_analyzer=MockAnalyzer(),
-        order_manager=MockOrderManager(),
-        position_manager=MockPositionManager(),
-        performance_tracker=MockTracker()
-    )
-    
-    # Test decision making
-    engine.last_market_data = {"condition": MarketCondition.TRENDING_UP, "trend_strength": 0.8, "rsi": 25}
-    engine.last_portfolio_data = {"total_profit": 50, "total_positions": 3}
-    
-    decision = engine._execute_rule_based_decision()
-    if decision:
-        print(f"✅ Decision: {decision.decision.value} (confidence: {decision.confidence:.1%})")
-        print(f"💭 Reasoning: {decision.reasoning}")
-    else:
-        print("🔄 No decision made")
-    
-    print("✅ Rule engine test completed")
-
-if __name__ == "__main__":
-    test_rule_engine()
