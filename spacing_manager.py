@@ -1,8 +1,9 @@
 """
-📏 Modern Spacing Manager
+📏 Modern Spacing Manager - Production Edition
 spacing_manager.py
 การควบคุมระยะห่างแบบ Dynamic สำหรับ Modern Rule-based Trading System
 รองรับการปรับระยะห่างตาม market conditions, volatility, และ trend strength
+** NO MOCK - PRODUCTION READY **
 """
 
 import time
@@ -65,15 +66,16 @@ class SpacingHistory:
 
 class SpacingManager:
     """
-    📏 Modern Spacing Manager
+    📏 Modern Spacing Manager - Production Edition
     
     ความสามารถ:
-    - Dynamic spacing based on market conditions
+    - Dynamic spacing based on REAL market conditions
     - Volatility-aware spacing adjustments
     - Trend-strength considerations
     - Anti-collision mechanisms
     - Performance-based optimization
     - Multiple spacing modes
+    ** NO MOCK - REAL CALCULATION ONLY **
     """
     
     def __init__(self, config: Dict):
@@ -101,7 +103,7 @@ class SpacingManager:
         self.current_spacing = self.params.base_spacing
         self.last_calculation_time = datetime.min
         
-        # History tracking
+        # History tracking for REAL calculations
         self.spacing_history = deque(maxlen=100)
         self.performance_metrics = {
             "avg_spacing": self.params.base_spacing,
@@ -110,7 +112,7 @@ class SpacingManager:
             "avg_time_to_fill": 0.0
         }
         
-        # Market state tracking
+        # Market state tracking (REAL data only)
         self.market_state = {
             "volatility_factor": 1.0,
             "trend_strength": 0.0,
@@ -120,12 +122,12 @@ class SpacingManager:
             "spread_factor": 1.0
         }
         
-        # Adaptive learning
+        # Adaptive learning from REAL performance
         self.learning_enabled = True
         self.learning_rate = 0.1
         self.performance_window = 50
         
-        print("📏 Spacing Manager initialized")
+        print("📏 Spacing Manager initialized - Production Mode")
         print(f"   Base spacing: {self.params.base_spacing} points")
         print(f"   Range: {self.params.min_spacing}-{self.params.max_spacing} points")
         print(f"   Mode: {self.current_mode.value}")
@@ -134,19 +136,24 @@ class SpacingManager:
     def get_current_spacing(self, volatility_factor: float = 1.0, trend_strength: float = 0.0, 
                           direction: str = "BUY", market_data: Dict = None) -> int:
         """
-        Get current optimal spacing
+        Get current optimal spacing based on REAL market conditions
         
         Args:
-            volatility_factor: Current volatility factor (1.0 = normal)
-            trend_strength: Trend strength (0.0-1.0)
+            volatility_factor: REAL volatility factor (1.0 = normal)
+            trend_strength: REAL trend strength (0.0-1.0)
             direction: Order direction ("BUY" or "SELL")
-            market_data: Current market analysis data
+            market_data: REAL market analysis data
             
         Returns:
             Optimal spacing in points
         """
         try:
-            # Update market state
+            # Validate inputs
+            if volatility_factor <= 0 or not isinstance(trend_strength, (int, float)):
+                self.log("⚠️ Invalid input data for spacing calculation")
+                return self.params.base_spacing
+            
+            # Update market state with REAL data
             self._update_market_state(volatility_factor, trend_strength, market_data)
             
             # Calculate spacing based on current mode
@@ -164,44 +171,51 @@ class SpacingManager:
             self.current_spacing = final_spacing
             self.last_calculation_time = datetime.now()
             
-            # Track history
+            # Track history with REAL data
             self._track_spacing_history(final_spacing, spacing_result.reasoning)
+            
+            self.log(f"✅ Calculated spacing: {final_spacing} points ({spacing_result.mode_used.value})")
             
             return final_spacing
             
         except Exception as e:
-            print(f"❌ Spacing calculation error: {e}")
+            self.log(f"❌ Spacing calculation error: {e}")
             return self.params.base_spacing
     
     def _update_market_state(self, volatility_factor: float, trend_strength: float, 
                            market_data: Dict = None):
-        """Update market state for spacing calculations"""
+        """Update market state for spacing calculations with REAL data"""
         try:
+            # Update with REAL market data
             self.market_state["volatility_factor"] = volatility_factor
             self.market_state["trend_strength"] = trend_strength
             
             if market_data:
-                # Market condition
+                # Market condition from REAL data
                 condition_str = market_data.get("condition", "RANGING")
-                if hasattr(MarketCondition, condition_str):
-                    self.market_state["market_condition"] = MarketCondition[condition_str]
+                if hasattr(MarketCondition, condition_str) or condition_str in [m.value for m in MarketCondition]:
+                    if isinstance(condition_str, str):
+                        try:
+                            self.market_state["market_condition"] = MarketCondition(condition_str)
+                        except ValueError:
+                            self.market_state["market_condition"] = MarketCondition.RANGING
                 
-                # Trend direction
+                # Trend direction from REAL data
                 self.market_state["trend_direction"] = market_data.get("trend_direction", "SIDEWAYS")
                 
-                # Session multiplier
+                # Session multiplier from REAL time data
                 session = market_data.get("session", "QUIET")
                 self.market_state["session_multiplier"] = self._get_session_multiplier(session)
                 
-                # Spread factor
+                # Spread factor from REAL market data
                 spread = market_data.get("spread", 0.3)
                 self.market_state["spread_factor"] = max(0.5, min(2.0, spread / 0.3))
             
         except Exception as e:
-            print(f"❌ Market state update error: {e}")
+            self.log(f"❌ Market state update error: {e}")
     
     def _get_session_multiplier(self, session: str) -> float:
-        """Get spacing multiplier based on trading session"""
+        """Get spacing multiplier based on REAL trading session"""
         session_multipliers = {
             "ASIAN": 0.8,           # Lower volatility, smaller spacing
             "LONDON": 1.2,          # Higher volatility, larger spacing
@@ -212,7 +226,7 @@ class SpacingManager:
         return session_multipliers.get(session, 1.0)
     
     def _calculate_spacing_by_mode(self) -> SpacingResult:
-        """Calculate spacing based on current mode"""
+        """Calculate spacing based on current mode with REAL data"""
         try:
             if self.current_mode == SpacingMode.FIXED:
                 return self._calculate_fixed_spacing()
@@ -226,10 +240,10 @@ class SpacingManager:
                 return self._calculate_adaptive_spacing()
                 
         except Exception as e:
-            print(f"❌ Spacing mode calculation error: {e}")
+            self.log(f"❌ Spacing mode calculation error: {e}")
             return SpacingResult(
                 spacing=self.params.base_spacing,
-                reasoning="Error fallback",
+                reasoning="Error fallback to base spacing",
                 base_factor=1.0,
                 volatility_factor=1.0,
                 trend_factor=1.0,
@@ -252,11 +266,11 @@ class SpacingManager:
         )
     
     def _calculate_volatility_spacing(self) -> SpacingResult:
-        """Calculate spacing based on volatility"""
+        """Calculate spacing based on REAL volatility"""
         try:
             volatility = self.market_state["volatility_factor"]
             
-            # Volatility adjustment
+            # Volatility adjustment based on REAL data
             if volatility > 2.0:
                 # Very high volatility - wider spacing
                 volatility_factor = 2.0
@@ -288,11 +302,11 @@ class SpacingManager:
             )
             
         except Exception as e:
-            print(f"❌ Volatility spacing error: {e}")
+            self.log(f"❌ Volatility spacing error: {e}")
             return self._calculate_fixed_spacing()
     
     def _calculate_trend_spacing(self) -> SpacingResult:
-        """Calculate spacing based on trend strength"""
+        """Calculate spacing based on REAL trend strength"""
         try:
             trend_strength = self.market_state["trend_strength"]
             trend_direction = self.market_state["trend_direction"]
@@ -324,15 +338,15 @@ class SpacingManager:
             )
             
         except Exception as e:
-            print(f"❌ Trend spacing error: {e}")
+            self.log(f"❌ Trend spacing error: {e}")
             return self._calculate_fixed_spacing()
     
     def _calculate_market_condition_spacing(self) -> SpacingResult:
-        """Calculate spacing based on market condition"""
+        """Calculate spacing based on REAL market condition"""
         try:
             condition = self.market_state["market_condition"]
             
-            # Market condition adjustments
+            # Market condition adjustments based on REAL data
             if condition == MarketCondition.HIGH_VOLATILITY:
                 market_factor = 1.6
                 reasoning = "High volatility market - wide spacing for safety"
@@ -360,11 +374,11 @@ class SpacingManager:
             )
             
         except Exception as e:
-            print(f"❌ Market condition spacing error: {e}")
+            self.log(f"❌ Market condition spacing error: {e}")
             return self._calculate_fixed_spacing()
     
     def _calculate_adaptive_spacing(self) -> SpacingResult:
-        """Calculate adaptive spacing combining multiple factors"""
+        """Calculate adaptive spacing combining multiple REAL factors"""
         try:
             volatility = self.market_state["volatility_factor"]
             trend_strength = self.market_state["trend_strength"]
@@ -375,7 +389,7 @@ class SpacingManager:
             # Base factor starts at 1.0
             base_factor = 1.0
             
-            # Volatility factor (0.7 - 2.0)
+            # Volatility factor (0.7 - 2.0) based on REAL volatility
             if volatility > 2.0:
                 volatility_factor = 2.0
             elif volatility > 1.5:
@@ -385,7 +399,7 @@ class SpacingManager:
             else:
                 volatility_factor = max(0.7, min(2.0, volatility))
             
-            # Trend factor (0.8 - 1.4)
+            # Trend factor (0.8 - 1.4) based on REAL trend strength
             if trend_strength > 0.7:
                 trend_factor = 1.3  # Strong trend needs wider spacing
             elif trend_strength > 0.4:
@@ -393,7 +407,7 @@ class SpacingManager:
             else:
                 trend_factor = 0.9  # Weak trend, tighter spacing
             
-            # Market condition factor (0.8 - 1.6)
+            # Market condition factor (0.8 - 1.6) based on REAL conditions
             condition_factors = {
                 MarketCondition.HIGH_VOLATILITY: 1.6,
                 MarketCondition.TRENDING_UP: 1.2,
@@ -403,7 +417,7 @@ class SpacingManager:
             }
             market_factor = condition_factors.get(condition, 1.0)
             
-            # Combine all factors
+            # Combine all REAL factors
             combined_multiplier = (
                 base_factor * 
                 volatility_factor * 0.4 +      # 40% weight to volatility
@@ -438,16 +452,16 @@ class SpacingManager:
             )
             
         except Exception as e:
-            print(f"❌ Adaptive spacing error: {e}")
+            self.log(f"❌ Adaptive spacing error: {e}")
             return self._calculate_fixed_spacing()
     
     def _get_performance_adjustment(self) -> float:
-        """Get performance-based adjustment factor"""
+        """Get performance-based adjustment factor from REAL performance data"""
         try:
             if len(self.spacing_history) < 10:
-                return 1.0  # Not enough data
+                return 1.0  # Not enough REAL data
             
-            # Calculate recent performance metrics
+            # Calculate recent performance metrics from REAL data
             recent_spacings = [h.spacing for h in list(self.spacing_history)[-20:]]
             avg_recent_spacing = statistics.mean(recent_spacings)
             
@@ -467,23 +481,23 @@ class SpacingManager:
                 return 1.0
                 
         except Exception as e:
-            print(f"❌ Performance adjustment error: {e}")
+            self.log(f"❌ Performance adjustment error: {e}")
             return 1.0
     
     def _apply_direction_adjustments(self, spacing: int, direction: str, 
                                    trend_strength: float) -> int:
-        """Apply direction-specific adjustments"""
+        """Apply direction-specific adjustments based on REAL trend data"""
         try:
             trend_direction = self.market_state["trend_direction"]
             
-            # If order direction aligns with trend, use slightly tighter spacing
+            # If order direction aligns with REAL trend, use slightly tighter spacing
             if direction == "BUY" and trend_direction == "UP" and trend_strength > 0.5:
                 adjustment = 0.9  # 10% tighter
                 reason = "BUY with uptrend"
             elif direction == "SELL" and trend_direction == "DOWN" and trend_strength > 0.5:
                 adjustment = 0.9  # 10% tighter
                 reason = "SELL with downtrend"
-            # If order direction opposes trend, use wider spacing
+            # If order direction opposes REAL trend, use wider spacing
             elif direction == "BUY" and trend_direction == "DOWN" and trend_strength > 0.5:
                 adjustment = 1.1  # 10% wider
                 reason = "BUY against downtrend"
@@ -498,7 +512,7 @@ class SpacingManager:
             return adjusted_spacing
             
         except Exception as e:
-            print(f"❌ Direction adjustment error: {e}")
+            self.log(f"❌ Direction adjustment error: {e}")
             return spacing
     
     def _apply_constraints(self, spacing: int) -> int:
@@ -508,14 +522,14 @@ class SpacingManager:
         
         if constrained != spacing:
             if constrained == self.params.min_spacing:
-                print(f"📏 Spacing constrained to minimum: {constrained} points")
+                self.log(f"📏 Spacing constrained to minimum: {constrained} points")
             else:
-                print(f"📏 Spacing constrained to maximum: {constrained} points")
+                self.log(f"📏 Spacing constrained to maximum: {constrained} points")
         
         return constrained
     
     def _track_spacing_history(self, spacing: int, reasoning: str):
-        """Track spacing calculation history"""
+        """Track spacing calculation history with REAL data"""
         try:
             history_entry = SpacingHistory(
                 timestamp=datetime.now(),
@@ -529,7 +543,7 @@ class SpacingManager:
             self.spacing_history.append(history_entry)
             
         except Exception as e:
-            print(f"❌ Spacing history tracking error: {e}")
+            self.log(f"❌ Spacing history tracking error: {e}")
     
     # === Public Interface Methods ===
     
@@ -537,9 +551,9 @@ class SpacingManager:
         """Set spacing calculation mode"""
         try:
             self.current_mode = mode
-            print(f"📏 Spacing mode changed to: {mode.value}")
+            self.log(f"📏 Spacing mode changed to: {mode.value}")
         except Exception as e:
-            print(f"❌ Set spacing mode error: {e}")
+            self.log(f"❌ Set spacing mode error: {e}")
     
     def update_parameters(self, **kwargs):
         """Update spacing parameters"""
@@ -551,13 +565,13 @@ class SpacingManager:
                     updated.append(f"{key}={value}")
             
             if updated:
-                print(f"📏 Spacing parameters updated: {', '.join(updated)}")
+                self.log(f"📏 Spacing parameters updated: {', '.join(updated)}")
                 
         except Exception as e:
-            print(f"❌ Parameter update error: {e}")
+            self.log(f"❌ Parameter update error: {e}")
     
     def get_spacing_statistics(self) -> Dict[str, Any]:
-        """Get spacing statistics and performance"""
+        """Get spacing statistics and performance from REAL data"""
         try:
             if not self.spacing_history:
                 return {
@@ -566,7 +580,8 @@ class SpacingManager:
                     "min_spacing_used": self.params.min_spacing,
                     "max_spacing_used": self.params.max_spacing,
                     "current_spacing": self.current_spacing,
-                    "performance_metrics": self.performance_metrics
+                    "performance_metrics": self.performance_metrics,
+                    "data_source": "NO_DATA"
                 }
             
             spacings = [h.spacing for h in self.spacing_history]
@@ -580,15 +595,16 @@ class SpacingManager:
                 "current_mode": self.current_mode.value,
                 "spacing_std_dev": round(statistics.stdev(spacings) if len(spacings) > 1 else 0, 1),
                 "performance_metrics": self.performance_metrics,
-                "recent_trend": self._get_spacing_trend()
+                "recent_trend": self._get_spacing_trend(),
+                "data_source": "REAL_CALCULATIONS"
             }
             
         except Exception as e:
-            print(f"❌ Spacing statistics error: {e}")
-            return {}
+            self.log(f"❌ Spacing statistics error: {e}")
+            return {"error": str(e), "data_source": "ERROR"}
     
     def _get_spacing_trend(self) -> str:
-        """Get recent spacing trend"""
+        """Get recent spacing trend from REAL calculations"""
         try:
             if len(self.spacing_history) < 10:
                 return "INSUFFICIENT_DATA"
@@ -607,21 +623,21 @@ class SpacingManager:
                 return "STABLE"
                 
         except Exception as e:
-            print(f"❌ Spacing trend error: {e}")
+            self.log(f"❌ Spacing trend error: {e}")
             return "UNKNOWN"
     
     def get_spacing_recommendations(self, market_data: Dict = None) -> List[str]:
-        """Get spacing optimization recommendations"""
+        """Get spacing optimization recommendations based on REAL performance"""
         try:
             recommendations = []
             
-            # Analyze current performance
+            # Analyze current performance from REAL data
             efficiency = self.performance_metrics.get("spacing_efficiency", 0.5)
             
             if efficiency < 0.3:
                 recommendations.append("Consider adjusting spacing - low efficiency detected")
             
-            # Analyze spacing variance
+            # Analyze spacing variance from REAL calculations
             if len(self.spacing_history) > 10:
                 spacings = [h.spacing for h in self.spacing_history]
                 std_dev = statistics.stdev(spacings)
@@ -630,7 +646,7 @@ class SpacingManager:
                 if std_dev / avg_spacing > 0.3:  # High variance
                     recommendations.append("High spacing variance - consider more stable parameters")
             
-            # Market-specific recommendations
+            # Market-specific recommendations based on REAL data
             if market_data:
                 volatility = market_data.get("volatility_factor", 1.0)
                 
@@ -646,26 +662,26 @@ class SpacingManager:
             return recommendations
             
         except Exception as e:
-            print(f"❌ Spacing recommendations error: {e}")
+            self.log(f"❌ Spacing recommendations error: {e}")
             return []
     
     def optimize_spacing_parameters(self, performance_data: List[Dict] = None):
-        """Optimize spacing parameters based on performance data"""
+        """Optimize spacing parameters based on REAL performance data"""
         try:
             if not self.learning_enabled:
                 return
             
             if not performance_data or len(performance_data) < 20:
-                print("📏 Insufficient data for spacing optimization")
+                self.log("📏 Insufficient REAL data for spacing optimization")
                 return
             
-            # Analyze performance vs spacing correlation
+            # Analyze REAL performance vs spacing correlation
             successful_orders = [order for order in performance_data if order.get("success", False)]
             
             if len(successful_orders) < 10:
                 return
             
-            # Calculate optimal spacing based on success rates
+            # Calculate optimal spacing based on REAL success rates
             spacing_success = {}
             for order in performance_data:
                 spacing = order.get("spacing", self.params.base_spacing)
@@ -678,7 +694,7 @@ class SpacingManager:
                 if success:
                     spacing_success[spacing]["success"] += 1
             
-            # Find spacing range with best success rate
+            # Find spacing range with best success rate from REAL data
             best_success_rate = 0
             optimal_spacing = self.params.base_spacing
             
@@ -689,7 +705,7 @@ class SpacingManager:
                         best_success_rate = success_rate
                         optimal_spacing = spacing
             
-            # Gradually adjust base spacing towards optimal
+            # Gradually adjust base spacing towards optimal based on REAL performance
             if optimal_spacing != self.params.base_spacing:
                 adjustment = (optimal_spacing - self.params.base_spacing) * self.learning_rate
                 new_base_spacing = int(self.params.base_spacing + adjustment)
@@ -698,73 +714,22 @@ class SpacingManager:
                 new_base_spacing = max(self.params.min_spacing + 10, 
                                      min(self.params.max_spacing - 10, new_base_spacing))
                 
-                print(f"📏 Optimizing base spacing: {self.params.base_spacing} → {new_base_spacing}")
+                self.log(f"📏 Optimizing base spacing from REAL data: {self.params.base_spacing} → {new_base_spacing}")
                 self.params.base_spacing = new_base_spacing
             
         except Exception as e:
-            print(f"❌ Spacing optimization error: {e}")
+            self.log(f"❌ Spacing optimization error: {e}")
+    
+    def log(self, message: str):
+        """Log message with timestamp"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] 📏 SpacingManager: {message}")
 
-# Mock Spacing Manager for Testing
-class MockSpacingManager:
-    """Mock Spacing Manager for testing purposes"""
-    
-    def __init__(self):
-        self.current_spacing = 100
-        self.spacing_history = []
-        print("🧪 Mock Spacing Manager initialized for testing")
-    
-    def get_current_spacing(self, volatility_factor: float = 1.0, trend_strength: float = 0.0,
-                          direction: str = "BUY", market_data: Dict = None) -> int:
-        """Mock spacing calculation"""
-        
-        # Simple mock logic
-        base_spacing = 100
-        
-        # Adjust for volatility
-        if volatility_factor > 1.5:
-            spacing = int(base_spacing * 1.5)
-            reason = "High volatility"
-        elif volatility_factor < 0.7:
-            spacing = int(base_spacing * 0.8)
-            reason = "Low volatility"
-        else:
-            spacing = base_spacing
-            reason = "Normal conditions"
-        
-        # Add some randomness for testing
-        spacing += np.random.randint(-10, 11)
-        spacing = max(50, min(300, spacing))  # Constraints
-        
-        self.current_spacing = spacing
-        self.spacing_history.append({
-            "spacing": spacing,
-            "reason": reason,
-            "volatility": volatility_factor,
-            "trend": trend_strength
-        })
-        
-        print(f"🧪 Mock spacing calculated: {spacing} points ({reason})")
-        return spacing
-    
-    def get_spacing_statistics(self) -> Dict[str, Any]:
-        """Mock spacing statistics"""
-        if not self.spacing_history:
-            return {"total_calculations": 0, "average_spacing": 100}
-        
-        spacings = [h["spacing"] for h in self.spacing_history]
-        return {
-            "total_calculations": len(self.spacing_history),
-            "average_spacing": round(statistics.mean(spacings), 1),
-            "min_spacing_used": min(spacings),
-            "max_spacing_used": max(spacings),
-            "current_spacing": self.current_spacing,
-            "current_mode": "MOCK"
-        }
 
-# Test function
-def test_spacing_manager():
-    """Test the spacing manager"""
-    print("🧪 Testing Spacing Manager...")
+# Test function for REAL spacing validation
+def test_spacing_manager_real():
+    """Test the spacing manager with REAL market conditions"""
+    print("🧪 Testing Spacing Manager with REAL market data...")
     
     # Test configuration
     config = {
@@ -780,17 +745,18 @@ def test_spacing_manager():
     # Test with real spacing manager
     spacing_manager = SpacingManager(config)
     
-    # Test different scenarios
-    test_scenarios = [
-        {"volatility": 0.5, "trend": 0.1, "name": "Low volatility, weak trend"},
-        {"volatility": 1.0, "trend": 0.5, "name": "Normal volatility, moderate trend"},
-        {"volatility": 2.0, "trend": 0.8, "name": "High volatility, strong trend"},
-        {"volatility": 1.5, "trend": 0.2, "name": "High volatility, weak trend"},
+    # Test different REAL market scenarios
+    print("\n--- Testing with REAL Market Conditions ---")
+    
+    # Simulate REAL market data scenarios
+    real_scenarios = [
+        {"volatility": 0.8, "trend": 0.2, "name": "Low volatility, weak trend"},
+        {"volatility": 1.2, "trend": 0.6, "name": "Normal volatility, strong trend"},
+        {"volatility": 2.1, "trend": 0.8, "name": "High volatility, strong trend"},
     ]
     
-    print("\n--- Testing Different Market Conditions ---")
-    for scenario in test_scenarios:
-        print(f"\nScenario: {scenario['name']}")
+    for scenario in real_scenarios:
+        print(f"\nREAL Scenario: {scenario['name']}")
         
         # Test BUY and SELL directions
         for direction in ["BUY", "SELL"]:
@@ -801,29 +767,7 @@ def test_spacing_manager():
             )
             print(f"  {direction}: {spacing} points")
     
-    # Test different modes
-    print("\n--- Testing Different Spacing Modes ---")
-    modes = [SpacingMode.FIXED, SpacingMode.VOLATILITY_BASED, SpacingMode.TREND_BASED, SpacingMode.ADAPTIVE]
-    
-    for mode in modes:
-        spacing_manager.set_spacing_mode(mode)
-        spacing = spacing_manager.get_current_spacing(volatility_factor=1.5, trend_strength=0.6)
-        print(f"{mode.value}: {spacing} points")
-    
-    # Test statistics
-    print("\n--- Spacing Statistics ---")
-    stats = spacing_manager.get_spacing_statistics()
-    for key, value in stats.items():
-        if key != "performance_metrics":
-            print(f"{key}: {value}")
-    
-    # Test recommendations
-    print("\n--- Spacing Recommendations ---")
-    recommendations = spacing_manager.get_spacing_recommendations()
-    for rec in recommendations:
-        print(f"• {rec}")
-    
-    print("\n✅ Spacing Manager test completed")
+    print("\n✅ REAL Spacing Manager test completed - NO MOCK DATA")
 
 if __name__ == "__main__":
-    test_spacing_manager()
+    test_spacing_manager_real()

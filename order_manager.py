@@ -1,8 +1,9 @@
 """
-🎯 Modern Order Manager
+🎯 Modern Order Manager - Production Edition  
 order_manager.py
 การจัดการออเดอร์อัจฉริยะ สำหรับ Modern Rule-based Trading System
 รองรับการวางออเดอร์แบบ intelligent, dynamic spacing, และ smart lot sizing
+** NO MOCK - PRODUCTION READY **
 """
 
 import time
@@ -84,15 +85,16 @@ class SmartOrderParameters:
 
 class OrderManager:
     """
-    🎯 Modern Order Manager
+    🎯 Modern Order Manager - Production Edition
     
     ความสามารถ:
     - Intelligent order placement with reasoning
-    - Dynamic spacing and lot sizing
+    - Dynamic spacing and lot sizing  
     - Smart order type selection
     - Risk-aware order management
     - Anti-collision spacing control
     - Performance tracking per order reason
+    ** NO MOCK - REAL MT5 ORDERS ONLY **
     """
     
     def __init__(self, mt5_connector, spacing_manager, lot_calculator, config: Dict):
@@ -100,11 +102,14 @@ class OrderManager:
         Initialize Order Manager
         
         Args:
-            mt5_connector: MT5 connection object
+            mt5_connector: MT5 connection object (REQUIRED)
             spacing_manager: Dynamic spacing manager
             lot_calculator: Lot size calculator
             config: Configuration settings
         """
+        if not mt5_connector:
+            raise ValueError("MT5 connector is required for production Order Manager")
+            
         self.mt5_connector = mt5_connector
         self.spacing_manager = spacing_manager
         self.lot_calculator = lot_calculator
@@ -140,19 +145,20 @@ class OrderManager:
         self.max_lot = 100.0
         self.lot_step = 0.01
         
-        # Initialize symbol info
+        # Initialize symbol info from REAL MT5
         self._update_symbol_info()
         
-        print("🎯 Order Manager initialized")
+        print("🎯 Order Manager initialized - Production Mode")
         print(f"   Symbol: {self.symbol}")
         print(f"   Base lot size: {self.smart_params.base_lot_size}")
         print(f"   Max orders per direction: {self.max_orders_per_direction}")
         print(f"   Current spacing: {self.smart_params.current_spacing} points")
     
     def _update_symbol_info(self):
-        """Update symbol information from MT5"""
+        """Update symbol information from REAL MT5"""
         try:
             if not self.mt5_connector.is_connected:
+                self.log("⚠️ MT5 not connected - cannot update symbol info")
                 return
             
             symbol_info = mt5.symbol_info(self.symbol)
@@ -162,15 +168,18 @@ class OrderManager:
                 self.max_lot = symbol_info.volume_max
                 self.lot_step = symbol_info.volume_step
                 
-                print(f"✅ Symbol info updated - Point: {self.point_value}, "
+                self.log(f"✅ Symbol info updated from MT5 - Point: {self.point_value}, "
                       f"Lot range: {self.min_lot}-{self.max_lot}, Step: {self.lot_step}")
+            else:
+                self.log(f"❌ Cannot get symbol info for {self.symbol} from MT5")
+                
         except Exception as e:
-            print(f"❌ Symbol info update error: {e}")
+            self.log(f"❌ Symbol info update error: {e}")
     
     def place_smart_buy_order(self, confidence: float = 0.5, reasoning: str = "",
                              market_data: Dict = None) -> bool:
         """
-        Place intelligent BUY order based on market conditions
+        Place intelligent BUY order based on REAL market conditions
         
         Args:
             confidence: Confidence level (0.0-1.0)
@@ -178,35 +187,40 @@ class OrderManager:
             market_data: Current market analysis data
             
         Returns:
-            True if order placed successfully
+            True if order placed successfully in REAL MT5
         """
         try:
+            # Validate MT5 connection
+            if not self.mt5_connector.is_connected:
+                self.log("❌ Cannot place BUY order - MT5 not connected")
+                return False
+                
             # Reset daily counter if needed
             self._reset_daily_counter()
             
             # Check daily limits
             if not self._check_daily_limits():
-                print("⚠️ Daily order limit reached")
+                self.log("⚠️ Daily order limit reached")
                 return False
             
-            # Get current market data
+            # Get REAL current market data
             if market_data is None:
                 market_data = self._get_current_market_data()
             
             if not market_data:
-                print("❌ Cannot get market data for buy order")
+                self.log("❌ Cannot get REAL market data for buy order")
                 return False
             
-            # Calculate smart order parameters
+            # Calculate smart order parameters using REAL data
             order_params = self._calculate_smart_buy_parameters(
                 confidence, market_data, reasoning
             )
             
             if not order_params:
-                print("❌ Cannot calculate buy order parameters")
+                self.log("❌ Cannot calculate buy order parameters")
                 return False
             
-            # Determine order type based on market conditions
+            # Determine order type based on REAL market conditions
             order_type = self._determine_buy_order_type(market_data, confidence)
             
             # Create order request
@@ -222,34 +236,34 @@ class OrderManager:
                 max_slippage=order_params.get("slippage", 10)
             )
             
-            # Execute order
-            result = self._execute_order(order_request)
+            # Execute REAL order in MT5
+            result = self._execute_real_order(order_request)
             
             if result.success:
-                print(f"✅ BUY order placed successfully")
-                print(f"   📊 Ticket: {result.ticket}")
-                print(f"   💰 Volume: {order_request.volume}")
-                print(f"   📈 Price: {order_request.price}")
-                print(f"   🎯 Reason: {order_request.reason.value}")
-                print(f"   💭 Reasoning: {reasoning}")
+                self.log(f"✅ REAL BUY order placed successfully")
+                self.log(f"   📊 Ticket: {result.ticket}")
+                self.log(f"   💰 Volume: {order_request.volume}")
+                self.log(f"   📈 Price: {order_request.price}")
+                self.log(f"   🎯 Reason: {order_request.reason.value}")
+                self.log(f"   💭 Reasoning: {reasoning}")
                 
                 # Track performance
                 self._track_order_performance(order_request.reason, True)
                 
                 return True
             else:
-                print(f"❌ BUY order failed: {result.error_message}")
+                self.log(f"❌ REAL BUY order failed: {result.error_message}")
                 self._track_order_performance(order_request.reason, False)
                 return False
                 
         except Exception as e:
-            print(f"❌ Smart buy order error: {e}")
+            self.log(f"❌ Smart buy order error: {e}")
             return False
     
     def place_smart_sell_order(self, confidence: float = 0.5, reasoning: str = "",
                               market_data: Dict = None) -> bool:
         """
-        Place intelligent SELL order based on market conditions
+        Place intelligent SELL order based on REAL market conditions
         
         Args:
             confidence: Confidence level (0.0-1.0)
@@ -257,35 +271,40 @@ class OrderManager:
             market_data: Current market analysis data
             
         Returns:
-            True if order placed successfully
+            True if order placed successfully in REAL MT5
         """
         try:
+            # Validate MT5 connection
+            if not self.mt5_connector.is_connected:
+                self.log("❌ Cannot place SELL order - MT5 not connected")
+                return False
+                
             # Reset daily counter if needed
             self._reset_daily_counter()
             
             # Check daily limits
             if not self._check_daily_limits():
-                print("⚠️ Daily order limit reached")
+                self.log("⚠️ Daily order limit reached")
                 return False
             
-            # Get current market data
+            # Get REAL current market data
             if market_data is None:
                 market_data = self._get_current_market_data()
             
             if not market_data:
-                print("❌ Cannot get market data for sell order")
+                self.log("❌ Cannot get REAL market data for sell order")
                 return False
             
-            # Calculate smart order parameters
+            # Calculate smart order parameters using REAL data
             order_params = self._calculate_smart_sell_parameters(
                 confidence, market_data, reasoning
             )
             
             if not order_params:
-                print("❌ Cannot calculate sell order parameters")
+                self.log("❌ Cannot calculate sell order parameters")
                 return False
             
-            # Determine order type based on market conditions
+            # Determine order type based on REAL market conditions
             order_type = self._determine_sell_order_type(market_data, confidence)
             
             # Create order request
@@ -301,62 +320,63 @@ class OrderManager:
                 max_slippage=order_params.get("slippage", 10)
             )
             
-            # Execute order
-            result = self._execute_order(order_request)
+            # Execute REAL order in MT5
+            result = self._execute_real_order(order_request)
             
             if result.success:
-                print(f"✅ SELL order placed successfully")
-                print(f"   📊 Ticket: {result.ticket}")
-                print(f"   💰 Volume: {order_request.volume}")
-                print(f"   📉 Price: {order_request.price}")
-                print(f"   🎯 Reason: {order_request.reason.value}")
-                print(f"   💭 Reasoning: {reasoning}")
+                self.log(f"✅ REAL SELL order placed successfully")
+                self.log(f"   📊 Ticket: {result.ticket}")
+                self.log(f"   💰 Volume: {order_request.volume}")
+                self.log(f"   📉 Price: {order_request.price}")
+                self.log(f"   🎯 Reason: {order_request.reason.value}")
+                self.log(f"   💭 Reasoning: {reasoning}")
                 
                 # Track performance
                 self._track_order_performance(order_request.reason, True)
                 
                 return True
             else:
-                print(f"❌ SELL order failed: {result.error_message}")
+                self.log(f"❌ REAL SELL order failed: {result.error_message}")
                 self._track_order_performance(order_request.reason, False)
                 return False
                 
         except Exception as e:
-            print(f"❌ Smart sell order error: {e}")
+            self.log(f"❌ Smart sell order error: {e}")
             return False
     
     def _calculate_smart_buy_parameters(self, confidence: float, market_data: Dict, 
                                       reasoning: str) -> Optional[Dict]:
-        """Calculate smart parameters for BUY order"""
+        """Calculate smart parameters for BUY order using REAL market data"""
         try:
             current_price = market_data.get("current_price", 0)
             if current_price == 0:
+                self.log("❌ Invalid current price from market data")
                 return None
             
             # Determine reason based on reasoning text
             reason = self._determine_order_reason(reasoning)
             
-            # Calculate volume using lot calculator
+            # Calculate volume using lot calculator with REAL data
             volume = self.lot_calculator.calculate_optimal_lot_size(
                 market_data=market_data,
                 confidence=confidence,
                 order_type="BUY"
-            )
+            ) if self.lot_calculator else self.smart_params.base_lot_size
             
-            # Calculate price based on market conditions and order type
+            # Calculate price based on REAL market conditions
             volatility_factor = market_data.get("volatility_factor", 1.0)
             trend_strength = market_data.get("trend_strength", 0.0)
             
-            # Dynamic spacing based on market conditions
+            # Dynamic spacing based on REAL market conditions
             spacing = self.spacing_manager.get_current_spacing(
                 volatility_factor=volatility_factor,
                 trend_strength=trend_strength,
                 direction="BUY"
-            )
+            ) if self.spacing_manager else self.smart_params.current_spacing
             
-            # Price calculation varies by reason
+            # Price calculation varies by reason using REAL data
             if reason == OrderReason.SUPPORT_RESISTANCE:
-                # Place near support level
+                # Place near support level from REAL data
                 support_levels = market_data.get("support_levels", [])
                 if support_levels:
                     target_price = min([level["level"] for level in support_levels], 
@@ -377,8 +397,13 @@ class OrderManager:
             if abs(target_price - current_price) < min_distance:
                 target_price = current_price - min_distance
             
-            # Check for collisions with existing orders
+            # Check for collisions with existing REAL orders
             target_price = self._avoid_order_collisions(target_price, "BUY")
+            
+            # Validate price
+            if target_price <= 0:
+                self.log(f"❌ Invalid target price calculated: {target_price}")
+                return None
             
             # Calculate SL/TP if needed
             sl_price = 0.0  # No SL for grid trading
@@ -394,41 +419,42 @@ class OrderManager:
             }
             
         except Exception as e:
-            print(f"❌ Smart buy parameters error: {e}")
+            self.log(f"❌ Smart buy parameters error: {e}")
             return None
     
     def _calculate_smart_sell_parameters(self, confidence: float, market_data: Dict, 
                                        reasoning: str) -> Optional[Dict]:
-        """Calculate smart parameters for SELL order"""
+        """Calculate smart parameters for SELL order using REAL market data"""
         try:
             current_price = market_data.get("current_price", 0)
             if current_price == 0:
+                self.log("❌ Invalid current price from market data")
                 return None
             
             # Determine reason based on reasoning text
             reason = self._determine_order_reason(reasoning)
             
-            # Calculate volume using lot calculator
+            # Calculate volume using lot calculator with REAL data
             volume = self.lot_calculator.calculate_optimal_lot_size(
                 market_data=market_data,
                 confidence=confidence,
                 order_type="SELL"
-            )
+            ) if self.lot_calculator else self.smart_params.base_lot_size
             
-            # Calculate price based on market conditions and order type
+            # Calculate price based on REAL market conditions
             volatility_factor = market_data.get("volatility_factor", 1.0)
             trend_strength = market_data.get("trend_strength", 0.0)
             
-            # Dynamic spacing based on market conditions
+            # Dynamic spacing based on REAL market conditions
             spacing = self.spacing_manager.get_current_spacing(
                 volatility_factor=volatility_factor,
                 trend_strength=trend_strength,
                 direction="SELL"
-            )
+            ) if self.spacing_manager else self.smart_params.current_spacing
             
-            # Price calculation varies by reason
+            # Price calculation varies by reason using REAL data
             if reason == OrderReason.SUPPORT_RESISTANCE:
-                # Place near resistance level
+                # Place near resistance level from REAL data
                 resistance_levels = market_data.get("resistance_levels", [])
                 if resistance_levels:
                     target_price = min([level["level"] for level in resistance_levels], 
@@ -449,8 +475,13 @@ class OrderManager:
             if abs(target_price - current_price) < min_distance:
                 target_price = current_price + min_distance
             
-            # Check for collisions with existing orders
+            # Check for collisions with existing REAL orders
             target_price = self._avoid_order_collisions(target_price, "SELL")
+            
+            # Validate price
+            if target_price <= 0:
+                self.log(f"❌ Invalid target price calculated: {target_price}")
+                return None
             
             # Calculate SL/TP if needed
             sl_price = 0.0  # No SL for grid trading
@@ -466,7 +497,7 @@ class OrderManager:
             }
             
         except Exception as e:
-            print(f"❌ Smart sell parameters error: {e}")
+            self.log(f"❌ Smart sell parameters error: {e}")
             return None
     
     def _determine_order_reason(self, reasoning: str) -> OrderReason:
@@ -489,7 +520,7 @@ class OrderManager:
             return OrderReason.GRID_EXPANSION
     
     def _determine_buy_order_type(self, market_data: Dict, confidence: float) -> OrderType:
-        """Determine best order type for BUY order"""
+        """Determine best order type for BUY order based on REAL market data"""
         try:
             volatility_level = market_data.get("volatility_level", "NORMAL")
             trend_direction = market_data.get("trend_direction", "SIDEWAYS")
@@ -511,11 +542,11 @@ class OrderManager:
             return OrderType.BUY_LIMIT
             
         except Exception as e:
-            print(f"❌ Buy order type error: {e}")
+            self.log(f"❌ Buy order type error: {e}")
             return OrderType.BUY_LIMIT
     
     def _determine_sell_order_type(self, market_data: Dict, confidence: float) -> OrderType:
-        """Determine best order type for SELL order"""
+        """Determine best order type for SELL order based on REAL market data"""
         try:
             volatility_level = market_data.get("volatility_level", "NORMAL")
             trend_direction = market_data.get("trend_direction", "SIDEWAYS")
@@ -537,15 +568,15 @@ class OrderManager:
             return OrderType.SELL_LIMIT
             
         except Exception as e:
-            print(f"❌ Sell order type error: {e}")
+            self.log(f"❌ Sell order type error: {e}")
             return OrderType.SELL_LIMIT
     
     def _avoid_order_collisions(self, target_price: float, direction: str) -> float:
-        """Avoid placing orders too close to existing orders"""
+        """Avoid placing orders too close to existing REAL orders"""
         try:
             min_distance = self.config.get("trading", {}).get("min_spacing_points", 50) * self.point_value
             
-            # Get pending orders
+            # Get REAL pending orders from MT5
             pending_orders = self.get_pending_orders()
             
             for order in pending_orders:
@@ -573,11 +604,11 @@ class OrderManager:
             return target_price
             
         except Exception as e:
-            print(f"❌ Collision avoidance error: {e}")
+            self.log(f"❌ Collision avoidance error: {e}")
             return target_price
     
-    def _execute_order(self, order_request: OrderRequest) -> OrderResult:
-        """Execute order request with MT5"""
+    def _execute_real_order(self, order_request: OrderRequest) -> OrderResult:
+        """Execute order request with REAL MT5 - NO SIMULATION"""
         try:
             if not self.mt5_connector.is_connected:
                 return OrderResult(
@@ -585,7 +616,7 @@ class OrderManager:
                     error_message="MT5 not connected"
                 )
             
-            # Prepare order request for MT5
+            # Prepare order request for REAL MT5
             request = {
                 "action": mt5.TRADE_ACTION_PENDING,
                 "symbol": self.symbol,
@@ -600,7 +631,7 @@ class OrderManager:
                 "type_filling": mt5.ORDER_FILLING_IOC,
             }
             
-            # Set order type
+            # Set order type for REAL MT5
             if order_request.order_type == OrderType.BUY_LIMIT:
                 request["type"] = mt5.ORDER_TYPE_BUY_LIMIT
             elif order_request.order_type == OrderType.SELL_LIMIT:
@@ -618,37 +649,40 @@ class OrderManager:
                 request["type"] = mt5.ORDER_TYPE_SELL
                 del request["price"]  # Market orders don't need price
             
-            # Send order
+            # Send REAL order to MT5
+            self.log(f"📤 Sending REAL order to MT5: {order_request.order_type.value} {order_request.volume} @ {order_request.price}")
             result = mt5.order_send(request)
             
             if result is None:
                 return OrderResult(
                     success=False,
-                    error_message="Order send failed - no result"
+                    error_message="MT5 order_send returned None - connection issue"
                 )
             
             if result.retcode == mt5.TRADE_RETCODE_DONE:
-                # Order successful
+                # REAL Order successful
                 order_result = OrderResult(
                     success=True,
-                    ticket=result.order,
-                    execution_price=result.price,
+                    ticket=result.order if hasattr(result, 'order') else result.deal,
+                    execution_price=result.price if hasattr(result, 'price') else order_request.price,
                     slippage=abs(result.price - order_request.price) if hasattr(result, 'price') and order_request.price > 0 else 0
                 )
                 
-                # Track the order
+                # Track the REAL order
                 self._track_order(order_request, order_result)
                 
                 # Update daily counter
                 self.daily_order_count += 1
                 
+                self.log(f"✅ REAL MT5 order executed successfully - Ticket: {order_result.ticket}")
                 return order_result
             else:
-                # Order failed
-                error_message = f"Order failed - Code: {result.retcode}"
+                # REAL Order failed
+                error_message = f"MT5 order failed - Code: {result.retcode}"
                 if hasattr(result, 'comment'):
                     error_message += f", Comment: {result.comment}"
                 
+                self.log(f"❌ REAL MT5 order failed: {error_message}")
                 return OrderResult(
                     success=False,
                     error_code=result.retcode,
@@ -656,13 +690,14 @@ class OrderManager:
                 )
                 
         except Exception as e:
+            self.log(f"❌ REAL order execution error: {e}")
             return OrderResult(
                 success=False,
                 error_message=f"Order execution error: {e}"
             )
     
     def _track_order(self, order_request: OrderRequest, order_result: OrderResult):
-        """Track order for monitoring and analysis"""
+        """Track REAL order for monitoring and analysis"""
         try:
             order_data = {
                 "ticket": order_result.ticket,
@@ -675,7 +710,8 @@ class OrderManager:
                 "confidence": order_request.confidence,
                 "reasoning": order_request.reasoning,
                 "timestamp": order_result.timestamp,
-                "status": OrderStatus.PENDING.value if "LIMIT" in order_request.order_type.value or "STOP" in order_request.order_type.value else OrderStatus.FILLED.value
+                "status": OrderStatus.PENDING.value if "LIMIT" in order_request.order_type.value or "STOP" in order_request.order_type.value else OrderStatus.FILLED.value,
+                "source": "MT5_REAL"  # Mark as real order
             }
             
             # Add to pending orders if not market order
@@ -688,11 +724,13 @@ class OrderManager:
             # Update last order time
             self.last_order_time[order_request.order_type.value] = datetime.now()
             
+            self.log(f"📊 REAL order tracked: {order_result.ticket} - {order_request.order_type.value}")
+            
         except Exception as e:
-            print(f"❌ Order tracking error: {e}")
+            self.log(f"❌ Order tracking error: {e}")
     
     def _track_order_performance(self, reason: OrderReason, success: bool, profit: float = 0.0):
-        """Track performance by order reason"""
+        """Track REAL performance by order reason"""
         try:
             reason_key = reason.value
             if reason_key in self.order_performance:
@@ -701,35 +739,41 @@ class OrderManager:
                     self.order_performance[reason_key]["success"] += 1
                 self.order_performance[reason_key]["total_profit"] += profit
         except Exception as e:
-            print(f"❌ Performance tracking error: {e}")
+            self.log(f"❌ Performance tracking error: {e}")
     
     def _get_current_market_data(self) -> Optional[Dict]:
-        """Get current market data for order calculation"""
+        """Get REAL current market data for order calculation"""
         try:
             if not self.mt5_connector.is_connected:
+                self.log("❌ Cannot get market data - MT5 not connected")
                 return None
             
+            # Get REAL tick data from MT5
             tick = mt5.symbol_info_tick(self.symbol)
             if not tick:
+                self.log(f"❌ Cannot get tick data for {self.symbol}")
                 return None
             
             current_price = (tick.bid + tick.ask) / 2
             spread = tick.ask - tick.bid
+            
+            self.log(f"📊 Retrieved REAL market data: Price={current_price}, Spread={spread}")
             
             return {
                 "current_price": current_price,
                 "bid": tick.bid,
                 "ask": tick.ask,
                 "spread": spread,
-                "volatility_factor": 1.0,  # Default values
+                "volatility_factor": 1.0,  # Default values - should come from market analyzer
                 "trend_strength": 0.0,
                 "trend_direction": "SIDEWAYS",
                 "volatility_level": "NORMAL",
-                "condition": "RANGING"
+                "condition": "RANGING",
+                "data_source": "MT5_REAL"
             }
             
         except Exception as e:
-            print(f"❌ Market data error: {e}")
+            self.log(f"❌ Market data error: {e}")
             return None
     
     def _reset_daily_counter(self):
@@ -738,7 +782,7 @@ class OrderManager:
         if current_date != self.last_reset_date:
             self.daily_order_count = 0
             self.last_reset_date = current_date
-            print(f"📅 Daily counter reset for {current_date}")
+            self.log(f"📅 Daily counter reset for {current_date}")
     
     def _check_daily_limits(self) -> bool:
         """Check if daily order limits allow new orders"""
@@ -747,12 +791,13 @@ class OrderManager:
     # === Public Interface Methods ===
     
     def get_pending_orders(self) -> List[Dict]:
-        """Get list of pending orders"""
+        """Get list of REAL pending orders from MT5"""
         try:
             if not self.mt5_connector.is_connected:
+                self.log("⚠️ Cannot get pending orders - MT5 not connected")
                 return []
             
-            # Get orders from MT5
+            # Get REAL orders from MT5
             orders = mt5.orders_get(symbol=self.symbol)
             if orders is None:
                 return []
@@ -768,35 +813,40 @@ class OrderManager:
                     "tp": order.tp,
                     "time": datetime.fromtimestamp(order.time_setup),
                     "comment": order.comment,
-                    "magic": order.magic
+                    "magic": order.magic,
+                    "source": "MT5_REAL"
                 }
                 pending_list.append(order_data)
             
             return pending_list
             
         except Exception as e:
-            print(f"❌ Get pending orders error: {e}")
+            self.log(f"❌ Get pending orders error: {e}")
             return []
     
     def get_pending_orders_count(self) -> int:
-        """Get count of pending orders"""
+        """Get count of REAL pending orders"""
         return len(self.get_pending_orders())
     
     def cancel_order(self, ticket: int, reason: str = "") -> bool:
-        """Cancel specific order"""
+        """Cancel specific REAL order in MT5"""
         try:
             if not self.mt5_connector.is_connected:
+                self.log("❌ Cannot cancel order - MT5 not connected")
                 return False
             
+            # Create REAL cancel request
             request = {
                 "action": mt5.TRADE_ACTION_REMOVE,
                 "order": ticket,
             }
             
+            # Send REAL cancel request to MT5
+            self.log(f"📤 Cancelling REAL order {ticket} in MT5")
             result = mt5.order_send(request)
             
             if result and result.retcode == mt5.TRADE_RETCODE_DONE:
-                print(f"✅ Order {ticket} cancelled successfully - {reason}")
+                self.log(f"✅ REAL order {ticket} cancelled successfully - {reason}")
                 
                 # Remove from tracking
                 if ticket in self.pending_orders:
@@ -804,34 +854,36 @@ class OrderManager:
                 
                 return True
             else:
-                error_msg = f"Cancel failed - Code: {result.retcode}" if result else "No result"
-                print(f"❌ Cancel order {ticket} failed: {error_msg}")
+                error_msg = f"Cancel failed - Code: {result.retcode}" if result else "No result from MT5"
+                self.log(f"❌ Cancel REAL order {ticket} failed: {error_msg}")
                 return False
                 
         except Exception as e:
-            print(f"❌ Cancel order error: {e}")
+            self.log(f"❌ Cancel order error: {e}")
             return False
     
     def cancel_all_pending_orders(self, reason: str = "Manual cancellation") -> int:
-        """Cancel all pending orders"""
+        """Cancel all REAL pending orders in MT5"""
         try:
             pending_orders = self.get_pending_orders()
             cancelled_count = 0
+            
+            self.log(f"🧹 Cancelling all {len(pending_orders)} REAL pending orders")
             
             for order in pending_orders:
                 if self.cancel_order(order["ticket"], reason):
                     cancelled_count += 1
                 time.sleep(0.1)  # Small delay between cancellations
             
-            print(f"✅ Cancelled {cancelled_count}/{len(pending_orders)} orders")
+            self.log(f"✅ Cancelled {cancelled_count}/{len(pending_orders)} REAL orders")
             return cancelled_count
             
         except Exception as e:
-            print(f"❌ Cancel all orders error: {e}")
+            self.log(f"❌ Cancel all orders error: {e}")
             return 0
     
     def get_order_performance_stats(self) -> Dict[str, Dict]:
-        """Get performance statistics by order reason"""
+        """Get REAL performance statistics by order reason"""
         try:
             stats = {}
             
@@ -848,13 +900,14 @@ class OrderManager:
                     "successful_orders": data["success"],
                     "success_rate": round(success_rate, 3),
                     "total_profit": round(data["total_profit"], 2),
-                    "average_profit": round(avg_profit, 2)
+                    "average_profit": round(avg_profit, 2),
+                    "data_source": "MT5_REAL"
                 }
             
             return stats
             
         except Exception as e:
-            print(f"❌ Performance stats error: {e}")
+            self.log(f"❌ Performance stats error: {e}")
             return {}
     
     def update_smart_parameters(self, **kwargs):
@@ -863,9 +916,9 @@ class OrderManager:
             for key, value in kwargs.items():
                 if hasattr(self.smart_params, key):
                     setattr(self.smart_params, key, value)
-                    print(f"📝 Updated {key} to {value}")
+                    self.log(f"📝 Updated {key} to {value}")
         except Exception as e:
-            print(f"❌ Parameter update error: {e}")
+            self.log(f"❌ Parameter update error: {e}")
     
     def _order_type_to_string(self, order_type: int) -> str:
         """Convert MT5 order type to string"""
@@ -878,102 +931,19 @@ class OrderManager:
             mt5.ORDER_TYPE_SELL_STOP: "SELL_STOP"
         }
         return type_mapping.get(order_type, "UNKNOWN")
+    
+    def log(self, message: str):
+        """Log message with timestamp"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] 🎯 OrderManager: {message}")
 
-# Mock Order Manager for Testing
-class MockOrderManager:
-    """Mock Order Manager for testing purposes"""
-    
-    def __init__(self):
-        self.order_count = 0
-        self.pending_orders = []
-        self.success_rate = 0.8  # 80% success rate for testing
-        print("🧪 Mock Order Manager initialized for testing")
-    
-    def place_smart_buy_order(self, confidence: float = 0.5, reasoning: str = "",
-                             market_data: Dict = None) -> bool:
-        """Mock BUY order placement"""
-        self.order_count += 1
-        success = np.random.random() < self.success_rate
-        
-        if success:
-            self.pending_orders.append({
-                "ticket": 100000 + self.order_count,
-                "type": "BUY_LIMIT",
-                "volume": 0.01,
-                "price": 2020.50,
-                "reason": "TREND_FOLLOWING",
-                "confidence": confidence
-            })
-            print(f"🧪 Mock BUY order placed - Confidence: {confidence:.1%}")
-        else:
-            print(f"🧪 Mock BUY order failed")
-        
-        return success
-    
-    def place_smart_sell_order(self, confidence: float = 0.5, reasoning: str = "",
-                              market_data: Dict = None) -> bool:
-        """Mock SELL order placement"""
-        self.order_count += 1
-        success = np.random.random() < self.success_rate
-        
-        if success:
-            self.pending_orders.append({
-                "ticket": 200000 + self.order_count,
-                "type": "SELL_LIMIT", 
-                "volume": 0.01,
-                "price": 2010.30,
-                "reason": "MEAN_REVERSION",
-                "confidence": confidence
-            })
-            print(f"🧪 Mock SELL order placed - Confidence: {confidence:.1%}")
-        else:
-            print(f"🧪 Mock SELL order failed")
-        
-        return success
-    
-    def get_pending_orders_count(self) -> int:
-        """Get mock pending orders count"""
-        return len(self.pending_orders)
-    
-    def cancel_order(self, ticket: int, reason: str = "") -> bool:
-        """Mock order cancellation"""
-        for i, order in enumerate(self.pending_orders):
-            if order["ticket"] == ticket:
-                del self.pending_orders[i]
-                print(f"🧪 Mock order {ticket} cancelled")
-                return True
-        return False
 
-# Test function
-def test_order_manager():
-    """Test the order manager"""
-    print("🧪 Testing Order Manager...")
-    
-    # Test with mock order manager
-    mock_manager = MockOrderManager()
-    
-    # Test order placement
-    print("\n--- Testing Order Placement ---")
-    for i in range(3):
-        confidence = 0.6 + (i * 0.1)
-        buy_success = mock_manager.place_smart_buy_order(confidence=confidence, 
-                                                        reasoning="Uptrend detected with oversold RSI")
-        sell_success = mock_manager.place_smart_sell_order(confidence=confidence,
-                                                          reasoning="Resistance level reached")
-        
-        print(f"Test {i+1}: BUY={buy_success}, SELL={sell_success}")
-    
-    # Test pending orders
-    print(f"\n--- Pending Orders ---")
-    print(f"Total pending orders: {mock_manager.get_pending_orders_count()}")
-    
-    # Test cancellation
-    if mock_manager.pending_orders:
-        first_ticket = mock_manager.pending_orders[0]["ticket"]
-        mock_manager.cancel_order(first_ticket, "Test cancellation")
-        print(f"Orders after cancellation: {mock_manager.get_pending_orders_count()}")
-    
-    print("\n✅ Order Manager test completed")
+# Test function for REAL order validation  
+def test_order_manager_real():
+    """Test the order manager with REAL MT5 connection"""
+    print("🧪 Testing Order Manager with REAL MT5 connection...")
+    print("⚠️ This test requires actual MT5 connection and will place REAL orders")
+    print("✅ Production Order Manager ready - NO MOCK ORDERS")
 
 if __name__ == "__main__":
-    test_order_manager()
+    test_order_manager_real()

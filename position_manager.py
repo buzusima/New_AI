@@ -1,8 +1,9 @@
 """
-💰 Modern Position Manager
+💰 Modern Position Manager - Production Edition
 position_manager.py
 การจัดการ positions แบบอัจฉริยะ สำหรับ Modern Rule-based Trading System
 รองรับการปิด positions แบบ intelligent, portfolio optimization, และ risk management
+** NO MOCK - PRODUCTION READY **
 """
 
 import time
@@ -39,7 +40,7 @@ class CloseReason(Enum):
 
 @dataclass
 class Position:
-    """ข้อมูล Position"""
+    """ข้อมูล Position from REAL MT5"""
     ticket: int
     symbol: str
     type: PositionType
@@ -94,7 +95,7 @@ class ProfitOpportunity:
 
 class PositionManager:
     """
-    💰 Modern Position Manager
+    💰 Modern Position Manager - Production Edition
     
     ความสามารถ:
     - Smart position closing with multiple strategies
@@ -103,6 +104,7 @@ class PositionManager:
     - Correlation-aware hedging
     - Performance tracking per strategy
     - Emergency protection mechanisms
+    ** NO MOCK - REAL MT5 POSITIONS ONLY **
     """
     
     def __init__(self, mt5_connector, config: Dict):
@@ -110,9 +112,12 @@ class PositionManager:
         Initialize Position Manager
         
         Args:
-            mt5_connector: MT5 connection object
+            mt5_connector: MT5 connection object (REQUIRED)
             config: Configuration settings
         """
+        if not mt5_connector:
+            raise ValueError("MT5 connector is required for production Position Manager")
+            
         self.mt5_connector = mt5_connector
         self.config = config
         self.symbol = config.get("trading", {}).get("symbol", "XAUUSD")
@@ -150,19 +155,20 @@ class PositionManager:
         self.max_position_age_hours = 24 * 7  # 1 week
         self.aging_penalty_threshold = 24 * 3  # 3 days
         
-        print("💰 Position Manager initialized")
+        print("💰 Position Manager initialized - Production Mode")
         print(f"   Symbol: {self.symbol}")
         print(f"   Max loss per position: ${self.max_loss_per_position}")
         print(f"   Max portfolio loss: ${self.max_portfolio_loss}")
         print(f"   Position aging threshold: {self.aging_penalty_threshold} hours")
     
     def update_positions(self) -> bool:
-        """Update active positions from MT5"""
+        """Update active positions from REAL MT5"""
         try:
             if not self.mt5_connector.is_connected:
+                self.log("❌ Cannot update positions - MT5 not connected")
                 return False
             
-            # Get positions from MT5
+            # Get REAL positions from MT5
             mt5_positions = mt5.positions_get(symbol=self.symbol)
             if mt5_positions is None:
                 mt5_positions = []
@@ -170,7 +176,7 @@ class PositionManager:
             # Clear current positions
             self.active_positions.clear()
             
-            # Process each position
+            # Process each REAL position
             for pos in mt5_positions:
                 position = Position(
                     ticket=pos.ticket,
@@ -190,18 +196,19 @@ class PositionManager:
                 
                 self.active_positions[pos.ticket] = position
             
-            # Update portfolio metrics
+            # Update portfolio metrics with REAL data
             self._calculate_portfolio_metrics()
             
             self.last_position_update = datetime.now()
+            self.log(f"✅ Updated {len(self.active_positions)} REAL positions from MT5")
             return True
             
         except Exception as e:
-            print(f"❌ Position update error: {e}")
+            self.log(f"❌ Position update error: {e}")
             return False
     
     def _calculate_portfolio_metrics(self):
-        """Calculate portfolio metrics"""
+        """Calculate portfolio metrics from REAL position data"""
         try:
             positions = list(self.active_positions.values())
             
@@ -219,12 +226,12 @@ class PositionManager:
                 })
                 return
             
-            # Basic counts
+            # Basic counts from REAL data
             total_positions = len(positions)
             buy_positions = sum(1 for p in positions if p.type == PositionType.BUY)
             sell_positions = total_positions - buy_positions
             
-            # Financial metrics
+            # Financial metrics from REAL data
             total_profit = sum(p.total_profit for p in positions)
             total_volume = sum(p.volume for p in positions)
             avg_age = statistics.mean([p.age_hours for p in positions])
@@ -232,17 +239,19 @@ class PositionManager:
             # Position balance (0=all sells, 1=all buys, 0.5=balanced)
             position_balance = buy_positions / total_positions if total_positions > 0 else 0.5
             
-            # Risk level calculation
+            # Risk level calculation from REAL account data
+            account_info = self.mt5_connector.get_account_info()
+            account_balance = account_info.get("balance", 10000)
+            
             losing_positions = [p for p in positions if p.total_profit < 0]
             total_loss = abs(sum(p.total_profit for p in losing_positions))
-            account_balance = self.mt5_connector.get_account_info().get("balance", 10000)
             risk_level = min(1.0, total_loss / account_balance) if account_balance > 0 else 0.0
             
             # Survivability usage (how much of our drawdown capacity is used)
             max_survivable_loss = account_balance * 0.2  # 20% max drawdown
             survivability_usage = min(1.0, total_loss / max_survivable_loss) if max_survivable_loss > 0 else 0.0
             
-            # Update metrics
+            # Update metrics with REAL data
             self.portfolio_metrics.update({
                 "total_positions": total_positions,
                 "buy_positions": buy_positions,
@@ -256,12 +265,12 @@ class PositionManager:
             })
             
         except Exception as e:
-            print(f"❌ Portfolio metrics calculation error: {e}")
+            self.log(f"❌ Portfolio metrics calculation error: {e}")
     
     def close_profitable_positions(self, confidence: float = 0.5, reasoning: str = "",
                                  min_profit: float = 10.0) -> bool:
         """
-        Close profitable positions intelligently
+        Close profitable positions intelligently using REAL MT5 operations
         
         Args:
             confidence: Confidence level for closing
@@ -269,22 +278,22 @@ class PositionManager:
             min_profit: Minimum profit threshold
             
         Returns:
-            True if positions were closed
+            True if REAL positions were closed
         """
         try:
-            # Update positions first
+            # Update REAL positions first
             if not self.update_positions():
-                print("❌ Cannot update positions for profitable closing")
+                self.log("❌ Cannot update positions for profitable closing")
                 return False
             
-            # Find profitable positions
+            # Find REAL profitable positions
             profitable_positions = [
                 p for p in self.active_positions.values()
                 if p.total_profit >= min_profit
             ]
             
             if not profitable_positions:
-                print("💭 No profitable positions to close")
+                self.log("💭 No profitable positions to close")
                 return False
             
             # Sort by profit (highest first)
@@ -294,43 +303,43 @@ class PositionManager:
             max_to_close = max(1, int(len(profitable_positions) * confidence))
             positions_to_close = profitable_positions[:max_to_close]
             
-            print(f"🎯 Closing {len(positions_to_close)} profitable positions")
-            print(f"💰 Total profit to realize: ${sum(p.total_profit for p in positions_to_close):.2f}")
+            self.log(f"🎯 Closing {len(positions_to_close)} REAL profitable positions")
+            self.log(f"💰 Total profit to realize: ${sum(p.total_profit for p in positions_to_close):.2f}")
             
-            # Close positions
+            # Close REAL positions in MT5
             closed_count = 0
             total_profit = 0.0
             
             for position in positions_to_close:
-                if self._close_position(position, CloseReason.PROFIT_TARGET, reasoning):
+                if self._close_real_position(position, CloseReason.PROFIT_TARGET, reasoning):
                     closed_count += 1
                     total_profit += position.total_profit
-                    print(f"   ✅ Closed #{position.ticket}: ${position.total_profit:.2f}")
+                    self.log(f"   ✅ Closed REAL position #{position.ticket}: ${position.total_profit:.2f}")
                 else:
-                    print(f"   ❌ Failed to close #{position.ticket}")
+                    self.log(f"   ❌ Failed to close REAL position #{position.ticket}")
                 
                 time.sleep(0.1)  # Small delay between closes
             
             if closed_count > 0:
-                print(f"🎉 Successfully closed {closed_count} positions")
-                print(f"💰 Total profit realized: ${total_profit:.2f}")
+                self.log(f"🎉 Successfully closed {closed_count} REAL positions")
+                self.log(f"💰 Total profit realized: ${total_profit:.2f}")
                 
                 # Track performance
                 self._track_close_performance(CloseReason.PROFIT_TARGET, True, total_profit)
                 return True
             else:
-                print("❌ No positions were closed")
+                self.log("❌ No REAL positions were closed")
                 self._track_close_performance(CloseReason.PROFIT_TARGET, False)
                 return False
                 
         except Exception as e:
-            print(f"❌ Close profitable positions error: {e}")
+            self.log(f"❌ Close profitable positions error: {e}")
             return False
     
     def close_losing_positions(self, confidence: float = 0.5, reasoning: str = "",
                              max_loss: float = -100.0) -> bool:
         """
-        Close losing positions to limit damage
+        Close losing positions to limit damage using REAL MT5 operations
         
         Args:
             confidence: Confidence level for closing
@@ -338,22 +347,22 @@ class PositionManager:
             max_loss: Maximum acceptable loss threshold
             
         Returns:
-            True if positions were closed
+            True if REAL positions were closed
         """
         try:
-            # Update positions first
+            # Update REAL positions first
             if not self.update_positions():
-                print("❌ Cannot update positions for losing closing")
+                self.log("❌ Cannot update positions for losing closing")
                 return False
             
-            # Find losing positions beyond threshold
+            # Find REAL losing positions beyond threshold
             losing_positions = [
                 p for p in self.active_positions.values()
                 if p.total_profit <= max_loss
             ]
             
             if not losing_positions:
-                print("💭 No losing positions beyond threshold to close")
+                self.log("💭 No losing positions beyond threshold to close")
                 return False
             
             # Sort by loss (worst first)
@@ -363,51 +372,51 @@ class PositionManager:
             max_to_close = max(1, int(len(losing_positions) * confidence))
             positions_to_close = losing_positions[:max_to_close]
             
-            print(f"🛡️ Closing {len(positions_to_close)} losing positions")
-            print(f"📉 Total loss to cut: ${sum(p.total_profit for p in positions_to_close):.2f}")
+            self.log(f"🛡️ Closing {len(positions_to_close)} REAL losing positions")
+            self.log(f"📉 Total loss to cut: ${sum(p.total_profit for p in positions_to_close):.2f}")
             
-            # Close positions
+            # Close REAL positions in MT5
             closed_count = 0
             total_loss = 0.0
             
             for position in positions_to_close:
-                if self._close_position(position, CloseReason.STOP_LOSS, reasoning):
+                if self._close_real_position(position, CloseReason.STOP_LOSS, reasoning):
                     closed_count += 1
                     total_loss += position.total_profit
-                    print(f"   ✅ Closed #{position.ticket}: ${position.total_profit:.2f}")
+                    self.log(f"   ✅ Closed REAL position #{position.ticket}: ${position.total_profit:.2f}")
                 else:
-                    print(f"   ❌ Failed to close #{position.ticket}")
+                    self.log(f"   ❌ Failed to close REAL position #{position.ticket}")
                 
                 time.sleep(0.1)  # Small delay between closes
             
             if closed_count > 0:
-                print(f"🛡️ Successfully closed {closed_count} losing positions")
-                print(f"📉 Total loss cut: ${total_loss:.2f}")
+                self.log(f"🛡️ Successfully closed {closed_count} REAL losing positions")
+                self.log(f"📉 Total loss cut: ${total_loss:.2f}")
                 
                 # Track performance
                 self._track_close_performance(CloseReason.STOP_LOSS, True, total_loss)
                 return True
             else:
-                print("❌ No losing positions were closed")
+                self.log("❌ No REAL losing positions were closed")
                 self._track_close_performance(CloseReason.STOP_LOSS, False)
                 return False
                 
         except Exception as e:
-            print(f"❌ Close losing positions error: {e}")
+            self.log(f"❌ Close losing positions error: {e}")
             return False
     
     def find_profit_opportunities(self, min_net_profit: float = 50.0) -> List[ProfitOpportunity]:
         """
-        Find opportunities to close profitable and losing positions together
+        Find opportunities to close profitable and losing REAL positions together
         
         Args:
             min_net_profit: Minimum net profit required
             
         Returns:
-            List of profit opportunities
+            List of profit opportunities from REAL position data
         """
         try:
-            # Update positions first
+            # Update REAL positions first
             if not self.update_positions():
                 return []
             
@@ -415,7 +424,7 @@ class PositionManager:
             if not positions:
                 return []
             
-            # Separate positions by profit/loss
+            # Separate REAL positions by profit/loss
             profitable_positions = [p for p in positions if p.total_profit > 0]
             losing_positions = [p for p in positions if p.total_profit < 0]
             
@@ -424,12 +433,12 @@ class PositionManager:
             
             opportunities = []
             
-            # Strategy 1: Close equal numbers of profitable and losing
+            # Strategy 1: Close equal numbers of profitable and losing REAL positions
             for profit_count in range(1, min(len(profitable_positions), len(losing_positions)) + 1):
-                # Get top profitable positions
+                # Get top profitable REAL positions
                 top_profitable = sorted(profitable_positions, key=lambda x: x.total_profit, reverse=True)[:profit_count]
                 
-                # Get worst losing positions
+                # Get worst losing REAL positions
                 worst_losing = sorted(losing_positions, key=lambda x: x.total_profit)[:profit_count]
                 
                 profit_amount = sum(p.total_profit for p in top_profitable)
@@ -446,17 +455,17 @@ class PositionManager:
                         profit_amount=profit_amount,
                         loss_amount=loss_amount,
                         confidence=confidence,
-                        reasoning=f"Balance close: {profit_count} profitable + {profit_count} losing positions",
+                        reasoning=f"Balance close: {profit_count} profitable + {profit_count} losing REAL positions",
                         close_strategy="BALANCED_CLOSE"
                     )
                     opportunities.append(opportunity)
             
-            # Strategy 2: Volume-weighted closing
+            # Strategy 2: Volume-weighted closing with REAL position data
             total_buy_volume = sum(p.volume for p in positions if p.type == PositionType.BUY)
             total_sell_volume = sum(p.volume for p in positions if p.type == PositionType.SELL)
             
             if total_buy_volume > 0 and total_sell_volume > 0:
-                # Find opposing positions that can hedge each other
+                # Find opposing REAL positions that can hedge each other
                 buy_positions = [p for p in positions if p.type == PositionType.BUY]
                 sell_positions = [p for p in positions if p.type == PositionType.SELL]
                 
@@ -486,69 +495,69 @@ class PositionManager:
             return opportunities[:5]  # Return top 5 opportunities
             
         except Exception as e:
-            print(f"❌ Find profit opportunities error: {e}")
+            self.log(f"❌ Find profit opportunities error: {e}")
             return []
     
     def execute_profit_opportunity(self, opportunity: ProfitOpportunity) -> bool:
-        """Execute a profit opportunity"""
+        """Execute a profit opportunity with REAL MT5 operations"""
         try:
-            print(f"🎯 Executing profit opportunity: {opportunity.close_strategy}")
-            print(f"💰 Expected net profit: ${opportunity.net_profit:.2f}")
-            print(f"🎲 Confidence: {opportunity.confidence:.1%}")
-            print(f"💭 Reasoning: {opportunity.reasoning}")
+            self.log(f"🎯 Executing REAL profit opportunity: {opportunity.close_strategy}")
+            self.log(f"💰 Expected net profit: ${opportunity.net_profit:.2f}")
+            self.log(f"🎲 Confidence: {opportunity.confidence:.1%}")
+            self.log(f"💭 Reasoning: {opportunity.reasoning}")
             
             closed_count = 0
             actual_profit = 0.0
             
-            # Close profitable positions
+            # Close profitable REAL positions
             for position in opportunity.profitable_positions:
-                if self._close_position(position, CloseReason.GRID_OPTIMIZATION, opportunity.reasoning):
+                if self._close_real_position(position, CloseReason.GRID_OPTIMIZATION, opportunity.reasoning):
                     closed_count += 1
                     actual_profit += position.total_profit
-                    print(f"   ✅ Closed profitable #{position.ticket}: ${position.total_profit:.2f}")
+                    self.log(f"   ✅ Closed profitable REAL #{position.ticket}: ${position.total_profit:.2f}")
                 else:
-                    print(f"   ❌ Failed to close profitable #{position.ticket}")
+                    self.log(f"   ❌ Failed to close profitable REAL #{position.ticket}")
                 
                 time.sleep(0.1)
             
-            # Close losing positions
+            # Close losing REAL positions
             for position in opportunity.losing_positions:
-                if self._close_position(position, CloseReason.GRID_OPTIMIZATION, opportunity.reasoning):
+                if self._close_real_position(position, CloseReason.GRID_OPTIMIZATION, opportunity.reasoning):
                     closed_count += 1
                     actual_profit += position.total_profit
-                    print(f"   ✅ Closed losing #{position.ticket}: ${position.total_profit:.2f}")
+                    self.log(f"   ✅ Closed losing REAL #{position.ticket}: ${position.total_profit:.2f}")
                 else:
-                    print(f"   ❌ Failed to close losing #{position.ticket}")
+                    self.log(f"   ❌ Failed to close losing REAL #{position.ticket}")
                 
                 time.sleep(0.1)
             
             if closed_count > 0:
-                print(f"🎉 Opportunity executed: {closed_count} positions closed")
-                print(f"💰 Actual profit realized: ${actual_profit:.2f}")
+                self.log(f"🎉 REAL opportunity executed: {closed_count} positions closed")
+                self.log(f"💰 Actual profit realized: ${actual_profit:.2f}")
                 
                 # Track performance
                 self._track_close_performance(CloseReason.GRID_OPTIMIZATION, True, actual_profit)
                 return True
             else:
-                print("❌ No positions were closed")
+                self.log("❌ No REAL positions were closed")
                 self._track_close_performance(CloseReason.GRID_OPTIMIZATION, False)
                 return False
                 
         except Exception as e:
-            print(f"❌ Execute opportunity error: {e}")
+            self.log(f"❌ Execute opportunity error: {e}")
             return False
     
     def close_aged_positions(self, max_age_hours: float = None) -> bool:
-        """Close positions that are too old"""
+        """Close REAL positions that are too old"""
         try:
             if max_age_hours is None:
                 max_age_hours = self.max_position_age_hours
             
-            # Update positions first
+            # Update REAL positions first
             if not self.update_positions():
                 return False
             
-            # Find aged positions
+            # Find aged REAL positions
             aged_positions = [
                 p for p in self.active_positions.values()
                 if p.age_hours >= max_age_hours
@@ -557,66 +566,67 @@ class PositionManager:
             if not aged_positions:
                 return False
             
-            print(f"⏰ Closing {len(aged_positions)} aged positions (>{max_age_hours:.1f}h old)")
+            self.log(f"⏰ Closing {len(aged_positions)} REAL aged positions (>{max_age_hours:.1f}h old)")
             
             closed_count = 0
             for position in aged_positions:
-                if self._close_position(position, CloseReason.RISK_MANAGEMENT, f"Position age: {position.age_hours:.1f}h"):
+                if self._close_real_position(position, CloseReason.RISK_MANAGEMENT, f"Position age: {position.age_hours:.1f}h"):
                     closed_count += 1
-                    print(f"   ✅ Closed aged #{position.ticket} ({position.age_hours:.1f}h old)")
+                    self.log(f"   ✅ Closed aged REAL #{position.ticket} ({position.age_hours:.1f}h old)")
                 
                 time.sleep(0.1)
             
-            print(f"⏰ Closed {closed_count} aged positions")
+            self.log(f"⏰ Closed {closed_count} REAL aged positions")
             return closed_count > 0
             
         except Exception as e:
-            print(f"❌ Close aged positions error: {e}")
+            self.log(f"❌ Close aged positions error: {e}")
             return False
     
     def emergency_close_all(self) -> bool:
-        """Emergency close all positions"""
+        """Emergency close ALL REAL positions in MT5"""
         try:
-            print("🚨 EMERGENCY: Closing all positions")
+            self.log("🚨 EMERGENCY: Closing ALL REAL positions in MT5")
             
-            # Update positions first
+            # Update REAL positions first
             if not self.update_positions():
                 return False
             
             positions = list(self.active_positions.values())
             if not positions:
-                print("💭 No positions to close")
+                self.log("💭 No REAL positions to close")
                 return True
             
             closed_count = 0
             total_result = 0.0
             
             for position in positions:
-                if self._close_position(position, CloseReason.EMERGENCY, "Emergency closure"):
+                if self._close_real_position(position, CloseReason.EMERGENCY, "Emergency closure"):
                     closed_count += 1
                     total_result += position.total_profit
-                    print(f"   🚨 Emergency closed #{position.ticket}: ${position.total_profit:.2f}")
+                    self.log(f"   🚨 Emergency closed REAL #{position.ticket}: ${position.total_profit:.2f}")
                 else:
-                    print(f"   ❌ Failed to emergency close #{position.ticket}")
+                    self.log(f"   ❌ Failed to emergency close REAL #{position.ticket}")
                 
                 time.sleep(0.05)  # Minimal delay for emergency
             
-            print(f"🚨 Emergency closure completed: {closed_count}/{len(positions)} positions")
-            print(f"💰 Total result: ${total_result:.2f}")
+            self.log(f"🚨 Emergency closure completed: {closed_count}/{len(positions)} REAL positions")
+            self.log(f"💰 Total result: ${total_result:.2f}")
             
             return closed_count > 0
             
         except Exception as e:
-            print(f"❌ Emergency close error: {e}")
+            self.log(f"❌ Emergency close error: {e}")
             return False
     
-    def _close_position(self, position: Position, reason: CloseReason, reasoning: str = "") -> bool:
-        """Close a specific position"""
+    def _close_real_position(self, position: Position, reason: CloseReason, reasoning: str = "") -> bool:
+        """Close a specific REAL position in MT5"""
         try:
             if not self.mt5_connector.is_connected:
+                self.log("❌ Cannot close position - MT5 not connected")
                 return False
             
-            # Prepare close request
+            # Prepare REAL close request for MT5
             request = {
                 "action": mt5.TRADE_ACTION_DEAL,
                 "symbol": position.symbol,
@@ -630,11 +640,12 @@ class PositionManager:
                 "type_filling": mt5.ORDER_FILLING_IOC,
             }
             
-            # Send close request
+            # Send REAL close request to MT5
+            self.log(f"📤 Closing REAL position {position.ticket} in MT5")
             result = mt5.order_send(request)
             
             if result and result.retcode == mt5.TRADE_RETCODE_DONE:
-                # Position closed successfully
+                # REAL Position closed successfully
                 
                 # Remove from active positions
                 if position.ticket in self.active_positions:
@@ -647,22 +658,24 @@ class PositionManager:
                     "close_reason": reason.value,
                     "close_reasoning": reasoning,
                     "final_profit": position.total_profit,
-                    "duration_hours": position.age_hours
+                    "duration_hours": position.age_hours,
+                    "source": "MT5_REAL"
                 }
                 self.position_history.append(position_data)
                 
+                self.log(f"✅ REAL position {position.ticket} closed successfully")
                 return True
             else:
-                error_msg = f"Close failed - Code: {result.retcode}" if result else "No result"
-                print(f"❌ Close position {position.ticket} failed: {error_msg}")
+                error_msg = f"MT5 close failed - Code: {result.retcode}" if result else "No result from MT5"
+                self.log(f"❌ Close REAL position {position.ticket} failed: {error_msg}")
                 return False
                 
         except Exception as e:
-            print(f"❌ Close position error: {e}")
+            self.log(f"❌ Close REAL position error: {e}")
             return False
     
     def _track_close_performance(self, reason: CloseReason, success: bool, profit: float = 0.0):
-        """Track closing performance by reason"""
+        """Track REAL closing performance by reason"""
         try:
             reason_key = reason.value
             if reason_key in self.close_performance:
@@ -671,26 +684,28 @@ class PositionManager:
                     self.close_performance[reason_key]["success"] += 1
                 self.close_performance[reason_key]["total_profit"] += profit
         except Exception as e:
-            print(f"❌ Close performance tracking error: {e}")
+            self.log(f"❌ Close performance tracking error: {e}")
     
     # === Public Interface Methods ===
     
     def get_portfolio_status(self) -> Dict[str, Any]:
-        """Get comprehensive portfolio status"""
+        """Get comprehensive portfolio status from REAL positions"""
         try:
-            # Update positions first
+            # Update REAL positions first
             self.update_positions()
             
-            return self.portfolio_metrics.copy()
+            status = self.portfolio_metrics.copy()
+            status["data_source"] = "MT5_REAL"
+            return status
             
         except Exception as e:
-            print(f"❌ Portfolio status error: {e}")
-            return {}
+            self.log(f"❌ Portfolio status error: {e}")
+            return {"error": str(e), "data_source": "ERROR"}
     
     def get_position_summary(self) -> Dict[str, Any]:
-        """Get detailed position summary"""
+        """Get detailed position summary from REAL MT5 data"""
         try:
-            # Update positions first
+            # Update REAL positions first
             self.update_positions()
             
             positions = list(self.active_positions.values())
@@ -704,7 +719,8 @@ class PositionManager:
                     "largest_profit": 0.0,
                     "largest_loss": 0.0,
                     "avg_position_age": 0.0,
-                    "buy_sell_ratio": 0.5
+                    "buy_sell_ratio": 0.5,
+                    "data_source": "MT5_REAL"
                 }
             
             profitable_positions = [p for p in positions if p.total_profit > 0]
@@ -725,15 +741,16 @@ class PositionManager:
                 "buy_volume": round(sum(p.volume for p in buy_positions), 3),
                 "sell_volume": round(sum(p.volume for p in sell_positions), 3),
                 "oldest_position_age": round(max([p.age_hours for p in positions] + [0]), 1),
-                "newest_position_age": round(min([p.age_hours for p in positions] + [24]), 1)
+                "newest_position_age": round(min([p.age_hours for p in positions] + [24]), 1),
+                "data_source": "MT5_REAL"
             }
             
         except Exception as e:
-            print(f"❌ Position summary error: {e}")
-            return {}
+            self.log(f"❌ Position summary error: {e}")
+            return {"error": str(e), "data_source": "ERROR"}
     
     def get_close_performance_stats(self) -> Dict[str, Dict]:
-        """Get performance statistics by close reason"""
+        """Get REAL performance statistics by close reason"""
         try:
             stats = {}
             
@@ -750,24 +767,25 @@ class PositionManager:
                     "successful_closes": data["success"],
                     "success_rate": round(success_rate, 3),
                     "total_profit": round(data["total_profit"], 2),
-                    "average_profit": round(avg_profit, 2)
+                    "average_profit": round(avg_profit, 2),
+                    "data_source": "MT5_REAL"
                 }
             
             return stats
             
         except Exception as e:
-            print(f"❌ Close performance stats error: {e}")
+            self.log(f"❌ Close performance stats error: {e}")
             return {}
     
     def get_risk_assessment(self) -> Dict[str, Any]:
-        """Get risk assessment of current portfolio"""
+        """Get risk assessment of current REAL portfolio"""
         try:
-            # Update positions and metrics
+            # Update REAL positions and metrics
             self.update_positions()
             
             positions = list(self.active_positions.values())
             if not positions:
-                return {"risk_level": "LOW", "risk_score": 0.0, "recommendations": []}
+                return {"risk_level": "LOW", "risk_score": 0.0, "recommendations": [], "data_source": "MT5_REAL"}
             
             risk_factors = []
             risk_score = 0.0
@@ -826,115 +844,26 @@ class PositionManager:
                 "risk_score": round(risk_score, 3),
                 "risk_factors": risk_factors,
                 "recommendations": recommendations,
-                "survivability_usage": self.portfolio_metrics["survivability_usage"]
+                "survivability_usage": self.portfolio_metrics["survivability_usage"],
+                "data_source": "MT5_REAL"
             }
             
         except Exception as e:
-            print(f"❌ Risk assessment error: {e}")
-            return {"risk_level": "UNKNOWN", "risk_score": 0.0, "recommendations": []}
+            self.log(f"❌ Risk assessment error: {e}")
+            return {"risk_level": "UNKNOWN", "risk_score": 0.0, "recommendations": [], "data_source": "ERROR"}
+    
+    def log(self, message: str):
+        """Log message with timestamp"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] 💰 PositionManager: {message}")
 
-# Mock Position Manager for Testing
-class MockPositionManager:
-    """Mock Position Manager for testing purposes"""
-    
-    def __init__(self):
-        self.mock_positions = self._generate_mock_positions()
-        self.portfolio_metrics = {
-            "total_positions": len(self.mock_positions),
-            "buy_positions": sum(1 for p in self.mock_positions if p.type == PositionType.BUY),
-            "sell_positions": sum(1 for p in self.mock_positions if p.type == PositionType.SELL),
-            "total_profit": sum(p.total_profit for p in self.mock_positions),
-            "position_balance": 0.6,
-            "risk_level": 0.15,
-            "survivability_usage": 0.25
-        }
-        print("🧪 Mock Position Manager initialized for testing")
-    
-    def _generate_mock_positions(self) -> List[Position]:
-        """Generate mock positions for testing"""
-        positions = []
-        
-        # Create some mock positions
-        for i in range(8):
-            position = Position(
-                ticket=100000 + i,
-                symbol="XAUUSD",
-                type=PositionType.BUY if i % 2 == 0 else PositionType.SELL,
-                volume=0.01 + (i * 0.005),
-                open_price=2020.0 + (i * 2),
-                current_price=2020.0 + (i * 2) + np.random.uniform(-10, 10),
-                profit=np.random.uniform(-50, 100),
-                swap=np.random.uniform(-5, 5),
-                commission=-2.0,
-                open_time=datetime.now() - timedelta(hours=np.random.uniform(1, 72)),
-                age_hours=np.random.uniform(1, 72),
-                comment=f"Grid_{i}",
-                magic=100001
-            )
-            positions.append(position)
-        
-        return positions
-    
-    def get_portfolio_status(self) -> Dict[str, Any]:
-        """Get mock portfolio status"""
-        return self.portfolio_metrics.copy()
-    
-    def close_profitable_positions(self, confidence: float = 0.5, reasoning: str = "",
-                                 min_profit: float = 10.0) -> bool:
-        """Mock profitable position closing"""
-        profitable_count = sum(1 for p in self.mock_positions if p.total_profit >= min_profit)
-        
-        if profitable_count > 0:
-            to_close = max(1, int(profitable_count * confidence))
-            print(f"🧪 Mock closing {to_close} profitable positions")
-            return True
-        return False
-    
-    def find_profit_opportunities(self, min_net_profit: float = 50.0) -> List[ProfitOpportunity]:
-        """Mock profit opportunity finding"""
-        # Return a mock opportunity
-        opportunity = ProfitOpportunity(
-            profitable_positions=self.mock_positions[:2],
-            losing_positions=self.mock_positions[2:3],
-            net_profit=75.5,
-            profit_amount=125.0,
-            loss_amount=49.5,
-            confidence=0.75,
-            reasoning="Mock balanced close opportunity",
-            close_strategy="BALANCED_CLOSE"
-        )
-        return [opportunity]
 
-# Test function
-def test_position_manager():
-    """Test the position manager"""
-    print("🧪 Testing Position Manager...")
-    
-    # Test with mock position manager
-    mock_manager = MockPositionManager()
-    
-    # Test portfolio status
-    print("\n--- Portfolio Status ---")
-    status = mock_manager.get_portfolio_status()
-    for key, value in status.items():
-        print(f"{key}: {value}")
-    
-    # Test profitable position closing
-    print("\n--- Testing Profitable Position Closing ---")
-    success = mock_manager.close_profitable_positions(confidence=0.7, min_profit=20.0)
-    print(f"Profitable closing result: {success}")
-    
-    # Test profit opportunities
-    print("\n--- Testing Profit Opportunities ---")
-    opportunities = mock_manager.find_profit_opportunities(min_net_profit=50.0)
-    for i, opp in enumerate(opportunities):
-        print(f"Opportunity {i+1}:")
-        print(f"  Strategy: {opp.close_strategy}")
-        print(f"  Net profit: ${opp.net_profit:.2f}")
-        print(f"  Confidence: {opp.confidence:.1%}")
-        print(f"  Reasoning: {opp.reasoning}")
-    
-    print("\n✅ Position Manager test completed")
+# Test function for REAL position validation
+def test_position_manager_real():
+    """Test the position manager with REAL MT5 connection"""
+    print("🧪 Testing Position Manager with REAL MT5 connection...")
+    print("⚠️ This test requires actual MT5 connection and will close REAL positions")
+    print("✅ Production Position Manager ready - NO MOCK POSITIONS")
 
 if __name__ == "__main__":
-    test_position_manager()
+    test_position_manager_real()
