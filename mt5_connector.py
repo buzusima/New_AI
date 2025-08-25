@@ -417,6 +417,30 @@ class MT5Connector:
             
         return False
 
+    def get_current_price(self, symbol: str) -> float:
+        """Get current market price for symbol"""
+        try:
+            if not self.is_connected:
+                print(f"❌ MT5 not connected - cannot get price for {symbol}")
+                return 0.0
+            
+            tick = mt5.symbol_info_tick(symbol)
+            if tick is None:
+                print(f"❌ No tick data for symbol: {symbol}")
+                return 0.0
+            
+            price = tick.bid if hasattr(tick, 'bid') else 0.0
+            
+            if price <= 0:
+                print(f"❌ Invalid price for {symbol}: {price}")
+                return 0.0
+            
+            return price
+            
+        except Exception as e:
+            print(f"❌ Get current price error for {symbol}: {e}")
+            return 0.0
+
 # === Test Function ===
 
 def test_connector():
