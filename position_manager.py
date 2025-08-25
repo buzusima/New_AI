@@ -385,13 +385,125 @@ class PositionManager:
                 "pending_orders": [],
                 "account_info": {}
             }
+
+    def get_active_positions(self) -> List[Dict]:
+        """
+        🆕 ดึง active positions สำหรับ Rule Engine
+        Returns: List ของ position dictionaries
+        """
+        try:
+            print("💰 Getting active positions from MT5...")
             
+            # อัพเดท positions จาก MT5 ก่อน
+            self.update_positions()
+            
+            # แปลง self.active_positions เป็น list of dicts
+            positions_list = []
+            
+            for ticket, position in self.active_positions.items():
+                pos_dict = {
+                    "ticket": position.ticket,
+                    "symbol": position.symbol,
+                    "type": position.type.value if hasattr(position.type, 'value') else str(position.type),
+                    "volume": position.volume,
+                    "price_open": position.open_price,
+                    "price": position.current_price,
+                    "profit": position.profit,
+                    "swap": position.swap,
+                    "commission": position.commission,
+                    "open_time": position.open_time,
+                    "age_hours": position.age_hours,
+                    "comment": position.comment,
+                    "magic": position.magic,
+                    "total_profit": position.total_profit,
+                    "pips_profit": position.pips_profit
+                }
+                positions_list.append(pos_dict)
+            
+            print(f"✅ Retrieved {len(positions_list)} active positions")
+            return positions_list
+            
+        except Exception as e:
+            self.log(f"❌ get_active_positions error: {e}")
+            return []
+    
+    def get_pending_orders(self) -> List[Dict]:
+        """
+        🆕 ดึง pending orders สำหรับ Rule Engine
+        Returns: List ของ order dictionaries
+        """
+        try:
+            print("💰 Getting pending orders from MT5...")
+            
+            if not self.mt5_connector or not self.mt5_connector.is_connected:
+                print("⚠️ MT5 not connected")
+                return []
+            
+            # ดึง pending orders จาก MT5
+            orders = mt5.orders_get(symbol=self.symbol)
+            if orders is None:
+                orders = []
+            
+            orders_list = []
+            for order in orders:
+                order_dict = {
+                    "ticket": order.ticket,
+                    "symbol": order.symbol,
+                    "type": order.type,
+                    "type_description": str(order.type),
+                    "volume": order.volume_initial,
+                    "price": order.price_open,
+                    "time_setup": order.time_setup,
+                    "magic": order.magic,
+                    "comment": order.comment,
+                    "sl": getattr(order, 'sl', 0.0),
+                    "tp": getattr(order, 'tp', 0.0)
+                }
+                orders_list.append(order_dict)
+            
+            print(f"✅ Retrieved {len(orders_list)} pending orders")
+            return orders_list
+            
+        except Exception as e:
+            self.log(f"❌ get_pending_orders error: {e}")
+            return []
+    
+    def get_account_info(self) -> Dict:
+        """
+        🆕 ดึงข้อมูล account สำหรับ Rule Engine
+        Returns: Account information dictionary
+        """
+        try:
+            if not self.mt5_connector or not self.mt5_connector.is_connected:
+                print("⚠️ MT5 not connected")
+                return {}
+            
+            account_info = mt5.account_info()
+            if account_info is None:
+                return {}
+            
+            return {
+                "balance": account_info.balance,
+                "equity": account_info.equity,
+                "margin": account_info.margin,
+                "margin_free": account_info.margin_free,
+                "margin_level": account_info.margin_level if account_info.margin > 0 else 0,
+                "profit": account_info.profit,
+                "currency": account_info.currency,
+                "server": account_info.server,
+                "leverage": account_info.leverage
+            }
+            
+        except Exception as e:
+            self.log(f"❌ get_account_info error: {e}")
+            return {}
+                    
     # ========================================================================================
     # 🔄 EXISTING METHODS (Keep compatibility)
     # ========================================================================================
     
     def update_positions(self):
-        """Update positions from REAL MT5"""
+        """Update positions from REAL MT5 - แก้ไข commission error"""
         try:
             if not self.mt5_connector.is_connected:
                 return
@@ -408,6 +520,17 @@ class PositionManager:
                 current_price = self._get_current_price_for_position(pos)
                 age_hours = (datetime.now() - datetime.fromtimestamp(pos.time)).total_seconds() / 3600
                 
+                # แก้ไข: จัดการ commission ที่อาจไม่มี
+                commission = getattr(pos, 'commission', 0.0)  # ใช้ getattr ป้องกัน AttributeError
+                swap = getattr(pos, 'swap', 0.0)              # ใช้ getattr ป้องกัน AttributeError
+                
+                print(f"💰 Processing Position:")
+                print(f"   Ticket: {pos.ticket}")
+                print(f"   Type: {pos.type}")
+                print(f"   Profit: ${pos.profit:.2f}")
+                print(f"   Swap: ${swap:.2f}")
+                print(f"   Commission: ${commission:.2f}")
+                
                 position = Position(
                     ticket=pos.ticket,
                     symbol=pos.symbol,
@@ -416,21 +539,152 @@ class PositionManager:
                     open_price=pos.price_open,
                     current_price=current_price,
                     profit=pos.profit,
-                    swap=pos.swap,
-                    commission=pos.commission,
+                    swap=swap,
+                    commission=commission,
                     open_time=datetime.fromtimestamp(pos.time),
                     age_hours=age_hours,
-                    comment=pos.comment,
-                    magic=pos.magic
+                    comment=getattr(pos, 'comment', ''),  # ป้องกัน comment ไม่มี
+                    magic=getattr(pos, 'magic', 0)        # ป้องกัน magic ไม่มี
                 )
                 
                 self.active_positions[pos.ticket] = position
+                print(f"   ✅ Position added: Total P&L = ${position.total_profit:.2f}")
             
             self.last_update_time = datetime.now()
+            print(f"💰 Updated {len(self.active_positions)} active positions")
             
         except Exception as e:
             self.log(f"❌ Position update error: {e}")
     
+    def _get_current_price_for_position(self, position) -> float:
+        """ดึงราคาปัจจุบันสำหรับ position - แก้ไข error handling"""
+        try:
+            if not self.mt5_connector or not self.mt5_connector.is_connected:
+                return getattr(position, 'price_current', position.price_open)
+            
+            tick = mt5.symbol_info_tick(position.symbol)
+            if tick is None:
+                return getattr(position, 'price_current', position.price_open)
+            
+            # ใช้ bid สำหรับ BUY, ask สำหรับ SELL
+            if position.type == mt5.POSITION_TYPE_BUY:
+                return tick.bid
+            else:
+                return tick.ask
+                
+        except Exception as e:
+            print(f"❌ Get current price error: {e}")
+            # Fallback ใช้ราคาที่มีใน position object
+            return getattr(position, 'price_current', position.price_open)
+        
+    def _calculate_portfolio_health(self, total_profit: float, equity: float, 
+                                  balance: float, margin_level: float) -> float:
+        """
+        🩺 คำนวณสุขภาพ portfolio (0.0-1.0)
+        
+        Args:
+            total_profit: กำไร/ขาดทุนรวม
+            equity: equity ปัจจุบัน
+            balance: balance
+            margin_level: margin level (%)
+            
+        Returns:
+            float: สุขภาพ portfolio (0.0=แย่มาก, 1.0=ดีมาก)
+        """
+        try:
+            print(f"🩺 Calculating portfolio health...")
+            print(f"   Total Profit: ${total_profit:.2f}")
+            print(f"   Equity: ${equity:.2f}")
+            print(f"   Balance: ${balance:.2f}")
+            print(f"   Margin Level: {margin_level:.1f}%")
+            
+            health_factors = []
+            
+            # 1. Profit Factor (40% weight)
+            if balance > 0:
+                profit_ratio = total_profit / balance
+                if profit_ratio >= 0.05:  # กำไร >= 5%
+                    profit_score = 1.0
+                elif profit_ratio >= 0:   # กำไร 0-5%
+                    profit_score = 0.7 + (profit_ratio / 0.05) * 0.3
+                elif profit_ratio >= -0.05:  # ขาดทุน 0-5%
+                    profit_score = 0.4 + (profit_ratio / -0.05) * 0.3
+                else:  # ขาดทุน > 5%
+                    profit_score = max(0.0, 0.4 * (1 + profit_ratio / -0.1))
+            else:
+                profit_score = 0.5
+            
+            health_factors.append(("profit", profit_score, 0.4))
+            print(f"   Profit Score: {profit_score:.2f}")
+            
+            # 2. Margin Safety Factor (30% weight)
+            if margin_level >= 1000:  # Very safe
+                margin_score = 1.0
+            elif margin_level >= 500:  # Safe
+                margin_score = 0.8
+            elif margin_level >= 200:  # Moderate
+                margin_score = 0.6
+            elif margin_level >= 100:  # Warning
+                margin_score = 0.4
+            elif margin_level >= 50:   # Danger
+                margin_score = 0.2
+            else:  # Critical
+                margin_score = 0.1
+            
+            health_factors.append(("margin", margin_score, 0.3))
+            print(f"   Margin Score: {margin_score:.2f}")
+            
+            # 3. Equity vs Balance Factor (20% weight)
+            if balance > 0:
+                equity_ratio = equity / balance
+                if equity_ratio >= 1.05:  # Equity > Balance (good)
+                    equity_score = 1.0
+                elif equity_ratio >= 1.0:  # Equity = Balance
+                    equity_score = 0.8
+                elif equity_ratio >= 0.95:  # Small loss
+                    equity_score = 0.6
+                elif equity_ratio >= 0.9:   # Moderate loss
+                    equity_score = 0.4
+                else:  # Large loss
+                    equity_score = max(0.0, equity_ratio)
+            else:
+                equity_score = 0.5
+            
+            health_factors.append(("equity", equity_score, 0.2))
+            print(f"   Equity Score: {equity_score:.2f}")
+            
+            # 4. Position Count Factor (10% weight)
+            position_count = len(self.active_positions)
+            max_safe_positions = self.config.get("risk_management", {}).get("max_positions", 20)
+            
+            if position_count <= max_safe_positions * 0.5:  # Safe range
+                position_score = 1.0
+            elif position_count <= max_safe_positions * 0.8:  # Moderate
+                position_score = 0.7
+            elif position_count <= max_safe_positions:  # Full but safe
+                position_score = 0.5
+            else:  # Over limit
+                position_score = max(0.1, 0.5 * (max_safe_positions / position_count))
+            
+            health_factors.append(("positions", position_score, 0.1))
+            print(f"   Position Score: {position_score:.2f}")
+            
+            # คำนวณ weighted average
+            total_weight = sum(weight for _, _, weight in health_factors)
+            weighted_sum = sum(score * weight for _, score, weight in health_factors)
+            
+            portfolio_health = weighted_sum / total_weight if total_weight > 0 else 0.5
+            portfolio_health = max(0.0, min(1.0, portfolio_health))  # Bound 0-1
+            
+            print(f"   📊 Final Portfolio Health: {portfolio_health:.1%}")
+            print(f"   Components: " + " | ".join([f"{name}:{score:.2f}" for name, score, _ in health_factors]))
+            
+            return portfolio_health
+            
+        except Exception as e:
+            print(f"❌ Portfolio health calculation error: {e}")
+            return 0.5  # Default moderate health
+
     # ========================================================================================
     # 🎯 SMART CLOSING STRATEGIES
     # ========================================================================================
@@ -686,22 +940,7 @@ class PositionManager:
         except Exception as e:
             self.log(f"❌ Recovery analysis error: {e}")
             return []
-    
-    def _get_current_price_for_position(self, position) -> float:
-        """ดึงราคาปัจจุบันสำหรับ position"""
-        try:
-            tick = mt5.symbol_info_tick(position.symbol)
-            if tick:
-                if position.type == mt5.POSITION_TYPE_BUY:
-                    return tick.bid  # BUY position ใช้ bid price สำหรับปิด
-                else:
-                    return tick.ask  # SELL position ใช้ ask price สำหรับปิด
-            else:
-                return position.price_open  # Fallback
-                
-        except Exception as e:
-            return position.price_open
-    
+        
     def _track_close_performance(self, reason: CloseReason, success: bool):
         """Track closing performance"""
         try:

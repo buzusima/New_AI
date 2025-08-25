@@ -288,17 +288,57 @@ class LotCalculator:
         except Exception as e:
             return 1.0
 
+    def calculate_optimal_lot_size(self, **kwargs) -> float:
+            """
+            🎯 หลัก method สำหรับ Modern Rule Engine
+            รองรับ market_data, confidence, order_type parameters
+            """
+            try:
+                # แปลงพารามิเตอร์จาก Rule Engine
+                market_data = kwargs.get('market_data', {})
+                confidence = kwargs.get('confidence_level', kwargs.get('confidence', 0.5))
+                order_type = kwargs.get('trade_direction', kwargs.get('order_type', 'BUY'))
+                reasoning = kwargs.get('reasoning', 'Rule Engine calculation')
+                
+                print(f"🔢 calculate_optimal_lot_size() called with:")
+                print(f"   Confidence: {confidence:.2f}")
+                print(f"   Order Type: {order_type}")
+                print(f"   Market Data: {market_data}")
+                
+                # เตรียมพารามิเตอร์
+                params = self._prepare_calculation_params(market_data, confidence, order_type)
+                
+                # คำนวณ lot ตาม method ที่เลือก
+                if self.current_method == LotCalculationMethod.DYNAMIC_HYBRID:
+                    result = self._calculate_hybrid_lot_size(params, reasoning)
+                elif self.current_method == LotCalculationMethod.CONFIDENCE_BASED:
+                    result = self._calculate_confidence_based_lot(params)
+                elif self.current_method == LotCalculationMethod.VOLATILITY_ADJUSTED:
+                    result = self._calculate_volatility_adjusted_lot(params)
+                elif self.current_method == LotCalculationMethod.PERCENTAGE_RISK:
+                    result = self._calculate_percentage_risk_lot(params)
+                else:
+                    result = self._calculate_fixed_lot(params)
+                
+                # Validate และ bound
+                final_lot_size = self._validate_and_bound_lot_size(result.lot_size)
+                
+                # บันทึกใน history
+                result.lot_size = final_lot_size
+                self.calculation_history.append(result)
+                
+                print(f"✅ Final lot size: {final_lot_size:.3f} ({result.calculation_method.value})")
+                return final_lot_size
+                
+            except Exception as e:
+                print(f"❌ calculate_optimal_lot_size error: {e}")
+                return self.base_lot_size
+        
     def calculate_lot_size(self, **kwargs) -> float:
         """
-        Alias สำหรับ Modern Rule Engine
-        เรียกใช้ calculate_optimal_lot_size() ที่มีอยู่แล้ว
+        🔄 Alias method สำหรับ backward compatibility
         """
-        try:
-            result = self.calculate_optimal_lot_size(**kwargs)
-            return result
-        except Exception as e:
-            print(f"❌ calculate_lot_size error: {e}")
-            return self.base_lot_size
+        return self.calculate_optimal_lot_size(**kwargs)
                         
     def _prepare_calculation_params(self, market_data: Dict, confidence: float, order_type: str) -> LotCalculationParams:
         """เตรียมพารามิเตอร์สำหรับการคำนวณ"""

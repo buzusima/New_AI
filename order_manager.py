@@ -599,51 +599,107 @@ class OrderManager:
             return True
     
     def _avoid_order_collisions(self, target_price: float, direction: str) -> Optional[float]:
-        """เช็คและป้องกันการ collision ของออเดอร์"""
+        """เช็คและป้องกันการ collision ของออเดอร์ - แก้ไข syntax error"""
         try:
-            tolerance_points = 5
-            tolerance = tolerance_points * self.point_value
-            spacing = self.smart_params.current_spacing * self.point_value
-            
-            # Get existing orders
+            # Get existing orders ก่อนเลย - แก้ไข variable scope
             pending_orders = self.get_pending_orders()
-            existing_prices = [order.get("price", 0) for order in pending_orders]
+            existing_prices = [order.get("price", 0) for order in pending_orders if order.get("price", 0) > 0]
             existing_prices.sort()
             
+            # Get current market price
+            current_price = self._get_current_price()
+            if current_price <= 0:
+                print(f"❌ Invalid current price: {current_price}")
+                return None
+            
             print(f"🔍 COLLISION CHECK: {direction} @ {target_price:.5f}")
+            print(f"   Current Price: {current_price:.5f}")
             print(f"   Existing orders: {len(existing_prices)}")
             
-            # Check for collisions
-            for price in existing_prices:
-                if abs(target_price - price) <= tolerance:
-                    print(f"❌ COLLISION detected @ {price:.5f}")
-                    
-                    # Find alternative slot
-                    if direction == "BUY":
-                        # Look for gap below
-                        for i in range(len(existing_prices)):
-                            gap_price = existing_prices[i] - spacing
-                            if not any(abs(gap_price - p) <= tolerance for p in existing_prices):
-                                print(f"✅ Found alternative BUY slot @ {gap_price:.5f}")
-                                return gap_price
-                    else:  # SELL
-                        # Look for gap above
-                        for i in range(len(existing_prices)):
-                            gap_price = existing_prices[i] + spacing
-                            if not any(abs(gap_price - p) <= tolerance for p in existing_prices):
-                                print(f"✅ Found alternative SELL slot @ {gap_price:.5f}")
-                                return gap_price
-                    
-                    print("❌ No suitable alternative found")
+            # 1. เช็ค grid density ก่อน - ถ้าหนาแน่นให้หยุด
+            if len(existing_prices) >= 12:
+                print(f"🛑 Grid has enough orders ({len(existing_prices)}) - STOPPING to maintain quality")
+                return None
+            
+            # 2. วิเคราะห์ spacing ถ้ามีออเดอร์มากพอ
+            if len(existing_prices) >= 2:
+                distances = []
+                for i in range(1, len(existing_prices)):
+                    distance = existing_prices[i] - existing_prices[i-1]
+                    distance_points = distance / self.point_value
+                    distances.append(distance_points)
+                
+                min_gap = min(distances)
+                avg_gap = sum(distances) / len(distances)
+                
+                print(f"📊 Current Grid Spacing:")
+                print(f"   Min Gap: {min_gap:.1f} points")
+                print(f"   Avg Gap: {avg_gap:.1f} points")
+                
+                # ถ้า spacing หนาแน่นเกินไปให้หยุด
+                if min_gap < 20:
+                    print(f"🛑 Grid too dense (min gap: {min_gap:.1f} points) - STOPPING")
                     return None
             
-            print(f"✅ Safe to place @ {target_price:.5f}")
-            return target_price
+            # 3. Collision detection ปกติ
+            tolerance_points = 15
+            tolerance = tolerance_points * self.point_value
+            
+            # เช็คระยะห่างจากราคาปัจจุบัน
+            distance_from_current = abs(target_price - current_price)
+            min_distance_from_current = 30 * self.point_value
+            
+            if distance_from_current < min_distance_from_current:
+                print(f"⚠️ Too close to current price: {distance_from_current/self.point_value:.1f} points")
+                
+                # ปรับราคาให้ห่างขึ้น
+                if direction == "BUY":
+                    adjusted_price = current_price - min_distance_from_current
+                else:  # SELL
+                    adjusted_price = current_price + min_distance_from_current
+                
+                print(f"🔧 Adjusted price: {adjusted_price:.5f}")
+                target_price = adjusted_price
+            
+            # เช็ค collision กับออเดอร์ที่มีอยู่
+            collision_detected = False
+            for existing_price in existing_prices:
+                if abs(target_price - existing_price) <= tolerance:
+                    print(f"❌ COLLISION detected @ {existing_price:.5f} (distance: {abs(target_price - existing_price)/self.point_value:.1f} points)")
+                    collision_detected = True
+                    break
+            
+            if not collision_detected:
+                # ตรวจสอบ price format แบบง่าย
+                if target_price <= 0:
+                    print(f"❌ Invalid price: {target_price}")
+                    return None
+                
+                formatted_price = round(target_price, 5)
+                
+                # เช็คทิศทางให้ถูกต้อง
+                if direction == "BUY" and formatted_price >= current_price:
+                    print(f"❌ BUY price must be below current price")
+                    return None
+                elif direction == "SELL" and formatted_price <= current_price:
+                    print(f"❌ SELL price must be above current price")
+                    return None
+                
+                print(f"✅ Safe to place @ {formatted_price:.5f}")
+                return formatted_price
+            
+            # 4. ถ้าเจอ collision ให้หยุดแทนที่จะฝืน
+            print(f"🛑 SMART DECISION: Collision detected - skipping order placement")
+            print(f"   Grid has adequate coverage with {len(existing_prices)} orders")
+            print(f"   Better to wait for market movement than force placement")
+            
+            return None  # หยุดส่งออเดอร์
             
         except Exception as e:
             self.log(f"❌ Collision check error: {e}")
-            return target_price
-    
+            return None
+                
+            
     def _determine_order_reason(self, reasoning: str) -> OrderReason:
         """Determine order reason from reasoning text"""
         reasoning_lower = reasoning.lower()
@@ -1146,6 +1202,231 @@ class OrderManager:
             self.log(f"❌ Smart sell order error: {e}")
             return False
 
+
+    def _find_wider_alternative_slot(self, direction: str, existing_prices: List[float], 
+                                   current_price: float) -> Optional[float]:
+        """หาตำแหน่งใหม่ด้วย spacing ที่กว้างขึ้น - เพิ่มใน order_manager.py"""
+        try:
+            print(f"🔍 Finding wider alternative for {direction}")
+            
+            # ใช้ spacing ที่กว้างขึ้น
+            wide_spacing = max(150, self.smart_params.current_spacing * 3)  # อย่างน้อย 150 points
+            wide_spacing_price = wide_spacing * self.point_value
+            
+            print(f"   Using wider spacing: {wide_spacing} points ({wide_spacing_price:.5f})")
+            
+            if direction == "BUY":
+                # หาตำแหน่งที่ต่ำกว่าออเดอร์ BUY ที่ต่ำสุด
+                buy_orders = [p for p in existing_prices if p < current_price]
+                if buy_orders:
+                    lowest_buy = min(buy_orders)
+                    candidate_price = lowest_buy - wide_spacing_price
+                    print(f"   Below lowest BUY: {lowest_buy:.5f} - {wide_spacing_price:.5f} = {candidate_price:.5f}")
+                else:
+                    candidate_price = current_price - wide_spacing_price
+                    print(f"   Below current: {current_price:.5f} - {wide_spacing_price:.5f} = {candidate_price:.5f}")
+                    
+            else:  # SELL
+                # หาตำแหน่งที่สูงกว่าออเดอร์ SELL ที่สูงสุด
+                sell_orders = [p for p in existing_prices if p > current_price]
+                if sell_orders:
+                    highest_sell = max(sell_orders)
+                    candidate_price = highest_sell + wide_spacing_price
+                    print(f"   Above highest SELL: {highest_sell:.5f} + {wide_spacing_price:.5f} = {candidate_price:.5f}")
+                else:
+                    candidate_price = current_price + wide_spacing_price
+                    print(f"   Above current: {current_price:.5f} + {wide_spacing_price:.5f} = {candidate_price:.5f}")
+            
+            # Validate candidate price - ใช้ wider validation
+            validated_price = self._validate_price_format_wider(candidate_price, direction, current_price)
+            
+            if validated_price:
+                # Final collision check with wider tolerance
+                min_distance = wide_spacing_price * 0.8  # ใช้ 80% ของ wide spacing
+                is_safe = all(abs(validated_price - p) >= min_distance for p in existing_prices)
+                
+                if is_safe:
+                    print(f"✅ Wide spacing alternative found: {validated_price:.5f}")
+                    return validated_price
+                else:
+                    print(f"❌ Wide spacing still has collision")
+                    return None
+            else:
+                print(f"❌ Wide spacing price validation failed")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Wide alternative search error: {e}")
+            return None
+
+    def _find_alternative_slot(self, original_price: float, direction: str, 
+                              existing_prices: List[float], current_price: float, 
+                              min_spacing: float) -> Optional[float]:
+        """หาตำแหน่งทดแทนที่เหมาะสม - เพิ่มใน order_manager.py"""
+        try:
+            print(f"🔍 Finding alternative slot for {direction}")
+            
+            # กำหนดทิศทางการค้นหา
+            if direction == "BUY":
+                # สำหรับ BUY: ค้นหาจากราคาต่ำขึ้นไป
+                search_direction = -1
+                price_limit = current_price * 0.95  # ไม่ต่ำกว่า 5% ของราคาปัจจุบัน
+            else:  # SELL
+                # สำหรับ SELL: ค้นหาจากราคาสูงขึ้นไป  
+                search_direction = 1
+                price_limit = current_price * 1.05  # ไม่สูงกว่า 5% ของราคาปัจจุบัน
+            
+            # ค้นหาในช่วง ±300 points ด้วย step ที่ใหญ่ขึ้น
+            for offset in range(50, 301, 25):  # เริ่มจาก 50 points, step 25
+                candidate_price = original_price + (search_direction * offset * self.point_value)
+                
+                # เช็คว่าอยู่ในขอบเขตที่อนุญาต
+                if direction == "BUY" and candidate_price < price_limit:
+                    print(f"   ⚠️ Price too low: {candidate_price:.5f} < {price_limit:.5f}")
+                    continue
+                elif direction == "SELL" and candidate_price > price_limit:
+                    print(f"   ⚠️ Price too high: {candidate_price:.5f} > {price_limit:.5f}")
+                    continue
+                
+                # เช็คระยะห่างจากราคาปัจจุบัน
+                distance_from_current = abs(candidate_price - current_price)
+                min_distance = 40 * self.point_value  # เพิ่มเป็น 40 points
+                
+                if distance_from_current < min_distance:
+                    continue
+                
+                # เช็ค collision กับออเดอร์ที่มีอยู่ด้วย tolerance ที่กว้างขึ้น
+                is_safe = True
+                min_gap = max(min_spacing, 60 * self.point_value)  # อย่างน้อย 60 points
+                
+                for existing_price in existing_prices:
+                    if abs(candidate_price - existing_price) <= min_gap:
+                        is_safe = False
+                        break
+                
+                if is_safe:
+                    print(f"   ✅ Alternative found: {candidate_price:.5f} (offset: {offset} points)")
+                    return candidate_price
+                else:
+                    print(f"   ❌ Collision at offset {offset}: {candidate_price:.5f}")
+            
+            print(f"   ❌ No alternative found in 300 points range")
+            return None
+            
+        except Exception as e:
+            print(f"❌ Alternative slot search error: {e}")
+            return None
+
+    def _diagnose_spacing_problem(self) -> Dict:
+        """🔍 วิเคราะห์ปัญหา spacing"""
+        try:
+            # ดึงออเดอร์ที่มีอยู่
+            pending_orders = self.get_pending_orders()
+            existing_prices = [order.get("price", 0) for order in pending_orders if order.get("price", 0) > 0]
+            existing_prices.sort()
+            
+            current_price = self._get_current_price()
+            
+            print(f"🔍 === SPACING DIAGNOSIS ===")
+            print(f"   Current Price: {current_price:.5f}")
+            print(f"   Total Orders: {len(existing_prices)}")
+            
+            # วิเคราะห์ระยะห่างระหว่างออเดอร์
+            if len(existing_prices) >= 2:
+                distances = []
+                for i in range(1, len(existing_prices)):
+                    distance = existing_prices[i] - existing_prices[i-1]
+                    distance_points = distance / self.point_value
+                    distances.append(distance_points)
+                    print(f"   Gap {i}: {distance:.5f} ({distance_points:.1f} points)")
+                
+                min_gap = min(distances)
+                max_gap = max(distances)
+                avg_gap = sum(distances) / len(distances)
+                
+                print(f"📊 Gap Analysis:")
+                print(f"   Min Gap: {min_gap:.1f} points")
+                print(f"   Max Gap: {max_gap:.1f} points") 
+                print(f"   Avg Gap: {avg_gap:.1f} points")
+                
+                # เช็คปัญหา
+                if min_gap < 10:
+                    print(f"🚨 PROBLEM: Grid too dense (min gap: {min_gap:.1f} points)")
+                    return {"problem": "GRID_TOO_DENSE", "min_gap": min_gap}
+                elif avg_gap < 30:
+                    print(f"⚠️ WARNING: Grid quite dense (avg gap: {avg_gap:.1f} points)")
+                    return {"problem": "GRID_DENSE", "avg_gap": avg_gap}
+                else:
+                    print(f"✅ Grid spacing OK")
+                    return {"problem": "NONE", "spacing_ok": True}
+            
+            return {"problem": "INSUFFICIENT_DATA"}
+            
+        except Exception as e:
+            print(f"❌ Spacing diagnosis error: {e}")
+            return {"problem": "ERROR", "error": str(e)}
+
+    def _get_current_price(self) -> float:
+        """ดึงราคาปัจจุบันจาก MT5"""
+        try:
+            if not self.mt5_connector or not self.mt5_connector.is_connected:
+                return 0.0
+            
+            tick = mt5.symbol_info_tick(self.symbol)
+            if tick is None:
+                return 0.0
+            
+            return (tick.bid + tick.ask) / 2  # ใช้ mid price
+            
+        except Exception as e:
+            print(f"❌ Get current price error: {e}")
+            return 0.0
+
+    def _validate_price_format(self, price: float, direction: str, current_price: float) -> Optional[float]:
+        """ตรวจสอบและปรับ format ราคาให้ถูกต้องสำหรับ MT5"""
+        try:
+            # ตรวจสอบพื้นฐาน
+            if price <= 0:
+                print(f"❌ Invalid price: {price}")
+                return None
+            
+            # Round ให้เป็นทศนิยม 5 ตำแหน่ง (XAUUSD standard)
+            formatted_price = round(price, 5)
+            
+            # เช็คระยะห่างขั้นต่ำจากราคาปัจจุบัน
+            min_distance = 30 * self.point_value  # 30 points
+            distance = abs(formatted_price - current_price)
+            
+            if distance < min_distance:
+                print(f"❌ Too close to current price: {distance/self.point_value:.1f} points (min: 30)")
+                return None
+            
+            # เช็คว่าราคาไม่ห่างเกินไป
+            max_distance = 800 * self.point_value  # 800 points
+            if distance > max_distance:
+                print(f"❌ Too far from current price: {distance/self.point_value:.1f} points (max: 800)")
+                return None
+            
+            # เช็คทิศทางให้ถูกต้อง
+            if direction == "BUY" and formatted_price >= current_price:
+                print(f"❌ BUY price must be below current price: {formatted_price:.5f} >= {current_price:.5f}")
+                return None
+            elif direction == "SELL" and formatted_price <= current_price:
+                print(f"❌ SELL price must be above current price: {formatted_price:.5f} <= {current_price:.5f}")
+                return None
+            
+            # เช็คว่าราคาไม่เป็น 0 หรือค่าผิดปกติ
+            if formatted_price < current_price * 0.92 or formatted_price > current_price * 1.08:
+                print(f"❌ Price out of reasonable range: {formatted_price:.5f} (current: {current_price:.5f})")
+                return None
+            
+            print(f"✅ Price validation passed: {formatted_price:.5f}")
+            return formatted_price
+            
+        except Exception as e:
+            print(f"❌ Price validation error: {e}")
+            return None
+    
 # ========================================================================================
 # 🧪 TEST FUNCTION
 # ========================================================================================

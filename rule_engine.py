@@ -1118,79 +1118,124 @@ class ModernRuleEngine:
             print(f"   Active Positions: {len(positions)}")
             print(f"   Pending Orders: {len(pending_orders)}")
             
-            # แยก positions ตามทิศทาง
+            # แยก positions ตามทิศทาง - แก้ไข type handling
             buy_positions = []
             sell_positions = []
             
             for position in positions:
-                pos_type = position.get("type", "").upper()
-                if pos_type in ["BUY", "POSITION_TYPE_BUY", "0"]:
+                # แก้ไขการจัดการ position type - อาจเป็น int หรือ string
+                pos_type = position.get("type", "")
+                
+                # Convert to string safely
+                if isinstance(pos_type, int):
+                    pos_type_str = str(pos_type)
+                else:
+                    pos_type_str = str(pos_type).upper()
+                
+                print(f"   📍 Position Type Debug:")
+                print(f"      Original type: {pos_type} ({type(pos_type)})")
+                print(f"      Converted: {pos_type_str}")
+                
+                # ตรวจสอบหลายรูปแบบของ position type
+                if (pos_type_str in ['BUY', 'POSITION_TYPE_BUY', '0'] or 
+                    'BUY' in pos_type_str or 
+                    pos_type == 0):
                     buy_positions.append(position)
-                elif pos_type in ["SELL", "POSITION_TYPE_SELL", "1"]:
+                    print(f"      → Classified as BUY position")
+                    
+                elif (pos_type_str in ['SELL', 'POSITION_TYPE_SELL', '1'] or 
+                      'SELL' in pos_type_str or 
+                      pos_type == 1):
                     sell_positions.append(position)
+                    print(f"      → Classified as SELL position")
+                else:
+                    print(f"      → Unknown position type: {pos_type_str}")
             
-            # แยก pending orders ตามทิศทาง
+            # แยก pending orders ตามทิศทาง - แก้ไข type handling
             buy_pending = []
             sell_pending = []
             
             for order in pending_orders:
-                order_type = order.get("type", "").upper()
-                if "BUY" in order_type:
+                # แก้ไขการจัดการ order type - อาจเป็น int หรือ string
+                order_type = order.get("type", "")
+                
+                # Convert to string safely
+                if isinstance(order_type, int):
+                    order_type_str = str(order_type)
+                else:
+                    order_type_str = str(order_type).upper()
+                
+                print(f"   📋 Order Type Debug:")
+                print(f"      Original type: {order_type} ({type(order_type)})")
+                print(f"      Converted: {order_type_str}")
+                
+                # ตรวจสอบหลายรูปแบบของ order type
+                if ('BUY' in order_type_str or 
+                    order_type_str in ['2', '4', '6'] or  # MT5 BUY order types
+                    order_type == 2 or order_type == 4 or order_type == 6):
                     buy_pending.append(order)
-                elif "SELL" in order_type:
+                    print(f"      → Classified as BUY pending")
+                    
+                elif ('SELL' in order_type_str or 
+                      order_type_str in ['3', '5', '7'] or  # MT5 SELL order types
+                      order_type == 3 or order_type == 5 or order_type == 7):
                     sell_pending.append(order)
+                    print(f"      → Classified as SELL pending")
+                else:
+                    print(f"      → Unknown order type: {order_type_str}")
             
-            # รวมจำนวนทั้งหมด
+            # รวมจำนวน orders ทั้งหมด (positions + pending)
             total_buy_orders = len(buy_positions) + len(buy_pending)
             total_sell_orders = len(sell_positions) + len(sell_pending)
             total_orders = total_buy_orders + total_sell_orders
             
-            print(f"   📊 Breakdown:")
-            print(f"      BUY Positions: {len(buy_positions)}")
-            print(f"      BUY Pending: {len(buy_pending)}")
-            print(f"      SELL Positions: {len(sell_positions)}")
-            print(f"      SELL Pending: {len(sell_pending)}")
-            print(f"   📊 Totals:")
-            print(f"      Total BUY: {total_buy_orders}")
-            print(f"      Total SELL: {total_sell_orders}")
-            print(f"      Total Orders: {total_orders}")
-            
             # คำนวณ balance ratio
             balance_ratio = total_buy_orders / total_orders if total_orders > 0 else 0.5
             
-            print(f"   ⚖️ Balance Ratio: {balance_ratio:.1%} BUY")
+            print(f"   📊 Grid Composition:")
+            print(f"      BUY: {len(buy_positions)} pos + {len(buy_pending)} pending = {total_buy_orders} total")
+            print(f"      SELL: {len(sell_positions)} pos + {len(sell_pending)} pending = {total_sell_orders} total")
+            print(f"      Balance Ratio: {balance_ratio:.1%} (target: 50%)")
             
-            # รวม levels จาก positions และ pending orders
+            # สร้าง price levels สำหรับการวิเคราะห์
             all_buy_levels = []
             all_sell_levels = []
             
-            # เพิ่ม buy levels
+            # เพิ่ม price levels จาก positions
             for pos in buy_positions:
                 price = pos.get("price_open", pos.get("price", 0))
                 if price > 0:
                     all_buy_levels.append(price)
-            
-            for order in buy_pending:
-                price = order.get("price", 0)
-                if price > 0:
-                    all_buy_levels.append(price)
-            
-            # เพิ่ม sell levels
+                    print(f"      BUY Position Level: {price:.2f}")
+                    
             for pos in sell_positions:
                 price = pos.get("price_open", pos.get("price", 0))
                 if price > 0:
                     all_sell_levels.append(price)
+                    print(f"      SELL Position Level: {price:.2f}")
             
+            # เพิ่ม price levels จาก pending orders
+            for order in buy_pending:
+                price = order.get("price", 0)
+                if price > 0:
+                    all_buy_levels.append(price)
+                    print(f"      BUY Pending Level: {price:.2f}")
+                    
             for order in sell_pending:
                 price = order.get("price", 0)
                 if price > 0:
                     all_sell_levels.append(price)
+                    print(f"      SELL Pending Level: {price:.2f}")
             
-            print(f"   📍 Price Levels:")
-            print(f"      BUY Levels: {len(all_buy_levels)} prices")
-            print(f"      SELL Levels: {len(all_sell_levels)} prices")
+            # Sort levels
+            all_buy_levels.sort(reverse=True)   # BUY: สูง → ต่ำ
+            all_sell_levels.sort()              # SELL: ต่ำ → สูง
             
-            # หา slot ถัดไป
+            print(f"   🎯 Price Levels:")
+            print(f"      BUY Levels: {all_buy_levels[:3]}..." if len(all_buy_levels) > 3 else f"      BUY Levels: {all_buy_levels}")
+            print(f"      SELL Levels: {all_sell_levels[:3]}..." if len(all_sell_levels) > 3 else f"      SELL Levels: {all_sell_levels}")
+            
+            # หา slots ถัดไป
             next_buy_slot = self._find_next_buy_slot(all_buy_levels, current_price)
             next_sell_slot = self._find_next_sell_slot(all_sell_levels, current_price)
             
