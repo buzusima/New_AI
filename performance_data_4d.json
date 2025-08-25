@@ -1,0 +1,224 @@
+{
+  "timestamp": "2025-08-25T22:42:46.082715",
+  "engine_version": "Modern_Smart_AI_v2.0",
+  "trading_mode": "ADAPTIVE",
+  "adaptive_thresholds": {
+    "minimum_decision_score": 0.5,
+    "excellent_threshold": 0.8,
+    "good_threshold": 0.65,
+    "acceptable_threshold": 0.5,
+    "poor_threshold": 0.35,
+    "minimum_time_between_orders": 30,
+    "maximum_orders_per_hour": 15,
+    "grid_density_limit": 0.85,
+    "learning_rate": 0.1,
+    "performance_window": 50,
+    "adaptation_sensitivity": 0.05
+  },
+  "success_rate_history": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "decision_quality_history": [
+    0.5744088862000001,
+    0.5735498830303031,
+    0.5745748756111112,
+    0.5730303026666668,
+    0.5724781451785715,
+    0.5720219688333334,
+    0.5683728145312501,
+    0.5651529725000001,
+    0.5622908906944445,
+    0.5597447253947369,
+    0.557453176625,
+    0.551668101625,
+    0.5515292767750001,
+    0.5502987138750001,
+    0.5479773131750001,
+    0.5445812685583334,
+    0.5401009511416668,
+    0.5345258571750001
+  ],
+  "recent_decisions": [
+    {
+      "timestamp": "2025-08-25T22:40:30.715472",
+      "score": 0.6296152500000001,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:40:35.600061",
+      "score": 0.5160409970000001,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:40:40.638852",
+      "score": 0.5378757580000001,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:40:45.673488",
+      "score": 0.5596925140000001,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:40:50.635394",
+      "score": 0.5811853923333334,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:40:55.637719",
+      "score": 0.6028708483333334,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:41:00.669130",
+      "score": 0.6247663793333333,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:41:05.671707",
+      "score": 0.629708,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:41:10.754161",
+      "score": 0.5201792646666666,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:41:15.763171",
+      "score": 0.5421544583333333,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:41:21.024937",
+      "score": 0.5649598513333334,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:41:25.844687",
+      "score": 0.585849794,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:41:30.890978",
+      "score": 0.5544954273333333,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:41:35.875222",
+      "score": 0.5653000978333333,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:41:40.888597",
+      "score": 0.5656355000000001,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:41:45.919946",
+      "score": 0.5136355,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:41:51.029403",
+      "score": 0.5136355,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:41:55.935937",
+      "score": 0.5136355,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:42:00.967130",
+      "score": 0.5139137500000001,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:42:05.967232",
+      "score": 0.5139137500000001,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:42:10.982946",
+      "score": 0.5139137500000001,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:42:16.014258",
+      "score": 0.5132645,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:42:21.061255",
+      "score": 0.5132645,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:42:26.030093",
+      "score": 0.5132645,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:42:31.061458",
+      "score": 0.5132645,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:42:36.061534",
+      "score": 0.5132645,
+      "quality": "ACCEPTABLE",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-25T22:42:41.077247",
+      "score": 0.5132645,
+      "quality": "ACCEPTABLE",
+      "success": false
+    }
+  ],
+  "grid_intelligence": {
+    "density_score": 0.0,
+    "distribution_score": 0.0,
+    "balance_score": 0.0,
+    "total_orders": 0
+  },
+  "market_intelligence": {
+    "volatility_level": "VERY_LOW",
+    "trend_direction": "MIXED",
+    "current_session": "OVERLAP"
+  },
+  "learning_stats": {
+    "total_decisions": 27,
+    "recent_success_rate": 0.0,
+    "current_threshold": 0.5,
+    "learning_active": true
+  }
+}

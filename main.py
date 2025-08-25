@@ -755,6 +755,9 @@ class ModernRuleBasedTradingGUI:
             # FIXED: Actually start rule engine
             if self.rule_engine:
                 self.rule_engine.start()  # ← เพิ่มบรรทัดนี้!
+                self.rule_engine.set_trading_mode("ADAPTIVE")
+                self.log("🎯 ADAPTIVE Mode activated - System will learn and adapt!")
+
                 self.log("🧠 Rule Engine started")
             else:
                 self.log("⚠️ Rule Engine not available")

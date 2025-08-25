@@ -105,12 +105,12 @@ class MarketAnalyzer:
         """
         try:
             self.analysis_count += 1
-            self.log(f"Starting 4D Analysis #{self.analysis_count}")
+           # self.log(f"Starting 4D Analysis #{self.analysis_count}")
             
             # เช็ค cache สำหรับ 4D analysis
             if self._is_4d_cache_valid():
                 self.cache_hit_count += 1
-                self.log(f"Using cached 4D analysis (Cache hits: {self.cache_hit_count})")
+                #self.log(f"Using cached 4D analysis (Cache hits: {self.cache_hit_count})")
                 return self.last_4d_analysis
             
             # ดึงข้อมูลราคาปัจจุบัน
