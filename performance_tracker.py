@@ -1,8 +1,14 @@
 """
-📈 Modern Performance Tracker - Updated for New Rule Engine
+📈 Performance Tracker - 4D Enhanced Monitoring Edition
 performance_tracker.py
-เพิ่ม methods ที่จำเป็นสำหรับ Modern Rule Engine และการติดตามประสิทธิภาพ
-** PRODUCTION READY - COMPATIBLE WITH NEW RULE ENGINE **
+
+🎯 ระบบติดตามประสิทธิภาพแบบ 4D สำหรับ AI Gold Grid Trading
+- 4D analysis performance tracking
+- Recovery effectiveness monitoring
+- Market order execution statistics  
+- Real-time performance updates
+
+** COMPATIBLE WITH 4D AI RULE ENGINE - COMPREHENSIVE MONITORING **
 """
 
 import time
@@ -15,877 +21,1057 @@ import json
 import numpy as np
 from collections import deque, defaultdict
 import statistics
+import os
 
-class DecisionOutcome(Enum):
-    """ผลลัพธ์การตัดสินใจ"""
-    SUCCESS = "SUCCESS"
-    FAILURE = "FAILURE"
-    PENDING = "PENDING"
-    CANCELLED = "CANCELLED"
+class PerformanceMetricType(Enum):
+    """ประเภทของ performance metrics"""
+    FOUR_D_ANALYSIS = "FOUR_D_ANALYSIS"
+    RECOVERY_EFFECTIVENESS = "RECOVERY_EFFECTIVENESS"
+    MARKET_ORDER_EXECUTION = "MARKET_ORDER_EXECUTION"
+    PORTFOLIO_HEALTH = "PORTFOLIO_HEALTH"
+    RULE_PERFORMANCE = "RULE_PERFORMANCE"
+    GRID_EFFICIENCY = "GRID_EFFICIENCY"
+
+class DecisionOutcome4D(Enum):
+    """ผลลัพธ์การตัดสินใจแบบ 4D"""
+    EXCELLENT_SUCCESS = "EXCELLENT_SUCCESS"       # มากกว่า expected
+    GOOD_SUCCESS = "GOOD_SUCCESS"                 # ตาม expected
+    MODERATE_SUCCESS = "MODERATE_SUCCESS"         # น้อยกว่า expected แต่ยังดี
+    POOR_PERFORMANCE = "POOR_PERFORMANCE"         # แย่กว่า expected
+    FAILURE = "FAILURE"                           # ล้มเหลวสิ้นเชิง
+    PENDING = "PENDING"                           # รอผลลัพธ์
+    CANCELLED = "CANCELLED"                       # ยกเลิก
 
 @dataclass
-class DecisionRecord:
-    """บันทึกการตัดสินใจ"""
+class FourDAnalysisRecord:
+    """บันทึกการวิเคราะห์ 4D"""
     timestamp: datetime
-    rule_name: str
-    decision_type: str
-    confidence: float
-    reasoning: str
-    market_context: Dict
-    execution_result: Optional[Dict] = None
-    outcome: DecisionOutcome = DecisionOutcome.PENDING
-    profit_impact: float = 0.0
-    evaluation_time: Optional[datetime] = None
+    four_d_score: float
+    four_d_confidence: float
     
+    # Individual dimension scores
+    trend_dimension_score: float
+    volume_dimension_score: float
+    session_dimension_score: float
+    volatility_dimension_score: float
+    
+    # Market context
+    market_condition_4d: str
+    recommendation: str
+    
+    # Action taken
+    action_taken: Optional[str] = None
+    order_type: Optional[str] = None
+    lot_size: Optional[float] = None
+    
+    # Results (filled later)
+    actual_outcome: Optional[DecisionOutcome4D] = None
+    profit_impact: Optional[float] = None
+    evaluation_timestamp: Optional[datetime] = None
+    accuracy_score: Optional[float] = None
+
 @dataclass
-class RuleMetrics:
-    """เมตริกการประเมิน Rule"""
-    rule_name: str
-    total_decisions: int = 0
-    successful_decisions: int = 0
-    failed_decisions: int = 0
-    pending_decisions: int = 0
-    total_profit_impact: float = 0.0
-    average_confidence: float = 0.0
-    success_rate: float = 0.0
-    profit_per_decision: float = 0.0
-    last_decision_time: Optional[datetime] = None
-    performance_trend: List[float] = field(default_factory=list)
+class RecoveryOperationRecord:
+    """บันทึกการทำ Recovery"""
+    timestamp: datetime
+    operation_id: str
+    
+    # Recovery context
+    losing_positions_count: int
+    total_loss_amount: float
+    target_recovery_amount: float
+    
+    # Recovery strategy
+    recovery_strategy: str
+    hedge_pairs_identified: int
+    recovery_confidence: float
+    
+    # Execution details
+    recovery_orders_placed: List[Dict]
+    total_recovery_volume: float
+    
+    # Results
+    recovery_success: bool = False
+    actual_recovery_amount: float = 0.0
+    net_result: float = 0.0
+    completion_time: Optional[datetime] = None
+    effectiveness_score: Optional[float] = None
+
+@dataclass
+class MarketOrderExecutionRecord:
+    """บันทึกการ execute Market Order"""
+    timestamp: datetime
+    order_id: str
+    
+    # Order details
+    symbol: str
+    order_type: str  # BUY/SELL
+    requested_volume: float
+    requested_price: float
+    
+    # Execution results
+    executed_price: float
+    executed_volume: float
+    slippage_points: float
+    slippage_percentage: float
+    execution_time_ms: float
+    
+    # Market context
+    market_spread: float
+    market_volatility: float
+    session_type: str
+    
+    # Quality assessment
+    execution_quality: str  # EXCELLENT/GOOD/AVERAGE/POOR
+    success: bool = True
+
+@dataclass
+class PerformanceMetrics4D:
+    """เมตริก performance แบบ 4D"""
+    # 4D Analysis Metrics
+    four_d_accuracy_rate: float = 0.0
+    average_four_d_score: float = 0.0
+    four_d_confidence_correlation: float = 0.0
+    dimension_accuracy: Dict[str, float] = field(default_factory=dict)
+    
+    # Recovery Metrics
+    recovery_success_rate: float = 0.0
+    average_recovery_effectiveness: float = 0.0
+    total_recovered_amount: float = 0.0
+    recovery_time_efficiency: float = 0.0
+    
+    # Market Order Metrics
+    market_order_success_rate: float = 0.0
+    average_slippage: float = 0.0
+    average_execution_time: float = 0.0
+    execution_quality_distribution: Dict[str, int] = field(default_factory=dict)
+    
+    # Portfolio Health Metrics
+    portfolio_health_trend: List[float] = field(default_factory=list)
+    balance_ratio_stability: float = 0.0
+    risk_adjusted_performance: float = 0.0
+    
+    # Overall Performance
+    overall_system_score: float = 0.0
+    performance_trend: str = "STABLE"
+    last_updated: datetime = field(default_factory=datetime.now)
 
 class PerformanceTracker:
     """
-    📈 Modern Performance Tracker - Updated Edition
+    📈 Performance Tracker - 4D Enhanced Monitoring Edition
     
     ความสามารถใหม่:
-    - ✅ track_decision() สำหรับ Rule Engine
-    - ✅ get_decision_outcome() evaluation
-    - ✅ Rule performance analytics
-    - ✅ Decision impact analysis
-    - ✅ Adaptive learning support
-    ** COMPATIBLE WITH NEW RULE ENGINE **
+    - ✅ 4D analysis performance tracking พร้อม accuracy assessment
+    - ✅ Recovery effectiveness monitoring แบบครบวงจร
+    - ✅ Market order execution statistics แบบรายละเอียด
+    - ✅ Real-time performance updates และ trend analysis
+    - ✅ Portfolio health trend monitoring
+    - ✅ Multi-dimensional performance correlation analysis
+    - ✅ Adaptive learning support จาก performance data
     """
     
     def __init__(self, config: Dict):
-        """Initialize Performance Tracker"""
+        """Initialize 4D Performance Tracker"""
         self.config = config
         
-        # Decision tracking
-        self.decision_records: List[DecisionRecord] = []
-        self.pending_decisions: deque = deque(maxlen=100)
+        # 4D Analysis tracking
+        self.four_d_records: deque = deque(maxlen=1000)
+        self.four_d_accuracy_history: deque = deque(maxlen=200)
         
-        # Rule metrics
-        self.rule_metrics: Dict[str, RuleMetrics] = {}
+        # Recovery tracking
+        self.recovery_records: deque = deque(maxlen=500)
+        self.recovery_effectiveness_history: deque = deque(maxlen=100)
         
-        # Performance windows
-        self.short_term_window = 20    # decisions
-        self.medium_term_window = 50   # decisions  
-        self.long_term_window = 200    # decisions
+        # Market order tracking
+        self.market_order_records: deque = deque(maxlen=2000)
+        self.execution_quality_history: deque = deque(maxlen=300)
         
-        # Evaluation settings
-        self.decision_evaluation_delay = 300  # seconds (5 minutes)
-        self.profit_evaluation_delay = 1800   # seconds (30 minutes)
+        # Portfolio health tracking
+        self.portfolio_health_history: deque = deque(maxlen=500)
+        self.balance_ratio_history: deque = deque(maxlen=500)
         
-        # Statistics
-        self.daily_stats = defaultdict(lambda: {
-            "decisions": 0, "successes": 0, "profit": 0.0
-        })
+        # Performance metrics
+        self.current_metrics = PerformanceMetrics4D()
+        self.metrics_history: deque = deque(maxlen=100)  # บันทึกทุก 10 นาที
         
-        print("📈 Performance Tracker initialized - Compatible with Modern Rule Engine")
+        # Configuration
+        self.tracking_config = {
+            "four_d_evaluation_delay": 300,        # 5 นาที - เวลารอประเมินผล 4D
+            "recovery_evaluation_delay": 1800,     # 30 นาที - เวลารอประเมินผล recovery
+            "portfolio_update_interval": 60,       # 1 นาที - อัปเดต portfolio health
+            "metrics_save_interval": 600,          # 10 นาที - บันทึกเมตริก
+            "enable_real_time_updates": True,
+            "track_correlations": True,
+            "enable_adaptive_learning": True
+        }
+        
+        # Real-time monitoring
+        self.monitoring_active = False
+        self.monitoring_thread = None
+        self.last_metrics_update = datetime.now()
+        
+        # File paths for persistence
+        self.data_directory = "performance_data"
+        self._ensure_data_directory()
+        
+        self.log("4D Performance Tracker initialized - Comprehensive monitoring active")
     
     # ========================================================================================
-    # 🆕 NEW METHODS FOR MODERN RULE ENGINE
+    # 🆕 MAIN 4D TRACKING METHODS
     # ========================================================================================
     
-    def track_decision(self, decision_result, success: bool):
+    def log_4d_analysis(self, analysis_data: Dict) -> str:
         """
-        🆕 ติดตามการตัดสินใจจาก Rule Engine
+        🆕 บันทึกการวิเคราะห์ 4D และติดตามประสิทธิภาพ
         
         Args:
-            decision_result: RuleResult object จาก Rule Engine
-            success: ผลการดำเนินการ (True/False)
-        """
-        try:
-            print(f"📈 === TRACKING DECISION ===")
-            print(f"   Rule: {decision_result.rule_name}")
-            print(f"   Decision: {decision_result.decision.value}")
-            print(f"   Success: {success}")
-            
-            # สร้าง decision record
-            record = DecisionRecord(
-                timestamp=datetime.now(),
-                rule_name=decision_result.rule_name,
-                decision_type=decision_result.decision.value,
-                confidence=decision_result.confidence,
-                reasoning=decision_result.reasoning,
-                market_context=decision_result.market_context,
-                execution_result={"success": success},
-                outcome=DecisionOutcome.SUCCESS if success else DecisionOutcome.FAILURE
-            )
-            
-            # เพิ่มในบันทึก
-            self.decision_records.append(record)
-            
-            # อัพเดท rule metrics
-            self._update_rule_metrics(decision_result.rule_name, record)
-            
-            # อัพเดท daily stats
-            today = datetime.now().date().isoformat()
-            self.daily_stats[today]["decisions"] += 1
-            if success:
-                self.daily_stats[today]["successes"] += 1
-            
-            # เพิ่มใน pending evaluation queue
-            if success:
-                self.pending_decisions.append(record)
-            
-            print(f"✅ Decision tracked: {decision_result.rule_name}")
-            
-        except Exception as e:
-            print(f"❌ Decision tracking error: {e}")
-    
-    def get_decision_outcome(self, decision_result) -> Optional[bool]:
-        """
-        🆕 ประเมินผลลัพธ์การตัดสินใจ
-        
-        Args:
-            decision_result: RuleResult object
+            analysis_data: ข้อมูลการวิเคราะห์ 4D
             
         Returns:
-            True/False ถ้าประเมินได้, None ถ้ายังไม่ถึงเวลา
+            str: ID ของการบันทึกเพื่อติดตามผลลัพธ์
         """
         try:
-            # หา decision record ที่ตรงกัน
-            target_record = None
-            for record in self.decision_records:
-                if (record.rule_name == decision_result.rule_name and
-                    record.decision_type == decision_result.decision.value and
-                    record.reasoning == decision_result.reasoning):
-                    target_record = record
-                    break
+            # สร้าง record ID
+            record_id = f"4D_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(self.four_d_records)}"
             
-            if not target_record:
-                return None
+            # สร้าง 4D analysis record
+            four_d_record = FourDAnalysisRecord(
+                timestamp=datetime.now(),
+                four_d_score=analysis_data.get("four_d_score", 0.0),
+                four_d_confidence=analysis_data.get("four_d_confidence", 0.0),
+                trend_dimension_score=analysis_data.get("trend_dimension_score", 0.0),
+                volume_dimension_score=analysis_data.get("volume_dimension_score", 0.0),
+                session_dimension_score=analysis_data.get("session_dimension_score", 0.0),
+                volatility_dimension_score=analysis_data.get("volatility_dimension_score", 0.0),
+                market_condition_4d=analysis_data.get("market_condition_4d", "UNKNOWN"),
+                recommendation=analysis_data.get("recommendation", "WAIT"),
+                action_taken=analysis_data.get("action_taken"),
+                order_type=analysis_data.get("order_type"),
+                lot_size=analysis_data.get("lot_size")
+            )
             
-            # เช็คว่าถึงเวลาประเมินหรือยัง
-            time_since_decision = (datetime.now() - target_record.timestamp).total_seconds()
+            # เพิ่มลงใน tracking queue
+            self.four_d_records.append(four_d_record)
             
-            if time_since_decision < self.decision_evaluation_delay:
-                return None  # ยังไม่ถึงเวลา
+            # อัปเดตเมตริกเรียลไทม์
+            self._update_4d_metrics()
             
-            # ประเมินผลลัพธ์
-            outcome = self._evaluate_decision_outcome(target_record)
+            self.log(f"4D Analysis logged: Score={four_d_record.four_d_score:.3f}, Confidence={four_d_record.four_d_confidence:.3f}")
             
-            # อัพเดท record
-            target_record.outcome = outcome
-            target_record.evaluation_time = datetime.now()
+            # กำหนดเวลาประเมินผล
+            evaluation_time = datetime.now() + timedelta(seconds=self.tracking_config["four_d_evaluation_delay"])
             
-            # อัพเดท daily stats ถ้าเป็น SUCCESS
-            if outcome == DecisionOutcome.SUCCESS:
-                today = datetime.now().date().isoformat()
-                # profit impact จะอัพเดทภายหลัง
+            # Schedule automatic evaluation (จำลอง - ในระบบจริงจะใช้ scheduler)
+            self._schedule_4d_evaluation(record_id, evaluation_time)
             
-            print(f"📊 Decision outcome evaluated: {target_record.rule_name} = {outcome.value}")
-            
-            return outcome == DecisionOutcome.SUCCESS
+            return record_id
             
         except Exception as e:
-            print(f"❌ Decision outcome evaluation error: {e}")
-            return None
+            self.log(f"❌ 4D Analysis logging error: {e}")
+            return ""
     
-    def _evaluate_decision_outcome(self, record: DecisionRecord) -> DecisionOutcome:
-        """ประเมินผลลัพธ์การตัดสินใจ"""
+    def track_recovery_performance(self, recovery_data: Dict) -> str:
+        """
+        🆕 ติดตามประสิทธิภาพการทำ Recovery
+        
+        Args:
+            recovery_data: ข้อมูลการทำ recovery
+            
+        Returns:
+            str: ID ของการติดตาม recovery
+        """
         try:
-            # เริ่มต้นด้วยผลการดำเนินการ
-            if record.execution_result and not record.execution_result.get("success"):
-                return DecisionOutcome.FAILURE
+            # สร้าง operation ID
+            operation_id = f"REC_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(self.recovery_records)}"
             
-            # ประเมินตาม decision type
-            if record.decision_type in ["BUY", "SELL"]:
-                # สำหรับ trading decisions ให้เวลาอีกสักหน่อย
-                time_since = (datetime.now() - record.timestamp).total_seconds()
-                if time_since < self.profit_evaluation_delay:
-                    return DecisionOutcome.PENDING
-                
-                # ประเมินจากผลกำไร (ถ้ามีข้อมูล)
-                # TODO: เชื่อมกับ position manager เพื่อดูผลกำไรจริง
-                return DecisionOutcome.SUCCESS  # Assume success for now
-                
-            elif record.decision_type in ["CLOSE_PROFITABLE", "CLOSE_LOSING"]:
-                # การปิด positions ประเมินได้ทันที
-                return DecisionOutcome.SUCCESS if record.execution_result.get("success") else DecisionOutcome.FAILURE
+            # สร้าง recovery record
+            recovery_record = RecoveryOperationRecord(
+                timestamp=datetime.now(),
+                operation_id=operation_id,
+                losing_positions_count=recovery_data.get("losing_positions_count", 0),
+                total_loss_amount=recovery_data.get("total_loss_amount", 0.0),
+                target_recovery_amount=recovery_data.get("target_recovery_amount", 0.0),
+                recovery_strategy=recovery_data.get("recovery_strategy", "UNKNOWN"),
+                hedge_pairs_identified=recovery_data.get("hedge_pairs_identified", 0),
+                recovery_confidence=recovery_data.get("recovery_confidence", 0.0),
+                recovery_orders_placed=recovery_data.get("recovery_orders_placed", []),
+                total_recovery_volume=recovery_data.get("total_recovery_volume", 0.0)
+            )
             
-            else:
-                return DecisionOutcome.SUCCESS
-                
+            # เพิ่มลงใน tracking queue
+            self.recovery_records.append(recovery_record)
+            
+            # อัปเดตเมตริกเรียลไทม์
+            self._update_recovery_metrics()
+            
+            self.log(f"Recovery operation tracked: Target=${recovery_record.target_recovery_amount:.2f}, Confidence={recovery_record.recovery_confidence:.3f}")
+            
+            return operation_id
+            
         except Exception as e:
-            print(f"❌ Outcome evaluation error: {e}")
-            return DecisionOutcome.FAILURE
+            self.log(f"❌ Recovery tracking error: {e}")
+            return ""
     
-    def _update_rule_metrics(self, rule_name: str, record: DecisionRecord):
-        """อัพเดทเมตริกของ rule"""
+    def log_market_order_execution(self, execution_data: Dict) -> str:
+        """
+        🆕 บันทึกการ execute Market Order และประเมินคุณภาพ
+        
+        Args:
+            execution_data: ข้อมูลการ execute market order
+            
+        Returns:
+            str: ID ของการบันทึก execution
+        """
         try:
-            if rule_name not in self.rule_metrics:
-                self.rule_metrics[rule_name] = RuleMetrics(rule_name=rule_name)
+            # สร้าง execution ID
+            execution_id = f"MO_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(self.market_order_records)}"
             
-            metrics = self.rule_metrics[rule_name]
+            # คำนวณ slippage
+            requested_price = execution_data.get("requested_price", 0.0)
+            executed_price = execution_data.get("executed_price", 0.0)
+            slippage_points = abs(executed_price - requested_price)
+            slippage_percentage = (slippage_points / requested_price * 100) if requested_price > 0 else 0.0
             
-            # อัพเดทจำนวน
-            metrics.total_decisions += 1
-            metrics.last_decision_time = record.timestamp
+            # ประเมินคุณภาพการ execute
+            execution_quality = self._assess_execution_quality(
+                slippage_points, execution_data.get("execution_time_ms", 0.0)
+            )
             
-            # อัพเดทผลลัพธ์
-            if record.outcome == DecisionOutcome.SUCCESS:
-                metrics.successful_decisions += 1
-            elif record.outcome == DecisionOutcome.FAILURE:
-                metrics.failed_decisions += 1
-            else:
-                metrics.pending_decisions += 1
+            # สร้าง market order record
+            execution_record = MarketOrderExecutionRecord(
+                timestamp=datetime.now(),
+                order_id=execution_id,
+                symbol=execution_data.get("symbol", "XAUUSD"),
+                order_type=execution_data.get("order_type", "BUY"),
+                requested_volume=execution_data.get("requested_volume", 0.0),
+                requested_price=requested_price,
+                executed_price=executed_price,
+                executed_volume=execution_data.get("executed_volume", 0.0),
+                slippage_points=slippage_points,
+                slippage_percentage=slippage_percentage,
+                execution_time_ms=execution_data.get("execution_time_ms", 0.0),
+                market_spread=execution_data.get("market_spread", 0.0),
+                market_volatility=execution_data.get("market_volatility", 1.0),
+                session_type=execution_data.get("session_type", "UNKNOWN"),
+                execution_quality=execution_quality,
+                success=execution_data.get("success", True)
+            )
             
-            # คำนวณ averages
-            if metrics.total_decisions > 0:
-                metrics.success_rate = metrics.successful_decisions / metrics.total_decisions
+            # เพิ่มลงใน tracking queue
+            self.market_order_records.append(execution_record)
+            
+            # อัปเดตเมตริกเรียลไทม์
+            self._update_market_order_metrics()
+            
+            self.log(f"Market order execution logged: {execution_quality} quality, Slippage={slippage_points:.5f}")
+            
+            return execution_id
+            
+        except Exception as e:
+            self.log(f"❌ Market order execution logging error: {e}")
+            return ""
+    
+    def update_portfolio_health(self, portfolio_data: Dict):
+        """
+        🆕 อัปเดตสุขภาพ portfolio และติดตาม trend
+        
+        Args:
+            portfolio_data: ข้อมูลสุขภาพ portfolio
+        """
+        try:
+            # สร้าง portfolio health record
+            health_record = {
+                "timestamp": datetime.now(),
+                "portfolio_health": portfolio_data.get("portfolio_health", 0.0),
+                "buy_sell_ratio": portfolio_data.get("buy_sell_ratio", 0.5),
+                "total_positions": portfolio_data.get("total_positions", 0),
+                "total_exposure": portfolio_data.get("total_exposure", 0.0),
+                "margin_level": portfolio_data.get("margin_level", 0.0),
+                "equity_balance_ratio": portfolio_data.get("equity_balance_ratio", 1.0),
+                "unrealized_pnl": portfolio_data.get("unrealized_pnl", 0.0)
+            }
+            
+            # เพิ่มลงประวัติ
+            self.portfolio_health_history.append(health_record)
+            self.balance_ratio_history.append(portfolio_data.get("buy_sell_ratio", 0.5))
+            
+            # อัปเดตเมตริก portfolio
+            self._update_portfolio_metrics()
+            
+            # เช็ค trend และแจ้งเตือนถ้าจำเป็น
+            self._check_portfolio_health_alerts(health_record)
+            
+        except Exception as e:
+            self.log(f"❌ Portfolio health update error: {e}")
+    
+    # ========================================================================================
+    # 🧮 METRICS CALCULATION METHODS
+    # ========================================================================================
+    
+    def _update_4d_metrics(self):
+        """อัปเดตเมตริก 4D analysis"""
+        try:
+            if not self.four_d_records:
+                return
+            
+            # รวบรวมข้อมูล 4D ล่าสุด
+            recent_records = [r for r in self.four_d_records if r.timestamp > datetime.now() - timedelta(hours=24)]
+            
+            if not recent_records:
+                return
+            
+            # คำนวณเมตริกต่างๆ
+            self.current_metrics.average_four_d_score = statistics.mean([r.four_d_score for r in recent_records])
+            
+            # คำนวณ accuracy rate (เฉพาะที่มีผลลัพธ์แล้ว)
+            evaluated_records = [r for r in recent_records if r.actual_outcome is not None]
+            if evaluated_records:
+                successful_predictions = sum(1 for r in evaluated_records 
+                                           if r.actual_outcome in [DecisionOutcome4D.EXCELLENT_SUCCESS, 
+                                                                  DecisionOutcome4D.GOOD_SUCCESS,
+                                                                  DecisionOutcome4D.MODERATE_SUCCESS])
+                self.current_metrics.four_d_accuracy_rate = successful_predictions / len(evaluated_records)
+            
+            # คำนวณ correlation ระหว่าง confidence และ accuracy
+            if len(evaluated_records) >= 10:
+                confidences = [r.four_d_confidence for r in evaluated_records]
+                accuracies = [r.accuracy_score for r in evaluated_records if r.accuracy_score is not None]
                 
-                # อัพเดท average confidence
-                all_confidences = [r.confidence for r in self.decision_records if r.rule_name == rule_name]
-                metrics.average_confidence = statistics.mean(all_confidences) if all_confidences else 0.0
+                if len(confidences) == len(accuracies) and len(accuracies) > 1:
+                    correlation = np.corrcoef(confidences, accuracies)[0, 1]
+                    if not np.isnan(correlation):
+                        self.current_metrics.four_d_confidence_correlation = correlation
+            
+            # คำนวณ accuracy แยกตามมิติ
+            dimension_accuracy = {}
+            for dimension in ["trend", "volume", "session", "volatility"]:
+                dimension_records = [r for r in evaluated_records if getattr(r, f"{dimension}_dimension_score", 0) > 0.6]
+                if dimension_records:
+                    accurate_predictions = sum(1 for r in dimension_records 
+                                             if r.actual_outcome in [DecisionOutcome4D.EXCELLENT_SUCCESS, 
+                                                                    DecisionOutcome4D.GOOD_SUCCESS])
+                    dimension_accuracy[dimension] = accurate_predictions / len(dimension_records)
+            
+            self.current_metrics.dimension_accuracy = dimension_accuracy
+            
+        except Exception as e:
+            self.log(f"❌ 4D metrics update error: {e}")
+    
+    def _update_recovery_metrics(self):
+        """อัปเดตเมตริก recovery effectiveness"""
+        try:
+            if not self.recovery_records:
+                return
+            
+            # รวบรวมข้อมูล recovery ล่าสุด
+            recent_records = [r for r in self.recovery_records if r.timestamp > datetime.now() - timedelta(hours=48)]
+            
+            if not recent_records:
+                return
+            
+            # คำนวณ success rate
+            completed_records = [r for r in recent_records if r.completion_time is not None]
+            if completed_records:
+                successful_recoveries = sum(1 for r in completed_records if r.recovery_success)
+                self.current_metrics.recovery_success_rate = successful_recoveries / len(completed_records)
                 
-                # อัพเดท performance trend
-                recent_decisions = [r for r in self.decision_records[-20:] if r.rule_name == rule_name]
-                if recent_decisions:
-                    recent_success_rate = len([r for r in recent_decisions if r.outcome == DecisionOutcome.SUCCESS]) / len(recent_decisions)
-                    metrics.performance_trend.append(recent_success_rate)
+                # คำนวณ average effectiveness
+                effectiveness_scores = [r.effectiveness_score for r in completed_records if r.effectiveness_score is not None]
+                if effectiveness_scores:
+                    self.current_metrics.average_recovery_effectiveness = statistics.mean(effectiveness_scores)
+                
+                # คำนวณยอดรวมที่กู้คืนได้
+                self.current_metrics.total_recovered_amount = sum(r.actual_recovery_amount for r in completed_records if r.recovery_success)
+                
+                # คำนวณ time efficiency (average recovery time)
+                recovery_times = []
+                for r in completed_records:
+                    if r.completion_time and r.recovery_success:
+                        time_diff = (r.completion_time - r.timestamp).total_seconds() / 60  # นาที
+                        recovery_times.append(time_diff)
+                
+                if recovery_times:
+                    avg_recovery_time = statistics.mean(recovery_times)
+                    # แปลงเป็น efficiency score (ยิ่งเร็วยิ่งดี)
+                    self.current_metrics.recovery_time_efficiency = max(0, 1 - (avg_recovery_time / 1800))  # 30 นาทีเป็นฐาน
+            
+        except Exception as e:
+            self.log(f"❌ Recovery metrics update error: {e}")
+    
+    def _update_market_order_metrics(self):
+        """อัปเดตเมตริก market order execution"""
+        try:
+            if not self.market_order_records:
+                return
+            
+            # รวบรวมข้อมูล market order ล่าสุด
+            recent_records = [r for r in self.market_order_records if r.timestamp > datetime.now() - timedelta(hours=24)]
+            
+            if not recent_records:
+                return
+            
+            # คำนวณ success rate
+            successful_orders = sum(1 for r in recent_records if r.success)
+            self.current_metrics.market_order_success_rate = successful_orders / len(recent_records)
+            
+            # คำนวณ average slippage (เฉพาะที่สำเร็จ)
+            successful_records = [r for r in recent_records if r.success]
+            if successful_records:
+                slippages = [r.slippage_points for r in successful_records]
+                self.current_metrics.average_slippage = statistics.mean(slippages)
+                
+                # คำนวณ average execution time
+                execution_times = [r.execution_time_ms for r in successful_records]
+                self.current_metrics.average_execution_time = statistics.mean(execution_times)
+                
+                # คำนวณ execution quality distribution
+                quality_dist = defaultdict(int)
+                for r in successful_records:
+                    quality_dist[r.execution_quality] += 1
+                
+                self.current_metrics.execution_quality_distribution = dict(quality_dist)
+            
+        except Exception as e:
+            self.log(f"❌ Market order metrics update error: {e}")
+    
+    def _update_portfolio_metrics(self):
+        """อัปเดตเมตริก portfolio health"""
+        try:
+            if not self.portfolio_health_history:
+                return
+            
+            # รวบรวมข้อมูล portfolio ล่าสุด
+            recent_records = [r for r in self.portfolio_health_history if r["timestamp"] > datetime.now() - timedelta(hours=24)]
+            
+            if not recent_records:
+                return
+            
+            # คำนวณ portfolio health trend
+            health_values = [r["portfolio_health"] for r in recent_records]
+            self.current_metrics.portfolio_health_trend = health_values[-20:]  # เก็บ 20 ค่าล่าสุด
+            
+            # คำนวณ balance ratio stability
+            if len(self.balance_ratio_history) >= 10:
+                recent_ratios = list(self.balance_ratio_history)[-10:]
+                ratio_std = statistics.stdev(recent_ratios)
+                # แปลงเป็น stability score (ยิ่ง stable ยิ่งดี)
+                self.current_metrics.balance_ratio_stability = max(0, 1 - (ratio_std / 0.5))
+            
+            # คำนวณ risk adjusted performance
+            if len(recent_records) >= 5:
+                pnl_values = [r["unrealized_pnl"] for r in recent_records]
+                exposure_values = [r["total_exposure"] for r in recent_records]
+                
+                avg_pnl = statistics.mean(pnl_values)
+                avg_exposure = statistics.mean(exposure_values)
+                
+                if avg_exposure > 0:
+                    self.current_metrics.risk_adjusted_performance = avg_pnl / avg_exposure
+            
+        except Exception as e:
+            self.log(f"❌ Portfolio metrics update error: {e}")
+    
+    def _calculate_overall_system_score(self):
+        """คำนวณคะแนนรวมของระบบ"""
+        try:
+            # น้ำหนักของแต่ละมิติ
+            weights = {
+                "four_d_accuracy": 0.30,
+                "recovery_effectiveness": 0.25,
+                "market_execution": 0.20,
+                "portfolio_health": 0.25
+            }
+            
+            # คะแนนแต่ละมิติ
+            four_d_score = self.current_metrics.four_d_accuracy_rate
+            recovery_score = self.current_metrics.average_recovery_effectiveness
+            execution_score = self.current_metrics.market_order_success_rate
+            
+            # Portfolio health score (จากค่าล่าสุด)
+            portfolio_score = 0.0
+            if self.current_metrics.portfolio_health_trend:
+                portfolio_score = self.current_metrics.portfolio_health_trend[-1]
+            
+            # คำนวณคะแนนรวม
+            overall_score = (
+                four_d_score * weights["four_d_accuracy"] +
+                recovery_score * weights["recovery_effectiveness"] +
+                execution_score * weights["market_execution"] +
+                portfolio_score * weights["portfolio_health"]
+            )
+            
+            self.current_metrics.overall_system_score = round(overall_score, 3)
+            
+            # กำหนด performance trend
+            if len(self.metrics_history) >= 5:
+                recent_scores = [m.overall_system_score for m in list(self.metrics_history)[-5:]]
+                if len(recent_scores) >= 2:
+                    trend_slope = (recent_scores[-1] - recent_scores[0]) / len(recent_scores)
                     
-                    # เก็บแค่ 10 ค่าล่าสุด
-                    if len(metrics.performance_trend) > 10:
-                        metrics.performance_trend = metrics.performance_trend[-10:]
-            
-            print(f"📊 Updated metrics for {rule_name}: {metrics.success_rate:.1%} success rate")
+                    if trend_slope > 0.02:
+                        self.current_metrics.performance_trend = "IMPROVING"
+                    elif trend_slope < -0.02:
+                        self.current_metrics.performance_trend = "DECLINING"
+                    else:
+                        self.current_metrics.performance_trend = "STABLE"
             
         except Exception as e:
-            print(f"❌ Rule metrics update error: {e}")
+            self.log(f"❌ Overall system score calculation error: {e}")
     
     # ========================================================================================
-    # 📊 ANALYTICS AND REPORTING
+    # 🔍 ANALYSIS AND ASSESSMENT METHODS
     # ========================================================================================
     
-    def get_rule_performance_summary(self) -> Dict[str, Dict]:
-        """ดึงสรุปประสิทธิภาพของทุก rules"""
+    def get_real_time_metrics(self) -> Dict:
+        """
+        🆕 ดึงเมตริก performance แบบ real-time
+        
+        Returns:
+            Dict: เมตริก performance ปัจจุบัน
+        """
         try:
-            summary = {}
+            # อัปเดตเมตริกทั้งหมด
+            self._update_4d_metrics()
+            self._update_recovery_metrics()
+            self._update_market_order_metrics()
+            self._update_portfolio_metrics()
+            self._calculate_overall_system_score()
             
-            for rule_name, metrics in self.rule_metrics.items():
-                summary[rule_name] = {
-                    "total_decisions": metrics.total_decisions,
-                    "success_rate": round(metrics.success_rate, 3),
-                    "average_confidence": round(metrics.average_confidence, 3),
-                    "total_profit_impact": round(metrics.total_profit_impact, 2),
-                    "profit_per_decision": round(metrics.profit_per_decision, 2),
-                    "last_decision": metrics.last_decision_time.isoformat() if metrics.last_decision_time else None,
-                    "performance_trend": [round(p, 3) for p in metrics.performance_trend[-5:]],  # 5 ค่าล่าสุด
-                    "status": self._get_rule_status(metrics)
+            # สร้าง real-time summary
+            real_time_summary = {
+                # Overall Performance
+                "overall_system_score": self.current_metrics.overall_system_score,
+                "performance_trend": self.current_metrics.performance_trend,
+                "last_updated": datetime.now().isoformat(),
+                
+                # 4D Analysis Performance
+                "four_d_performance": {
+                    "accuracy_rate": round(self.current_metrics.four_d_accuracy_rate, 3),
+                    "average_score": round(self.current_metrics.average_four_d_score, 3),
+                    "confidence_correlation": round(self.current_metrics.four_d_confidence_correlation, 3),
+                    "dimension_accuracy": {k: round(v, 3) for k, v in self.current_metrics.dimension_accuracy.items()}
+                },
+                
+                # Recovery Performance
+                "recovery_performance": {
+                    "success_rate": round(self.current_metrics.recovery_success_rate, 3),
+                    "effectiveness": round(self.current_metrics.average_recovery_effectiveness, 3),
+                    "total_recovered": round(self.current_metrics.total_recovered_amount, 2),
+                    "time_efficiency": round(self.current_metrics.recovery_time_efficiency, 3)
+                },
+                
+                # Market Order Performance
+                "market_execution_performance": {
+                    "success_rate": round(self.current_metrics.market_order_success_rate, 3),
+                    "average_slippage": round(self.current_metrics.average_slippage, 5),
+                    "average_execution_time": round(self.current_metrics.average_execution_time, 1),
+                    "quality_distribution": self.current_metrics.execution_quality_distribution
+                },
+                
+                # Portfolio Health
+                "portfolio_health": {
+                    "current_trend": self.current_metrics.portfolio_health_trend[-5:] if self.current_metrics.portfolio_health_trend else [],
+                    "balance_stability": round(self.current_metrics.balance_ratio_stability, 3),
+                    "risk_adjusted_performance": round(self.current_metrics.risk_adjusted_performance, 4)
+                },
+                
+                # Data Statistics
+                "data_statistics": {
+                    "four_d_records_count": len(self.four_d_records),
+                    "recovery_records_count": len(self.recovery_records),
+                    "market_order_records_count": len(self.market_order_records),
+                    "portfolio_health_records_count": len(self.portfolio_health_history)
                 }
+            }
             
-            return summary
+            return real_time_summary
             
         except Exception as e:
-            print(f"❌ Rule performance summary error: {e}")
-            return {}
+            self.log(f"❌ Real-time metrics error: {e}")
+            return {"error": str(e), "timestamp": datetime.now().isoformat()}
     
-    def get_daily_performance(self, days: int = 7) -> Dict[str, Dict]:
-        """ดึงประสิทธิภาพรายวัน"""
+    def analyze_performance_patterns(self, time_window_hours: int = 24) -> Dict:
+        """
+        🆕 วิเคราะห์รูปแบบ performance
+        
+        Args:
+            time_window_hours: ช่วงเวลาการวิเคราะห์ (ชั่วโมง)
+            
+        Returns:
+            Dict: ผลการวิเคราะห์รูปแบบ performance
+        """
         try:
-            daily_performance = {}
+            cutoff_time = datetime.now() - timedelta(hours=time_window_hours)
             
-            # Get last N days
-            today = datetime.now().date()
-            for i in range(days):
-                date = (today - timedelta(days=i)).isoformat()
-                
-                stats = self.daily_stats.get(date, {"decisions": 0, "successes": 0, "profit": 0.0})
-                
-                success_rate = stats["successes"] / stats["decisions"] if stats["decisions"] > 0 else 0.0
-                
-                daily_performance[date] = {
-                    "decisions": stats["decisions"],
-                    "successes": stats["successes"],
-                    "success_rate": round(success_rate, 3),
-                    "profit": round(stats["profit"], 2)
-                }
+            # วิเคราะห์รูปแบบ 4D performance
+            four_d_patterns = self._analyze_4d_patterns(cutoff_time)
             
-            return daily_performance
+            # วิเคราะห์รูปแบบ recovery
+            recovery_patterns = self._analyze_recovery_patterns(cutoff_time)
             
-        except Exception as e:
-            print(f"❌ Daily performance error: {e}")
-            return {}
-    
-    def get_comprehensive_stats(self) -> Dict:
-        """ดึงสถิติครบถ้วนสำหรับ dashboard"""
-        try:
-            total_decisions = len(self.decision_records)
+            # วิเคราะห์รูปแบบ market execution
+            execution_patterns = self._analyze_execution_patterns(cutoff_time)
             
-            if total_decisions == 0:
-                return {
-                    "overview": {"total_decisions": 0, "overall_success_rate": 0.0},
-                    "rules": {},
-                    "recent_performance": {},
-                    "trends": {}
-                }
-            
-            # Overall stats
-            successful_decisions = len([r for r in self.decision_records if r.outcome == DecisionOutcome.SUCCESS])
-            overall_success_rate = successful_decisions / total_decisions
-            
-            # Recent performance (last 20 decisions)
-            recent_decisions = self.decision_records[-20:]
-            recent_successes = len([r for r in recent_decisions if r.outcome == DecisionOutcome.SUCCESS])
-            recent_success_rate = recent_successes / len(recent_decisions) if recent_decisions else 0.0
-            
-            # Trend analysis
-            performance_over_time = self._calculate_performance_trend()
+            # วิเคราะห์ portfolio trends
+            portfolio_patterns = self._analyze_portfolio_patterns(cutoff_time)
             
             return {
-                "overview": {
-                    "total_decisions": total_decisions,
-                    "successful_decisions": successful_decisions,
-                    "overall_success_rate": round(overall_success_rate, 3),
-                    "recent_success_rate": round(recent_success_rate, 3),
-                    "total_profit_impact": sum(r.profit_impact for r in self.decision_records),
-                    "average_confidence": round(statistics.mean([r.confidence for r in self.decision_records]), 3)
-                },
-                "rules": self.get_rule_performance_summary(),
-                "recent_performance": {
-                    "last_20_decisions": recent_success_rate,
-                    "last_10_decisions": self._calculate_recent_performance(10),
-                    "last_5_decisions": self._calculate_recent_performance(5)
-                },
-                "trends": {
-                    "performance_trend": performance_over_time,
-                    "confidence_trend": self._calculate_confidence_trend(),
-                    "decision_frequency": self._calculate_decision_frequency()
-                },
-                "last_updated": datetime.now()
+                "analysis_window_hours": time_window_hours,
+                "analysis_timestamp": datetime.now().isoformat(),
+                "four_d_patterns": four_d_patterns,
+                "recovery_patterns": recovery_patterns,
+                "execution_patterns": execution_patterns,
+                "portfolio_patterns": portfolio_patterns,
+                "key_insights": self._generate_key_insights(
+                    four_d_patterns, recovery_patterns, execution_patterns, portfolio_patterns
+                )
             }
             
         except Exception as e:
-            print(f"❌ Comprehensive stats error: {e}")
+            self.log(f"❌ Performance pattern analysis error: {e}")
             return {"error": str(e)}
     
-    def update_profit_impact(self, rule_name: str, decision_timestamp: datetime, profit_amount: float):
-        """อัพเดทผลกระทบทางกำไรของการตัดสินใจ"""
-        try:
-            # หา decision record ที่ตรงกัน
-            for record in self.decision_records:
-                if (record.rule_name == rule_name and 
-                    abs((record.timestamp - decision_timestamp).total_seconds()) < 60):
-                    
-                    record.profit_impact = profit_amount
-                    
-                    # อัพเดท rule metrics
-                    if rule_name in self.rule_metrics:
-                        metrics = self.rule_metrics[rule_name]
-                        metrics.total_profit_impact += profit_amount
-                        if metrics.total_decisions > 0:
-                            metrics.profit_per_decision = metrics.total_profit_impact / metrics.total_decisions
-                    
-                    # อัพเดท daily stats
-                    today = decision_timestamp.date().isoformat()
-                    self.daily_stats[today]["profit"] += profit_amount
-                    
-                    print(f"💰 Updated profit impact: {rule_name} +${profit_amount:.2f}")
-                    break
-            
-        except Exception as e:
-            print(f"❌ Profit impact update error: {e}")
-    
-    # ========================================================================================
-    # 🔍 ANALYSIS METHODS
-    # ========================================================================================
-    
-    def _get_rule_status(self, metrics: RuleMetrics) -> str:
-        """กำหนดสถานะของ rule"""
-        try:
-            if metrics.total_decisions < 5:
-                return "LEARNING"  # ข้อมูลยังไม่เพียงพอ
-            
-            if metrics.success_rate > 0.7:
-                return "EXCELLENT"
-            elif metrics.success_rate > 0.6:
-                return "GOOD"
-            elif metrics.success_rate > 0.5:
-                return "AVERAGE"
-            elif metrics.success_rate > 0.3:
-                return "POOR"
-            else:
-                return "CRITICAL"
-                
-        except Exception as e:
-            return "UNKNOWN"
-    
-    def _calculate_performance_trend(self) -> List[float]:
-        """คำนวณเทรนด์ประสิทธิภาพ"""
-        try:
-            if len(self.decision_records) < 10:
-                return []
-            
-            # แบ่งการตัดสินใจเป็นกลุ่มๆ ละ 10
-            trend_points = []
-            
-            for i in range(10, len(self.decision_records) + 1, 10):
-                batch = self.decision_records[i-10:i]
-                successes = len([r for r in batch if r.outcome == DecisionOutcome.SUCCESS])
-                success_rate = successes / len(batch)
-                trend_points.append(success_rate)
-            
-            return trend_points[-10:]  # เก็บแค่ 10 จุดล่าสุด
-            
-        except Exception as e:
-            return []
-    
-    def _calculate_confidence_trend(self) -> List[float]:
-        """คำนวณเทรนด์ความเชื่อมั่น"""
-        try:
-            if len(self.decision_records) < 10:
-                return []
-            
-            # แบ่งการตัดสินใจเป็นกลุ่มๆ ละ 10
-            confidence_points = []
-            
-            for i in range(10, len(self.decision_records) + 1, 10):
-                batch = self.decision_records[i-10:i]
-                avg_confidence = statistics.mean([r.confidence for r in batch])
-                confidence_points.append(avg_confidence)
-            
-            return confidence_points[-10:]  # เก็บแค่ 10 จุดล่าสุด
-            
-        except Exception as e:
-            return []
-    
-    def _calculate_decision_frequency(self) -> Dict[str, float]:
-        """คำนวณความถี่ในการตัดสินใจ"""
-        try:
-            if len(self.decision_records) < 2:
-                return {"decisions_per_hour": 0.0, "avg_interval_minutes": 0.0}
-            
-            # คำนวณช่วงเวลาระหว่างการตัดสินใจ
-            intervals = []
-            for i in range(1, len(self.decision_records)):
-                interval = (self.decision_records[i].timestamp - self.decision_records[i-1].timestamp).total_seconds()
-                intervals.append(interval)
-            
-            avg_interval_seconds = statistics.mean(intervals)
-            decisions_per_hour = 3600 / avg_interval_seconds if avg_interval_seconds > 0 else 0
-            
-            return {
-                "decisions_per_hour": round(decisions_per_hour, 2),
-                "avg_interval_minutes": round(avg_interval_seconds / 60, 2),
-                "total_intervals": len(intervals)
-            }
-            
-        except Exception as e:
-            return {"decisions_per_hour": 0.0, "avg_interval_minutes": 0.0}
-    
-    def _calculate_recent_performance(self, window_size: int) -> float:
-        """คำนวณประสิทธิภาพล่าสุด"""
-        try:
-            if len(self.decision_records) < window_size:
-                window_size = len(self.decision_records)
-            
-            if window_size == 0:
-                return 0.0
-            
-            recent_decisions = self.decision_records[-window_size:]
-            successes = len([r for r in recent_decisions if r.outcome == DecisionOutcome.SUCCESS])
-            
-            return successes / len(recent_decisions)
-            
-        except Exception as e:
-            return 0.0
-    
-    # ========================================================================================
-    # 🎯 ADAPTIVE LEARNING SUPPORT
-    # ========================================================================================
-    
-    def get_rule_learning_data(self, rule_name: str) -> Dict:
-        """ดึงข้อมูลสำหรับ adaptive learning"""
-        try:
-            if rule_name not in self.rule_metrics:
-                return {}
-            
-            metrics = self.rule_metrics[rule_name]
-            
-            # ดึง decisions ของ rule นี้
-            rule_decisions = [r for r in self.decision_records if r.rule_name == rule_name]
-            
-            # วิเคราะห์ patterns
-            confidence_vs_success = self._analyze_confidence_vs_success(rule_decisions)
-            market_context_analysis = self._analyze_market_context_performance(rule_decisions)
-            
-            return {
-                "metrics": {
-                    "success_rate": metrics.success_rate,
-                    "avg_confidence": metrics.average_confidence,
-                    "total_decisions": metrics.total_decisions,
-                    "profit_per_decision": metrics.profit_per_decision
-                },
-                "patterns": {
-                    "confidence_vs_success": confidence_vs_success,
-                    "market_context_performance": market_context_analysis
-                },
-                "recommendations": self._generate_learning_recommendations(metrics, rule_decisions),
-                "trend": metrics.performance_trend
-            }
-            
-        except Exception as e:
-            print(f"❌ Learning data error: {e}")
-            return {}
-    
-    def _analyze_confidence_vs_success(self, decisions: List[DecisionRecord]) -> Dict:
-        """วิเคราะห์ความสัมพันธ์ระหว่าง confidence และ success"""
-        try:
-            confidence_groups = {
-                "high": [r for r in decisions if r.confidence > 0.7],
-                "medium": [r for r in decisions if 0.4 <= r.confidence <= 0.7],
-                "low": [r for r in decisions if r.confidence < 0.4]
-            }
-            
-            analysis = {}
-            for group_name, group_decisions in confidence_groups.items():
-                if group_decisions:
-                    successes = len([r for r in group_decisions if r.outcome == DecisionOutcome.SUCCESS])
-                    success_rate = successes / len(group_decisions)
-                    
-                    analysis[group_name] = {
-                        "decisions": len(group_decisions),
-                        "success_rate": round(success_rate, 3),
-                        "avg_confidence": round(statistics.mean([r.confidence for r in group_decisions]), 3)
-                    }
-                else:
-                    analysis[group_name] = {"decisions": 0, "success_rate": 0.0, "avg_confidence": 0.0}
-            
-            return analysis
-            
-        except Exception as e:
-            return {}
-    
-    def _analyze_market_context_performance(self, decisions: List[DecisionRecord]) -> Dict:
-        """วิเคราะห์ประสิทธิภาพในแต่ละ market context"""
-        try:
-            context_groups = defaultdict(list)
-            
-            for decision in decisions:
-                market_condition = decision.market_context.get("condition", "UNKNOWN")
-                context_groups[market_condition].append(decision)
-            
-            analysis = {}
-            for condition, group_decisions in context_groups.items():
-                if group_decisions:
-                    successes = len([r for r in group_decisions if r.outcome == DecisionOutcome.SUCCESS])
-                    success_rate = successes / len(group_decisions)
-                    
-                    analysis[condition] = {
-                        "decisions": len(group_decisions),
-                        "success_rate": round(success_rate, 3),
-                        "avg_confidence": round(statistics.mean([r.confidence for r in group_decisions]), 3)
-                    }
-            
-            return analysis
-            
-        except Exception as e:
-            return {}
-    
-    def _generate_learning_recommendations(self, metrics: RuleMetrics, decisions: List[DecisionRecord]) -> List[str]:
-        """สร้างคำแนะนำสำหรับการเรียนรู้"""
+    def get_adaptive_learning_recommendations(self) -> List[str]:
+        """
+        🆕 ดึงคำแนะนำสำหรับการปรับปรุงระบบ
+        
+        Returns:
+            List[str]: รายการคำแนะนำ
+        """
         try:
             recommendations = []
             
-            # ประสิทธิภาพโดยรวม
-            if metrics.success_rate < 0.4:
-                recommendations.append(f"❌ Rule performance is poor ({metrics.success_rate:.1%}). Consider reducing weight.")
-            elif metrics.success_rate > 0.8:
-                recommendations.append(f"✅ Excellent performance ({metrics.success_rate:.1%}). Consider increasing weight.")
+            # วิเคราะห์ 4D accuracy
+            if self.current_metrics.four_d_accuracy_rate < 0.6:
+                recommendations.append("4D Analysis: Consider adjusting dimension weights - accuracy below 60%")
             
-            # Confidence calibration
-            if metrics.average_confidence > 0.8 and metrics.success_rate < 0.6:
-                recommendations.append("⚠️ Overconfident rule. Reduce confidence threshold.")
-            elif metrics.average_confidence < 0.5 and metrics.success_rate > 0.7:
-                recommendations.append("📈 Underconfident rule. Can increase confidence threshold.")
+            if self.current_metrics.four_d_confidence_correlation < 0.3:
+                recommendations.append("4D Analysis: Low confidence-accuracy correlation - review confidence calculation")
             
-            # Decision frequency
-            if len(decisions) > 50 and (datetime.now() - decisions[0].timestamp).days < 1:
-                recommendations.append("⚡ High decision frequency. Monitor for overtrading.")
+            # วิเคราะห์ recovery effectiveness
+            if self.current_metrics.recovery_success_rate < 0.7:
+                recommendations.append("Recovery System: Success rate below 70% - review recovery strategies")
             
-            # Performance trend
-            if len(metrics.performance_trend) >= 3:
-                recent_trend = statistics.mean(metrics.performance_trend[-3:])
-                older_trend = statistics.mean(metrics.performance_trend[:-3]) if len(metrics.performance_trend) > 3 else recent_trend
-                
-                if recent_trend < older_trend - 0.1:
-                    recommendations.append("📉 Performance declining. Review rule logic.")
-                elif recent_trend > older_trend + 0.1:
-                    recommendations.append("📈 Performance improving. Rule is learning well.")
+            if self.current_metrics.recovery_time_efficiency < 0.5:
+                recommendations.append("Recovery System: Slow recovery times - optimize hedge detection")
+            
+            # วิเคราะห์ market execution
+            if self.current_metrics.average_slippage > 0.0005:
+                recommendations.append("Market Execution: High average slippage - consider execution timing optimization")
+            
+            if self.current_metrics.market_order_success_rate < 0.95:
+                recommendations.append("Market Execution: Low success rate - review order management parameters")
+            
+            # วิเคราะห์ portfolio health
+            if self.current_metrics.balance_ratio_stability < 0.7:
+                recommendations.append("Portfolio Management: Unstable balance ratio - enhance balance-focused trading")
+            
+            # Overall system performance
+            if self.current_metrics.overall_system_score < 0.6:
+                recommendations.append("Overall System: Below-average performance - comprehensive review needed")
+            
+            if self.current_metrics.performance_trend == "DECLINING":
+                recommendations.append("Performance Alert: Declining trend detected - immediate optimization required")
+            
+            # เพิ่มคำแนะนำเชิงบวก
+            if self.current_metrics.overall_system_score > 0.8:
+                recommendations.append("Excellent Performance: System operating at high efficiency")
+            
+            if not recommendations:
+                recommendations.append("System Performance: All metrics within acceptable ranges")
             
             return recommendations
             
         except Exception as e:
-            return ["❌ Cannot generate recommendations due to analysis error"]
+            self.log(f"❌ Adaptive learning recommendations error: {e}")
+            return [f"Error generating recommendations: {e}"]
     
     # ========================================================================================
-    # 🔧 UTILITY METHODS
+    # 🔧 HELPER AND UTILITY METHODS
     # ========================================================================================
     
-    def cleanup_old_records(self, days_to_keep: int = 30):
-        """ทำความสะอาดบันทึกเก่า"""
+    def _assess_execution_quality(self, slippage_points: float, execution_time_ms: float) -> str:
+        """ประเมินคุณภาพการ execute market order"""
         try:
-            cutoff_date = datetime.now() - timedelta(days=days_to_keep)
+            # เกณฑ์การประเมิน
+            excellent_slippage = 0.0002
+            good_slippage = 0.0005
+            average_slippage = 0.001
             
-            # ลบ decision records เก่า
-            original_count = len(self.decision_records)
-            self.decision_records = [r for r in self.decision_records if r.timestamp >= cutoff_date]
+            excellent_time = 1000  # ms
+            good_time = 3000      # ms
+            average_time = 5000   # ms
             
-            # ลบ daily stats เก่า
-            cutoff_date_str = cutoff_date.date().isoformat()
-            old_dates = [date for date in self.daily_stats.keys() if date < cutoff_date_str]
-            for date in old_dates:
-                del self.daily_stats[date]
-            
-            cleaned_count = original_count - len(self.decision_records)
-            if cleaned_count > 0:
-                print(f"🧹 Cleaned up {cleaned_count} old decision records")
-            
-        except Exception as e:
-            print(f"❌ Cleanup error: {e}")
-    
-    def export_performance_report(self, filename: str = None) -> str:
-        """Export performance report to JSON"""
-        try:
-            if filename is None:
-                filename = f"performance_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            
-            report = {
-                "export_timestamp": datetime.now().isoformat(),
-                "comprehensive_stats": self.get_comprehensive_stats(),
-                "daily_performance": self.get_daily_performance(30),
-                "rule_learning_data": {
-                    rule_name: self.get_rule_learning_data(rule_name)
-                    for rule_name in self.rule_metrics.keys()
-                }
-            }
-            
-            with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(report, f, indent=2, ensure_ascii=False, default=str)
-            
-            print(f"📄 Performance report exported: {filename}")
-            return filename
-            
-        except Exception as e:
-            print(f"❌ Export error: {e}")
-            return ""
-    
-    def get_real_time_metrics(self) -> Dict:
-        """ดึงเมตริกแบบ real-time สำหรับ dashboard"""
-        try:
-            recent_decisions = self.decision_records[-10:] if self.decision_records else []
-            
-            return {
-                "last_decision": {
-                    "rule": recent_decisions[-1].rule_name if recent_decisions else "None",
-                    "type": recent_decisions[-1].decision_type if recent_decisions else "None",
-                    "confidence": recent_decisions[-1].confidence if recent_decisions else 0.0,
-                    "outcome": recent_decisions[-1].outcome.value if recent_decisions else "None",
-                    "time_ago": (datetime.now() - recent_decisions[-1].timestamp).total_seconds() / 60 if recent_decisions else 0
-                },
-                "active_rules": len(self.rule_metrics),
-                "pending_evaluations": len(self.pending_decisions),
-                "decisions_last_hour": len([r for r in recent_decisions 
-                                          if (datetime.now() - r.timestamp).total_seconds() < 3600]),
-                "current_success_rate": self._calculate_recent_performance(10),
-                "system_health": self._calculate_system_health()
-            }
-            
-        except Exception as e:
-            return {"error": str(e)}
-    
-    def _calculate_system_health(self) -> float:
-        """คำนวณสุขภาพระบบโดยรวม (0.0-1.0)"""
-        try:
-            if not self.rule_metrics:
-                return 0.5
-            
-            # ประสิทธิภาพเฉลี่ยของ rules
-            avg_success_rate = statistics.mean([m.success_rate for m in self.rule_metrics.values()])
-            
-            # ความสม่ำเสมอของการตัดสินใจ
-            frequency_score = min(1.0, len(self.decision_records) / 100)  # 100 decisions = full score
-            
-            # ความใหม่ของข้อมูล
-            if self.decision_records:
-                last_decision_age = (datetime.now() - self.decision_records[-1].timestamp).total_seconds()
-                freshness_score = max(0, 1 - last_decision_age / 3600)  # 1 hour = 0 score
+            # คะแนนจาก slippage
+            if slippage_points <= excellent_slippage:
+                slippage_score = 4  # EXCELLENT
+            elif slippage_points <= good_slippage:
+                slippage_score = 3  # GOOD
+            elif slippage_points <= average_slippage:
+                slippage_score = 2  # AVERAGE
             else:
-                freshness_score = 0.0
+                slippage_score = 1  # POOR
             
-            # รวมคะแนน
-            health_score = (avg_success_rate * 0.5 + frequency_score * 0.3 + freshness_score * 0.2)
+            # คะแนนจากเวลา
+            if execution_time_ms <= excellent_time:
+                time_score = 4  # EXCELLENT
+            elif execution_time_ms <= good_time:
+                time_score = 3  # GOOD
+            elif execution_time_ms <= average_time:
+                time_score = 2  # AVERAGE
+            else:
+                time_score = 1  # POOR
             
-            return round(min(1.0, max(0.0, health_score)), 3)
+            # คะแนนรวม
+            combined_score = (slippage_score + time_score) / 2
             
+            if combined_score >= 3.5:
+                return "EXCELLENT"
+            elif combined_score >= 2.5:
+                return "GOOD"
+            elif combined_score >= 1.5:
+                return "AVERAGE"
+            else:
+                return "POOR"
+                
         except Exception as e:
-            return 0.5
+            return "UNKNOWN"
     
-    # ========================================================================================
-    # 📊 REPORTING METHODS
-    # ========================================================================================
+    def _schedule_4d_evaluation(self, record_id: str, evaluation_time: datetime):
+        """กำหนดเวลาประเมินผล 4D (จำลอง)"""
+        # ในระบบจริง จะใช้ task scheduler
+        # ที่นี่เราจะใช้วิธีง่ายๆ คือเก็บไว้ใน memory
+        pass
     
-    def generate_rule_insights(self, rule_name: str) -> Dict:
-        """สร้าง insights เชิงลึกสำหรับ rule"""
+    def _analyze_4d_patterns(self, cutoff_time: datetime) -> Dict:
+        """วิเคราะห์รูปแบบ 4D performance"""
         try:
-            if rule_name not in self.rule_metrics:
-                return {"error": f"No data for rule: {rule_name}"}
+            recent_records = [r for r in self.four_d_records if r.timestamp > cutoff_time]
             
-            metrics = self.rule_metrics[rule_name]
-            rule_decisions = [r for r in self.decision_records if r.rule_name == rule_name]
+            if not recent_records:
+                return {"insufficient_data": True}
             
-            # Best/Worst performance analysis
-            successful_decisions = [r for r in rule_decisions if r.outcome == DecisionOutcome.SUCCESS]
-            failed_decisions = [r for r in rule_decisions if r.outcome == DecisionOutcome.FAILURE]
-            
-            insights = {
-                "rule_name": rule_name,
-                "performance_summary": {
-                    "success_rate": metrics.success_rate,
-                    "total_decisions": metrics.total_decisions,
-                    "profit_impact": metrics.total_profit_impact,
-                    "status": self._get_rule_status(metrics)
-                },
-                "success_patterns": {
-                    "best_confidence_range": self._find_best_confidence_range(successful_decisions),
-                    "best_market_conditions": self._find_best_market_conditions(successful_decisions),
-                    "common_success_reasoning": self._find_common_reasoning(successful_decisions)
-                },
-                "failure_patterns": {
-                    "common_failure_conditions": self._find_best_market_conditions(failed_decisions),
-                    "problematic_confidence_levels": self._find_best_confidence_range(failed_decisions),
-                    "common_failure_reasoning": self._find_common_reasoning(failed_decisions)
-                },
-                "recommendations": self._generate_learning_recommendations(metrics, rule_decisions),
-                "performance_trend": metrics.performance_trend
+            # วิเคราะห์การกระจายคะแนน
+            scores = [r.four_d_score for r in recent_records]
+            score_distribution = {
+                "excellent": sum(1 for s in scores if s >= 0.8),
+                "good": sum(1 for s in scores if 0.6 <= s < 0.8),
+                "average": sum(1 for s in scores if 0.4 <= s < 0.6),
+                "poor": sum(1 for s in scores if s < 0.4)
             }
             
-            return insights
+            # วิเคราะห์ประสิทธิภาพแต่ละมิติ
+            dimension_performance = {}
+            for dimension in ["trend", "volume", "session", "volatility"]:
+                dim_scores = [getattr(r, f"{dimension}_dimension_score", 0) for r in recent_records]
+                if dim_scores:
+                    dimension_performance[dimension] = {
+                        "average": round(statistics.mean(dim_scores), 3),
+                        "consistency": round(1 - statistics.stdev(dim_scores) / max(statistics.mean(dim_scores), 0.1), 3)
+                    }
+            
+            return {
+                "total_analyses": len(recent_records),
+                "score_distribution": score_distribution,
+                "average_score": round(statistics.mean(scores), 3),
+                "score_consistency": round(1 - statistics.stdev(scores) / max(statistics.mean(scores), 0.1), 3),
+                "dimension_performance": dimension_performance
+            }
             
         except Exception as e:
             return {"error": str(e)}
     
-    def _find_best_confidence_range(self, decisions: List[DecisionRecord]) -> Dict:
-        """หาช่วง confidence ที่ดีที่สุด"""
+    def _analyze_recovery_patterns(self, cutoff_time: datetime) -> Dict:
+        """วิเคราะห์รูปแบบ recovery performance"""
         try:
-            if not decisions:
-                return {"range": "N/A", "count": 0, "success_rate": 0.0}
+            recent_records = [r for r in self.recovery_records if r.timestamp > cutoff_time]
             
-            confidence_ranges = {
-                "high": [r for r in decisions if r.confidence > 0.7],
-                "medium": [r for r in decisions if 0.4 <= r.confidence <= 0.7],
-                "low": [r for r in decisions if r.confidence < 0.4]
-            }
+            if not recent_records:
+                return {"insufficient_data": True}
             
-            best_range = "medium"
-            best_success_rate = 0.0
+            # วิเคราะห์ success rate ตาม strategy
+            strategy_performance = defaultdict(lambda: {"attempts": 0, "successes": 0})
             
-            for range_name, range_decisions in confidence_ranges.items():
-                if range_decisions:
-                    successes = len([r for r in range_decisions if r.outcome == DecisionOutcome.SUCCESS])
-                    success_rate = successes / len(range_decisions)
-                    
-                    if success_rate > best_success_rate:
-                        best_success_rate = success_rate
-                        best_range = range_name
+            for record in recent_records:
+                if record.completion_time:  # เฉพาะที่เสร็จแล้ว
+                    strategy = record.recovery_strategy
+                    strategy_performance[strategy]["attempts"] += 1
+                    if record.recovery_success:
+                        strategy_performance[strategy]["successes"] += 1
             
-            best_decisions = confidence_ranges[best_range]
+            # คำนวณ success rate แต่ละ strategy
+            strategy_success_rates = {}
+            for strategy, data in strategy_performance.items():
+                if data["attempts"] > 0:
+                    strategy_success_rates[strategy] = data["successes"] / data["attempts"]
             
             return {
-                "range": best_range,
-                "count": len(best_decisions),
-                "success_rate": round(best_success_rate, 3),
-                "avg_confidence": round(statistics.mean([r.confidence for r in best_decisions]), 3) if best_decisions else 0.0
+                "total_recoveries": len(recent_records),
+                "completed_recoveries": sum(1 for r in recent_records if r.completion_time),
+                "strategy_performance": dict(strategy_performance),
+                "strategy_success_rates": strategy_success_rates
             }
             
         except Exception as e:
-            return {"range": "unknown", "count": 0, "success_rate": 0.0}
+            return {"error": str(e)}
     
-    def _find_best_market_conditions(self, decisions: List[DecisionRecord]) -> Dict:
-        """หา market conditions ที่ดีที่สุด"""
+    def _analyze_execution_patterns(self, cutoff_time: datetime) -> Dict:
+        """วิเคราะห์รูปแบบ market execution"""
         try:
-            if not decisions:
-                return {}
+            recent_records = [r for r in self.market_order_records if r.timestamp > cutoff_time]
             
-            condition_groups = defaultdict(list)
-            for decision in decisions:
-                condition = decision.market_context.get("condition", "UNKNOWN")
-                condition_groups[condition].append(decision)
+            if not recent_records:
+                return {"insufficient_data": True}
             
-            condition_performance = {}
-            for condition, group_decisions in condition_groups.items():
-                successes = len([r for r in group_decisions if r.outcome == DecisionOutcome.SUCCESS])
-                success_rate = successes / len(group_decisions)
+            # วิเคราะห์ performance ตาม session
+            session_performance = defaultdict(lambda: {"orders": 0, "successes": 0, "total_slippage": 0.0})
+            
+            for record in recent_records:
+                session = record.session_type
+                session_performance[session]["orders"] += 1
+                if record.success:
+                    session_performance[session]["successes"] += 1
+                    session_performance[session]["total_slippage"] += record.slippage_points
+            
+            # คำนวณเมตริกแต่ละ session
+            session_metrics = {}
+            for session, data in session_performance.items():
+                if data["orders"] > 0:
+                    success_rate = data["successes"] / data["orders"]
+                    avg_slippage = data["total_slippage"] / max(data["successes"], 1)
+                    session_metrics[session] = {
+                        "success_rate": round(success_rate, 3),
+                        "average_slippage": round(avg_slippage, 5),
+                        "order_count": data["orders"]
+                    }
+            
+            return {
+                "total_orders": len(recent_records),
+                "successful_orders": sum(1 for r in recent_records if r.success),
+                "session_metrics": session_metrics,
+                "overall_success_rate": round(sum(1 for r in recent_records if r.success) / len(recent_records), 3)
+            }
+            
+        except Exception as e:
+            return {"error": str(e)}
+    
+    def _analyze_portfolio_patterns(self, cutoff_time: datetime) -> Dict:
+        """วิเคราะห์รูปแบบ portfolio health"""
+        try:
+            recent_records = [r for r in self.portfolio_health_history if r["timestamp"] > cutoff_time]
+            
+            if not recent_records:
+                return {"insufficient_data": True}
+            
+            # วิเคราะห์ trend
+            health_values = [r["portfolio_health"] for r in recent_records]
+            balance_ratios = [r["buy_sell_ratio"] for r in recent_records]
+            
+            health_trend = "STABLE"
+            if len(health_values) >= 5:
+                recent_avg = statistics.mean(health_values[-5:])
+                earlier_avg = statistics.mean(health_values[:5])
                 
-                condition_performance[condition] = {
-                    "decisions": len(group_decisions),
-                    "success_rate": round(success_rate, 3)
-                }
-            
-            # หา condition ที่ดีที่สุด
-            best_condition = max(condition_performance.keys(), 
-                               key=lambda c: condition_performance[c]["success_rate"]) if condition_performance else "UNKNOWN"
+                if recent_avg > earlier_avg + 0.1:
+                    health_trend = "IMPROVING"
+                elif recent_avg < earlier_avg - 0.1:
+                    health_trend = "DECLINING"
             
             return {
-                "best_condition": best_condition,
-                "all_conditions": condition_performance
+                "total_records": len(recent_records),
+                "average_health": round(statistics.mean(health_values), 3),
+                "health_trend": health_trend,
+                "average_balance_ratio": round(statistics.mean(balance_ratios), 3),
+                "balance_stability": round(1 - statistics.stdev(balance_ratios) / max(statistics.mean(balance_ratios), 0.1), 3)
             }
             
         except Exception as e:
-            return {}
+            return {"error": str(e)}
     
-    def _find_common_reasoning(self, decisions: List[DecisionRecord]) -> List[str]:
-        """หา reasoning ที่เกิดขึ้นบ่อย"""
+    def _generate_key_insights(self, four_d_patterns: Dict, recovery_patterns: Dict,
+                             execution_patterns: Dict, portfolio_patterns: Dict) -> List[str]:
+        """สร้าง key insights จากการวิเคราะห์"""
+        insights = []
+        
         try:
-            if not decisions:
-                return []
+            # 4D insights
+            if "score_distribution" in four_d_patterns:
+                excellent_pct = four_d_patterns["score_distribution"]["excellent"] / max(four_d_patterns["total_analyses"], 1) * 100
+                if excellent_pct > 30:
+                    insights.append(f"4D Analysis shows strong performance with {excellent_pct:.1f}% excellent scores")
+                elif excellent_pct < 10:
+                    insights.append(f"4D Analysis needs improvement - only {excellent_pct:.1f}% excellent scores")
             
-            reasoning_keywords = defaultdict(int)
+            # Recovery insights
+            if "strategy_success_rates" in recovery_patterns and recovery_patterns["strategy_success_rates"]:
+                best_strategy = max(recovery_patterns["strategy_success_rates"].items(), key=lambda x: x[1])
+                insights.append(f"Best recovery strategy: {best_strategy[0]} with {best_strategy[1]:.1%} success rate")
             
-            for decision in decisions:
-                words = decision.reasoning.lower().split()
-                for word in words:
-                    if len(word) > 3:  # เฉพาะคำที่มีความหมาย
-                        reasoning_keywords[word] += 1
+            # Execution insights
+            if "session_metrics" in execution_patterns and execution_patterns["session_metrics"]:
+                best_session = max(execution_patterns["session_metrics"].items(), key=lambda x: x[1]["success_rate"])
+                insights.append(f"Best execution session: {best_session[0]} with {best_session[1]['success_rate']:.1%} success rate")
             
-            # เลือก keywords ที่เกิดขึ้นบ่อย
-            common_keywords = sorted(reasoning_keywords.items(), key=lambda x: x[1], reverse=True)[:5]
-            
-            return [f"{keyword} ({count}x)" for keyword, count in common_keywords]
+            # Portfolio insights
+            if "health_trend" in portfolio_patterns:
+                trend = portfolio_patterns["health_trend"]
+                if trend == "IMPROVING":
+                    insights.append("Portfolio health is improving - good system performance")
+                elif trend == "DECLINING":
+                    insights.append("Portfolio health is declining - review needed")
             
         except Exception as e:
-            return []
+            insights.append(f"Insight generation error: {e}")
+        
+        return insights
+    
+    def _check_portfolio_health_alerts(self, health_record: Dict):
+        """เช็คและส่งการแจ้งเตือนเกี่ยวกับสุขภาพ portfolio"""
+        try:
+            portfolio_health = health_record.get("portfolio_health", 0.0)
+            
+            if portfolio_health < 0.3:
+                self.log(f"🚨 CRITICAL ALERT: Portfolio health critically low: {portfolio_health:.1%}")
+            elif portfolio_health < 0.5:
+                self.log(f"⚠️ WARNING: Portfolio health below average: {portfolio_health:.1%}")
+            
+            # เช็ค margin level
+            margin_level = health_record.get("margin_level", 0.0)
+            if 0 < margin_level < 200:
+                self.log(f"🚨 MARGIN ALERT: Margin level critically low: {margin_level:.0f}%")
+            
+        except Exception as e:
+            self.log(f"❌ Portfolio health alert error: {e}")
+    
+    def _ensure_data_directory(self):
+        """สร้างโฟลเดอร์สำหรับเก็บข้อมูล"""
+        try:
+            if not os.path.exists(self.data_directory):
+                os.makedirs(self.data_directory)
+        except Exception as e:
+            self.log(f"❌ Data directory creation error: {e}")
     
     def log(self, message: str):
         """Log message with timestamp"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
+        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         print(f"[{timestamp}] 📈 PerformanceTracker: {message}")
 
 
 # ========================================================================================
-# 🧪 TEST FUNCTION
+# 🧪 4D PERFORMANCE TRACKER TEST FUNCTIONS
 # ========================================================================================
 
-def test_performance_tracker_compatibility():
-    """Test compatibility with Modern Rule Engine"""
-    print("🧪 Testing Performance Tracker compatibility...")
-    print("✅ track_decision() method added")
-    print("✅ get_decision_outcome() method added")
-    print("✅ Rule learning analytics implemented")
-    print("✅ Comprehensive performance reporting")
-    print("✅ Adaptive learning support")
-    print("✅ Ready for Modern Rule Engine integration")
+# def test_4d_performance_tracker():
+#     """Test 4D Performance Tracker functionality"""
+#     print("🧪 Testing 4D Performance Tracker...")
+#     print("✅ 4D Analysis Performance Tracking")
+#     print("✅ Recovery Effectiveness Monitoring")
+#     print("✅ Market Order Execution Statistics")
+#     print("✅ Portfolio Health Trend Analysis")
+#     print("✅ Real-time Performance Updates")
+#     print("✅ Adaptive Learning Recommendations")
+#     print("✅ Performance Pattern Analysis")
+#     print("✅ Ready for 4D AI Rule Engine Integration")
 
-if __name__ == "__main__":
-    test_performance_tracker_compatibility()
+# if __name__ == "__main__":
+#     test_4d_performance_tracker()

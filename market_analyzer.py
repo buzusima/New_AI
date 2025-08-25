@@ -1,8 +1,14 @@
 """
-📊 Modern Market Analyzer - Updated for New Rule Engine
+📊 Market Analyzer - 4D Enhanced Edition
 market_analyzer.py
-อัพเดท get_comprehensive_analysis() และเพิ่มข้อมูลที่ Rule Engine ต้องการ
-** PRODUCTION READY - COMPATIBLE WITH NEW RULE ENGINE **
+
+🎯 ระบบวิเคราะห์ตลาด 4 มิติสำหรับ AI Gold Grid Trading
+- 4D Market Context Analysis
+- Session detection และ volatility analysis  
+- Market condition scoring สำหรับ 4D AI
+- Real-time market data สำหรับ hybrid decisions
+
+** COMPATIBLE WITH 4D AI RULE ENGINE **
 """
 
 import time
@@ -14,35 +20,45 @@ import numpy as np
 import pandas as pd
 from collections import deque
 import statistics
-import talib
 import math
 
 class MarketAnalyzer:
     """
-    📊 Modern Market Analyzer - Updated Edition
+    📊 Market Analyzer - 4D Enhanced Edition
     
     ความสามารถใหม่:
-    - ✅ get_comprehensive_analysis() ครบถ้วนสำหรับ Rule Engine
-    - ✅ Dynamic volatility analysis
-    - ✅ Market session detection
-    - ✅ Support/Resistance level detection
-    - ✅ Trend strength calculation
-    - ✅ Market condition assessment
-    ** COMPATIBLE WITH NEW RULE ENGINE **
+    - ✅ get_comprehensive_analysis() ครบถ้วนสำหรับ 4D Rule Engine
+    - ✅ 4D Market Context Analysis (Trend, Volume, Session, Volatility)
+    - ✅ Dynamic volatility analysis พร้อม adaptive thresholds
+    - ✅ Enhanced session detection พร้อม activity scoring
+    - ✅ Real-time support/resistance level detection
+    - ✅ Market condition scoring สำหรับ hybrid decisions
+    - ✅ Performance-optimized analysis caching
     """
     
     def __init__(self, mt5_connector, config: Dict):
-        """Initialize Market Analyzer"""
+        """Initialize 4D Market Analyzer"""
         if not mt5_connector:
             raise ValueError("MT5 connector is required")
             
         self.mt5_connector = mt5_connector
         self.config = config
         
-        # Analysis parameters
+        # Trading parameters
         self.symbol = config.get("trading", {}).get("symbol", "XAUUSD")
         self.timeframes = [mt5.TIMEFRAME_M1, mt5.TIMEFRAME_M5, mt5.TIMEFRAME_M15, mt5.TIMEFRAME_H1]
         self.analysis_period = config.get("analysis", {}).get("period", 100)
+        
+        # 4D Analysis configuration
+        self.four_d_config = {
+            "trend_analysis_depth": 50,          # จำนวน candle สำหรับวิเคราะห์ trend
+            "volume_analysis_period": 20,        # ช่วงเวลาวิเคราะห์ volume
+            "volatility_lookback": 30,           # ย้อนหลังสำหรับ volatility
+            "session_scoring_enabled": True,     # เปิดใช้ session scoring
+            "support_resistance_levels": 5,      # จำนวน S/R levels
+            "market_context_refresh": 10,        # วินาที - อัปเดต market context
+            "adaptive_thresholds": True          # ใช้ adaptive thresholds
+        }
         
         # Technical indicators settings
         self.rsi_period = 14
@@ -51,166 +67,661 @@ class MarketAnalyzer:
         self.ma_fast = 10
         self.ma_slow = 30
         
-        # Data caching
-        self.last_analysis = {}
+        # 4D Analysis cache
+        self.last_4d_analysis = {}
         self.last_analysis_time = datetime.now()
-        self.analysis_cache_duration = 30  # seconds
+        self.analysis_cache_duration = 15  # seconds - เร็วขึ้นสำหรับ 4D
         self.price_history = deque(maxlen=500)
         
-        # Market context
+        # Market context tracking
         self.support_levels = []
         self.resistance_levels = []
         self.last_sr_update = datetime.now()
+        self.session_context = {}
+        self.volatility_context = {}
         
-        print("📊 Market Analyzer initialized - Compatible with Modern Rule Engine")
+        # Performance tracking
+        self.analysis_count = 0
+        self.cache_hit_count = 0
+        
+        self.log("4D Market Analyzer initialized successfully")
     
     # ========================================================================================
-    # 🆕 MAIN METHOD FOR RULE ENGINE
+    # 🆕 MAIN 4D ANALYSIS METHOD
     # ========================================================================================
     
     def get_comprehensive_analysis(self) -> Dict:
         """
-        🆕 ดึงการวิเคราะห์ตลาดครบถ้วนสำหรับ Modern Rule Engine
+        🆕 4D Market Analysis - ดึงการวิเคราะห์ตลาดแบบ 4 มิติ
+        
+        4 Dimensions:
+        1. Trend Analysis (แนวโน้มราคา)
+        2. Volume Analysis (ปริมาณการเทรด) 
+        3. Session Analysis (ช่วงเวลาตลาด)
+        4. Volatility Analysis (ความผันผวน)
         
         Returns:
-            Dict: ข้อมูลการวิเคราะห์ครบถ้วนตามที่ Rule Engine ต้องการ
+            Dict: ข้อมูลการวิเคราะห์ 4D ครบถ้วน
         """
         try:
-            print("📊 === COMPREHENSIVE MARKET ANALYSIS ===")
+            self.analysis_count += 1
+            self.log(f"Starting 4D Analysis #{self.analysis_count}")
             
-            # เช็ค cache
-            if self._is_analysis_cache_valid():
-                print("💾 Using cached analysis")
-                return self.last_analysis
+            # เช็ค cache สำหรับ 4D analysis
+            if self._is_4d_cache_valid():
+                self.cache_hit_count += 1
+                self.log(f"Using cached 4D analysis (Cache hits: {self.cache_hit_count})")
+                return self.last_4d_analysis
             
             # ดึงข้อมูลราคาปัจจุบัน
             current_data = self._get_current_market_data()
             if not current_data:
-                print("❌ Cannot get current market data")
-                return {}
+                self.log("❌ Cannot get current market data")
+                return self._minimal_4d_analysis()
             
-            # ดึงข้อมูล OHLC
-            ohlc_data = self._get_ohlc_data(mt5.TIMEFRAME_M15, self.analysis_period)
-            if ohlc_data is None or len(ohlc_data) < 20:
-                print("❌ Insufficient OHLC data")
-                return self._minimal_analysis(current_data)
+            # ดึงข้อมูล OHLC สำหรับการวิเคราะห์
+            ohlc_data = self._get_ohlc_data(mt5.TIMEFRAME_M5, self.analysis_period)
+            if ohlc_data is None or len(ohlc_data) < 30:
+                self.log(f"❌ Insufficient OHLC data: {len(ohlc_data) if ohlc_data is not None else 0} candles")
+                return self._minimal_4d_analysis(current_data)
             
-            # วิเคราะห์ technical indicators
-            technical_analysis = self._analyze_technical_indicators(ohlc_data)
+            # === 4D ANALYSIS EXECUTION ===
             
-            # วิเคราะห์ trend และ momentum
-            trend_analysis = self._analyze_trend_and_momentum(ohlc_data)
+            # Dimension 1: Trend Analysis
+            trend_analysis = self._analyze_4d_trend(ohlc_data)
             
-            # วิเคราะห์ volatility
-            volatility_analysis = self._analyze_volatility(ohlc_data)
+            # Dimension 2: Volume Analysis  
+            volume_analysis = self._analyze_4d_volume(ohlc_data)
             
-            # วิเคราะห์ support/resistance
+            # Dimension 3: Session Analysis
+            session_analysis = self._analyze_4d_session(current_data)
+            
+            # Dimension 4: Volatility Analysis
+            volatility_analysis = self._analyze_4d_volatility(ohlc_data)
+            
+            # Technical indicators (supporting data)
+            technical_data = self._analyze_technical_indicators(ohlc_data)
+            
+            # Support/Resistance levels
             sr_analysis = self._analyze_support_resistance(ohlc_data)
             
-            # วิเคราะห์ market session
-            session_analysis = self._analyze_market_session()
+            # Market condition determination
+            market_condition = self._determine_4d_market_condition(
+                trend_analysis, volume_analysis, session_analysis, volatility_analysis
+            )
             
-            # วิเคราะห์ spread และ liquidity
-            spread_analysis = self._analyze_spread_and_liquidity(current_data)
+            # 4D Market Score calculation
+            market_score_4d = self._calculate_4d_market_score(
+                trend_analysis, volume_analysis, session_analysis, volatility_analysis
+            )
             
-            # รวมข้อมูลทั้งหมด
-            comprehensive_analysis = {
-                # ข้อมูลพื้นฐาน
+            # รวมผลการวิเคราะห์ 4D
+            comprehensive_4d_analysis = {
+                # === BASIC MARKET DATA ===
                 "current_price": current_data["current_price"],
-                "bid": current_data["bid"],
+                "bid": current_data["bid"], 
                 "ask": current_data["ask"],
                 "spread": current_data["spread"],
                 "timestamp": datetime.now(),
                 
-                # Technical Analysis
-                **technical_analysis,
-                
-                # Trend & Momentum
+                # === DIMENSION 1: TREND ANALYSIS ===
                 **trend_analysis,
                 
-                # Volatility
-                **volatility_analysis,
+                # === DIMENSION 2: VOLUME ANALYSIS ===
+                **volume_analysis,
                 
-                # Support & Resistance
-                **sr_analysis,
-                
-                # Market Session
+                # === DIMENSION 3: SESSION ANALYSIS ===
                 **session_analysis,
                 
-                # Spread & Liquidity
-                **spread_analysis,
+                # === DIMENSION 4: VOLATILITY ANALYSIS ===
+                **volatility_analysis,
                 
-                # Market Condition Summary
-                "condition": self._determine_market_condition(technical_analysis, trend_analysis, volatility_analysis),
-                "market_score": self._calculate_market_score(technical_analysis, trend_analysis, volatility_analysis),
+                # === TECHNICAL SUPPORT DATA ===
+                **technical_data,
+                **sr_analysis,
                 
-                # For Rule Engine
+                # === 4D MARKET ASSESSMENT ===
+                "market_condition_4d": market_condition,
+                "market_score_4d": market_score_4d,
+                "four_d_confidence": self._calculate_4d_confidence(
+                    trend_analysis, volume_analysis, session_analysis, volatility_analysis
+                ),
+                
+                # === ANALYSIS METADATA ===
                 "analysis_quality": self._calculate_analysis_quality(ohlc_data),
-                "data_freshness": (datetime.now() - current_data["timestamp"]).total_seconds()
+                "data_freshness": self._calculate_data_freshness(ohlc_data),
+                "cache_performance": {
+                    "total_analysis": self.analysis_count,
+                    "cache_hits": self.cache_hit_count,
+                    "cache_hit_rate": round(self.cache_hit_count / max(1, self.analysis_count), 3)
+                }
             }
             
-            # Cache the analysis
-            self.last_analysis = comprehensive_analysis
+            # อัปเดต cache
+            self.last_4d_analysis = comprehensive_4d_analysis
             self.last_analysis_time = datetime.now()
             
-            print(f"✅ Comprehensive analysis completed")
-            print(f"   Current Price: {current_data['current_price']:.2f}")
-            print(f"   Trend: {trend_analysis.get('trend_direction', 'UNKNOWN')} (strength: {trend_analysis.get('trend_strength', 0):.2f})")
-            print(f"   Volatility: {volatility_analysis.get('volatility_level', 'UNKNOWN')} (factor: {volatility_analysis.get('volatility_factor', 1):.2f})")
-            print(f"   RSI: {technical_analysis.get('rsi', 50):.1f}")
-            print(f"   Market Score: {comprehensive_analysis['market_score']:.2f}")
+            self.log(f"4D Analysis completed - Score: {market_score_4d:.3f}, Condition: {market_condition}")
             
-            return comprehensive_analysis
+            return comprehensive_4d_analysis
             
         except Exception as e:
-            print(f"❌ Comprehensive analysis error: {e}")
-            return self._minimal_analysis(current_data if 'current_data' in locals() else {})
+            self.log(f"❌ 4D Analysis error: {e}")
+            return self._minimal_4d_analysis()
     
     # ========================================================================================
-    # 🔍 ANALYSIS COMPONENTS
+    # 🔍 4D DIMENSION ANALYSIS METHODS
+    # ========================================================================================
+    
+    def _analyze_4d_trend(self, ohlc_data: pd.DataFrame) -> Dict:
+        """
+        🎯 Dimension 1: Advanced Trend Analysis
+        """
+        try:
+            close_prices = ohlc_data['close'].values
+            high_prices = ohlc_data['high'].values
+            low_prices = ohlc_data['low'].values
+            
+            # Multiple timeframe trend analysis
+            trend_5m = self._calculate_trend_direction(close_prices[-5:])
+            trend_15m = self._calculate_trend_direction(close_prices[-15:])
+            trend_30m = self._calculate_trend_direction(close_prices[-30:])
+            
+            # Trend strength calculation
+            trend_strength = self._calculate_trend_strength(close_prices[-30:])
+            
+            # Trend momentum
+            momentum_short = (close_prices[-1] - close_prices[-5]) / close_prices[-5] * 100
+            momentum_long = (close_prices[-1] - close_prices[-15]) / close_prices[-15] * 100
+            
+            # Price action patterns
+            recent_highs = high_prices[-10:]
+            recent_lows = low_prices[-10:]
+            higher_highs = sum(recent_highs[i] > recent_highs[i-1] for i in range(1, len(recent_highs)))
+            higher_lows = sum(recent_lows[i] > recent_lows[i-1] for i in range(1, len(recent_lows)))
+            
+            # Trend consistency
+            trend_consistency = self._calculate_trend_consistency(close_prices[-20:])
+            
+            # Overall trend assessment
+            if trend_5m == trend_15m == trend_30m:
+                trend_alignment = 1.0
+                main_trend = trend_5m
+            elif trend_15m == trend_30m:
+                trend_alignment = 0.7
+                main_trend = trend_15m
+            else:
+                trend_alignment = 0.3
+                main_trend = "MIXED"
+            
+            return {
+                # Primary trend data
+                "trend_direction": main_trend,
+                "trend_strength": round(trend_strength, 3),
+                "trend_alignment": round(trend_alignment, 3),
+                "trend_consistency": round(trend_consistency, 3),
+                
+                # Multi-timeframe trends
+                "trend_5m": trend_5m,
+                "trend_15m": trend_15m, 
+                "trend_30m": trend_30m,
+                
+                # Momentum data
+                "momentum_short": round(momentum_short, 4),
+                "momentum_long": round(momentum_long, 4),
+                "momentum_divergence": abs(momentum_short - momentum_long),
+                
+                # Price action
+                "higher_highs_count": higher_highs,
+                "higher_lows_count": higher_lows,
+                "price_action_bullish": higher_highs >= 6 and higher_lows >= 6,
+                
+                # Trend dimension score
+                "trend_dimension_score": round(trend_alignment * trend_strength * trend_consistency, 3)
+            }
+            
+        except Exception as e:
+            self.log(f"❌ Trend analysis error: {e}")
+            return {
+                "trend_direction": "SIDEWAYS", "trend_strength": 0.0,
+                "trend_alignment": 0.0, "momentum_short": 0.0,
+                "trend_dimension_score": 0.0
+            }
+    
+    def _analyze_4d_volume(self, ohlc_data: pd.DataFrame) -> Dict:
+        """
+        📊 Dimension 2: Advanced Volume Analysis
+        """
+        try:
+            # ใช้ tick_volume แทน volume จริง (MT5 limitation)
+            volumes = ohlc_data['tick_volume'].values if 'tick_volume' in ohlc_data else ohlc_data['real_volume'].values
+            close_prices = ohlc_data['close'].values
+            
+            # Volume moving averages
+            vol_ma_10 = np.mean(volumes[-10:])
+            vol_ma_20 = np.mean(volumes[-20:])
+            current_volume = volumes[-1]
+            
+            # Volume trend
+            volume_trend = "INCREASING" if vol_ma_10 > vol_ma_20 else "DECREASING"
+            volume_ratio = vol_ma_10 / vol_ma_20 if vol_ma_20 > 0 else 1.0
+            
+            # Volume spikes detection
+            volume_threshold = vol_ma_20 * 1.5
+            recent_spikes = sum(1 for v in volumes[-10:] if v > volume_threshold)
+            
+            # Volume-price relationship
+            price_changes = np.diff(close_prices[-10:])
+            volume_changes = np.diff(volumes[-10:])
+            
+            # Volume strength assessment
+            volume_strength = min(1.0, current_volume / vol_ma_20)
+            
+            # On-balance volume approximation
+            obv_trend = self._calculate_obv_trend(close_prices[-20:], volumes[-20:])
+            
+            return {
+                # Primary volume data
+                "current_volume": int(current_volume),
+                "volume_ma_10": round(vol_ma_10, 0),
+                "volume_ma_20": round(vol_ma_20, 0),
+                "volume_ratio": round(volume_ratio, 3),
+                
+                # Volume trend analysis
+                "volume_trend": volume_trend,
+                "volume_strength": round(volume_strength, 3),
+                "volume_spikes_count": recent_spikes,
+                
+                # Volume-price relationship
+                "obv_trend": obv_trend,
+                "volume_price_correlation": self._calculate_volume_price_correlation(
+                    price_changes, volume_changes
+                ),
+                
+                # Volume dimension score
+                "volume_dimension_score": round(
+                    (volume_strength + (1 if volume_trend == "INCREASING" else 0.5) + 
+                     min(1.0, recent_spikes / 5)) / 3, 3
+                ),
+                
+                # Volume confirmation
+                "volume_confirms_trend": recent_spikes >= 2 and volume_trend == "INCREASING"
+            }
+            
+        except Exception as e:
+            self.log(f"❌ Volume analysis error: {e}")
+            return {
+                "current_volume": 0, "volume_trend": "UNKNOWN",
+                "volume_strength": 0.5, "volume_dimension_score": 0.5
+            }
+    
+    def _analyze_4d_session(self, current_data: Dict) -> Dict:
+        """
+        🌍 Dimension 3: Advanced Session Analysis
+        """
+        try:
+            current_time = datetime.now()
+            current_hour = current_time.hour
+            
+            # Session identification
+            session_info = self._identify_trading_session(current_hour)
+            
+            # Session volatility characteristics
+            session_volatility = self._get_session_volatility_profile(session_info["session"])
+            
+            # Session overlap detection
+            overlaps = self._detect_session_overlaps(current_hour)
+            
+            # Time-based activity scoring
+            activity_score = self._calculate_time_activity_score(current_hour)
+            
+            # Market opening/closing proximity
+            proximity_events = self._calculate_session_proximity(current_hour)
+            
+            return {
+                # Primary session data
+                "market_session": session_info["session"],
+                "session_activity_level": session_info["activity_level"],
+                "session_factor": session_info["session_factor"],
+                "current_hour": current_hour,
+                
+                # Session characteristics
+                "is_major_session": session_info["is_major_session"],
+                "session_volatility_expected": session_volatility,
+                "activity_score": round(activity_score, 3),
+                
+                # Session overlaps and events
+                "session_overlaps": overlaps,
+                "proximity_to_open": proximity_events["open_proximity"],
+                "proximity_to_close": proximity_events["close_proximity"],
+                
+                # Session dimension score
+                "session_dimension_score": round(
+                    (activity_score + session_info["session_factor"] + 
+                     (1.0 if overlaps else 0.5)) / 3, 3
+                ),
+                
+                # Session trading recommendation
+                "session_favorable": activity_score > 0.6 and session_info["is_major_session"]
+            }
+            
+        except Exception as e:
+            self.log(f"❌ Session analysis error: {e}")
+            return {
+                "market_session": "UNKNOWN", "session_activity_level": "MEDIUM",
+                "session_factor": 1.0, "session_dimension_score": 0.5
+            }
+    
+    def _analyze_4d_volatility(self, ohlc_data: pd.DataFrame) -> Dict:
+        """
+        📈 Dimension 4: Advanced Volatility Analysis
+        """
+        try:
+            close_prices = ohlc_data['close'].values
+            high_prices = ohlc_data['high'].values
+            low_prices = ohlc_data['low'].values
+            
+            # Multiple volatility measures
+            price_volatility = np.std(close_prices[-20:]) / np.mean(close_prices[-20:])
+            range_volatility = np.mean((high_prices[-20:] - low_prices[-20:]) / close_prices[-20:])
+            
+            # ATR calculation
+            atr_values = []
+            for i in range(1, min(15, len(ohlc_data))):
+                true_range = max(
+                    high_prices[-i] - low_prices[-i],
+                    abs(high_prices[-i] - close_prices[-i-1]),
+                    abs(low_prices[-i] - close_prices[-i-1])
+                )
+                atr_values.append(true_range)
+            
+            current_atr = np.mean(atr_values) if atr_values else 0.0
+            atr_percentage = (current_atr / close_prices[-1]) * 100
+            
+            # Volatility trend
+            vol_short = np.std(close_prices[-10:]) / np.mean(close_prices[-10:])
+            vol_long = np.std(close_prices[-20:]) / np.mean(close_prices[-20:])
+            vol_trend = "INCREASING" if vol_short > vol_long else "DECREASING"
+            
+            # Volatility classification
+            if atr_percentage < 0.05:
+                vol_level = "VERY_LOW"
+                vol_factor = 0.5
+            elif atr_percentage < 0.1:
+                vol_level = "LOW"
+                vol_factor = 0.7
+            elif atr_percentage < 0.2:
+                vol_level = "MEDIUM"
+                vol_factor = 1.0
+            elif atr_percentage < 0.3:
+                vol_level = "HIGH"
+                vol_factor = 1.3
+            else:
+                vol_level = "VERY_HIGH"
+                vol_factor = 1.5
+            
+            # Volatility breakout detection
+            recent_ranges = [(high_prices[i] - low_prices[i]) for i in range(-10, 0)]
+            avg_range = np.mean(recent_ranges)
+            current_range = high_prices[-1] - low_prices[-1]
+            breakout_potential = current_range / avg_range if avg_range > 0 else 1.0
+            
+            return {
+                # Primary volatility data
+                "volatility_level": vol_level,
+                "volatility_factor": round(vol_factor, 3),
+                "atr": round(current_atr, 5),
+                "atr_percentage": round(atr_percentage, 3),
+                
+                # Volatility analysis
+                "price_volatility": round(price_volatility, 5),
+                "range_volatility": round(range_volatility, 5),
+                "volatility_trend": vol_trend,
+                
+                # Breakout analysis
+                "breakout_potential": round(breakout_potential, 3),
+                "is_volatility_expansion": breakout_potential > 1.2,
+                
+                # Volatility dimension score
+                "volatility_dimension_score": round(
+                    min(1.0, (vol_factor + breakout_potential + 
+                             (1.0 if vol_trend == "INCREASING" else 0.5)) / 3), 3
+                ),
+                
+                # Trading implications
+                "volatility_favorable": 0.8 <= vol_factor <= 1.3 and breakout_potential > 1.1
+            }
+            
+        except Exception as e:
+            self.log(f"❌ Volatility analysis error: {e}")
+            return {
+                "volatility_level": "MEDIUM", "volatility_factor": 1.0,
+                "atr": 0.0, "volatility_dimension_score": 0.5
+            }
+    
+    # ========================================================================================
+    # 🧮 4D SCORING AND ASSESSMENT METHODS  
+    # ========================================================================================
+    
+    def _determine_4d_market_condition(self, trend: Dict, volume: Dict, 
+                                      session: Dict, volatility: Dict) -> str:
+        """
+        🎯 กำหนด Market Condition จาก 4D Analysis
+        """
+        try:
+            trend_score = trend.get("trend_dimension_score", 0.0)
+            volume_score = volume.get("volume_dimension_score", 0.0) 
+            session_score = session.get("session_dimension_score", 0.0)
+            volatility_score = volatility.get("volatility_dimension_score", 0.0)
+            
+            overall_score = (trend_score + volume_score + session_score + volatility_score) / 4
+            
+            # Market condition classification
+            if overall_score >= 0.8:
+                return "EXCELLENT_4D"
+            elif overall_score >= 0.65:
+                return "GOOD_4D"
+            elif overall_score >= 0.5:
+                return "AVERAGE_4D"  
+            elif overall_score >= 0.35:
+                return "POOR_4D"
+            else:
+                return "VERY_POOR_4D"
+                
+        except Exception as e:
+            return "UNKNOWN_4D"
+    
+    def _calculate_4d_market_score(self, trend: Dict, volume: Dict,
+                                  session: Dict, volatility: Dict) -> float:
+        """
+        📊 คำนวณ 4D Market Score รวม
+        """
+        try:
+            # Individual dimension scores with weights
+            trend_score = trend.get("trend_dimension_score", 0.0) * 0.3
+            volume_score = volume.get("volume_dimension_score", 0.0) * 0.25
+            session_score = session.get("session_dimension_score", 0.0) * 0.2
+            volatility_score = volatility.get("volatility_dimension_score", 0.0) * 0.25
+            
+            total_4d_score = trend_score + volume_score + session_score + volatility_score
+            
+            return round(max(0.0, min(1.0, total_4d_score)), 3)
+            
+        except Exception as e:
+            return 0.5
+    
+    def _calculate_4d_confidence(self, trend: Dict, volume: Dict,
+                                session: Dict, volatility: Dict) -> float:
+        """
+        🎯 คำนวณความเชื่อมั่นของ 4D Analysis
+        """
+        try:
+            # Data quality factors
+            trend_alignment = trend.get("trend_alignment", 0.0)
+            volume_confirms = 1.0 if volume.get("volume_confirms_trend", False) else 0.5
+            session_favorable = 1.0 if session.get("session_favorable", False) else 0.5
+            volatility_favorable = 1.0 if volatility.get("volatility_favorable", False) else 0.5
+            
+            confidence = (trend_alignment + volume_confirms + session_favorable + volatility_favorable) / 4
+            
+            return round(max(0.0, min(1.0, confidence)), 3)
+            
+        except Exception as e:
+            return 0.5
+    
+    # ========================================================================================
+    # 🔧 SUPPORTING ANALYSIS METHODS
+    # ========================================================================================
+    
+    def _analyze_technical_indicators(self, ohlc_data: pd.DataFrame) -> Dict:
+        """วิเคราะห์ technical indicators พื้นฐาน"""
+        try:
+            close_prices = ohlc_data['close'].values
+            high_prices = ohlc_data['high'].values
+            low_prices = ohlc_data['low'].values
+            
+            # RSI
+            rsi = self._calculate_rsi(close_prices, self.rsi_period)
+            rsi_condition = self._classify_rsi(rsi)
+            
+            # MACD (simplified)
+            ema_12 = self._calculate_ema(close_prices, 12)
+            ema_26 = self._calculate_ema(close_prices, 26)
+            macd = ema_12[-1] - ema_26[-1] if len(ema_12) > 0 and len(ema_26) > 0 else 0
+            
+            # Bollinger Bands
+            bb_middle = np.mean(close_prices[-self.bb_period:])
+            bb_std = np.std(close_prices[-self.bb_period:]) 
+            bb_upper = bb_middle + (bb_std * self.bb_deviation)
+            bb_lower = bb_middle - (bb_std * self.bb_deviation)
+            current_price = close_prices[-1]
+            bb_position = (current_price - bb_lower) / (bb_upper - bb_lower) if bb_upper != bb_lower else 0.5
+            
+            # Moving Averages
+            ma_fast = np.mean(close_prices[-self.ma_fast:])
+            ma_slow = np.mean(close_prices[-self.ma_slow:])
+            ma_direction = "BULLISH" if ma_fast > ma_slow else "BEARISH"
+            
+            # Stochastic oscillator
+            lowest_low = np.min(low_prices[-14:])
+            highest_high = np.max(high_prices[-14:])
+            stochastic = ((current_price - lowest_low) / (highest_high - lowest_low) * 100) if highest_high != lowest_low else 50
+            stoch_condition = self._classify_stochastic(stochastic)
+            
+            return {
+                "rsi": round(rsi, 2),
+                "rsi_condition": rsi_condition,
+                "macd": round(macd, 5),
+                "bollinger_position": round(bb_position, 3),
+                "ma_direction": ma_direction,
+                "stochastic": round(stochastic, 2),
+                "stoch_condition": stoch_condition,
+                "bb_upper": round(bb_upper, 5),
+                "bb_lower": round(bb_lower, 5),
+                "ma_fast": round(ma_fast, 5),
+                "ma_slow": round(ma_slow, 5)
+            }
+            
+        except Exception as e:
+            self.log(f"❌ Technical analysis error: {e}")
+            return {
+                "rsi": 50, "rsi_condition": "NEUTRAL", "macd": 0,
+                "bollinger_position": 0.5, "ma_direction": "NEUTRAL",
+                "stochastic": 50, "stoch_condition": "NEUTRAL"
+            }
+    
+    def _analyze_support_resistance(self, ohlc_data: pd.DataFrame) -> Dict:
+        """วิเคราะห์ Support/Resistance levels"""
+        try:
+            close_prices = ohlc_data['close'].values
+            high_prices = ohlc_data['high'].values
+            low_prices = ohlc_data['low'].values
+            current_price = close_prices[-1]
+            
+            # Find pivot points
+            lookback = min(20, len(ohlc_data) // 2)
+            support_levels = []
+            resistance_levels = []
+            
+            for i in range(lookback, len(ohlc_data) - lookback):
+                # Support detection
+                if (low_prices[i] == min(low_prices[i-lookback:i+lookback]) and
+                    low_prices[i] < current_price):
+                    support_levels.append({
+                        "level": low_prices[i],
+                        "strength": self._calculate_level_strength(low_prices, low_prices[i], 'support'),
+                        "distance": current_price - low_prices[i]
+                    })
+                
+                # Resistance detection  
+                if (high_prices[i] == max(high_prices[i-lookback:i+lookback]) and
+                    high_prices[i] > current_price):
+                    resistance_levels.append({
+                        "level": high_prices[i],
+                        "strength": self._calculate_level_strength(high_prices, high_prices[i], 'resistance'),
+                        "distance": high_prices[i] - current_price
+                    })
+            
+            # Sort and limit levels
+            support_levels = sorted(support_levels, key=lambda x: x['distance'])[:self.four_d_config["support_resistance_levels"]]
+            resistance_levels = sorted(resistance_levels, key=lambda x: x['distance'])[:self.four_d_config["support_resistance_levels"]]
+            
+            # Find nearest levels
+            nearest_support = min(support_levels, key=lambda x: x['distance']) if support_levels else None
+            nearest_resistance = min(resistance_levels, key=lambda x: x['distance']) if resistance_levels else None
+            
+            return {
+                "support_levels": support_levels,
+                "resistance_levels": resistance_levels,
+                "nearest_support": nearest_support,
+                "nearest_resistance": nearest_resistance,
+                "support_distance": nearest_support['distance'] if nearest_support else float('inf'),
+                "resistance_distance": nearest_resistance['distance'] if nearest_resistance else float('inf'),
+                "near_support": nearest_support['distance'] < current_price * 0.001 if nearest_support else False,
+                "near_resistance": nearest_resistance['distance'] < current_price * 0.001 if nearest_resistance else False
+            }
+            
+        except Exception as e:
+            self.log(f"❌ S/R analysis error: {e}")
+            return {
+                "support_levels": [], "resistance_levels": [],
+                "nearest_support": None, "nearest_resistance": None,
+                "support_distance": float('inf'), "resistance_distance": float('inf')
+            }
+    
+    # ========================================================================================
+    # 🔧 HELPER AND UTILITY METHODS
     # ========================================================================================
     
     def _get_current_market_data(self) -> Dict:
         """ดึงข้อมูลตลาดปัจจุบัน"""
         try:
-            if not self.mt5_connector.is_connected:
+            symbol_info = mt5.symbol_info_tick(self.symbol)
+            if symbol_info is None:
                 return {}
             
-            tick = mt5.symbol_info_tick(self.symbol)
-            if not tick:
-                return {}
+            spread = symbol_info.ask - symbol_info.bid
+            current_price = (symbol_info.bid + symbol_info.ask) / 2
             
-            current_data = {
-                "current_price": (tick.bid + tick.ask) / 2,
-                "bid": tick.bid,
-                "ask": tick.ask,
-                "spread": tick.ask - tick.bid,
-                "timestamp": datetime.fromtimestamp(tick.time)
+            return {
+                "current_price": round(current_price, 5),
+                "bid": round(symbol_info.bid, 5),
+                "ask": round(symbol_info.ask, 5),
+                "spread": round(spread, 5),
+                "time": symbol_info.time
             }
             
-            # เก็บประวัติราคา
-            self.price_history.append({
-                "price": current_data["current_price"],
-                "timestamp": current_data["timestamp"]
-            })
-            
-            return current_data
-            
         except Exception as e:
-            print(f"❌ Current market data error: {e}")
+            self.log(f"❌ Market data error: {e}")
             return {}
     
-    def _get_ohlc_data(self, timeframe: int, count: int) -> Optional[pd.DataFrame]:
-        """ดึงข้อมูล OHLC จาก MT5"""
+    def _get_ohlc_data(self, timeframe: int, count: int) -> pd.DataFrame:
+        """ดึงข้อมูล OHLC"""
         try:
-            if not self.mt5_connector.is_connected:
-                return None
-            
             rates = mt5.copy_rates_from_pos(self.symbol, timeframe, 0, count)
             if rates is None or len(rates) == 0:
                 return None
-            
-            # Convert to DataFrame
+                
             df = pd.DataFrame(rates)
             df['time'] = pd.to_datetime(df['time'], unit='s')
             df.set_index('time', inplace=True)
@@ -218,418 +729,318 @@ class MarketAnalyzer:
             return df
             
         except Exception as e:
-            print(f"❌ OHLC data error: {e}")
+            self.log(f"❌ OHLC data error: {e}")
             return None
     
-    def _analyze_technical_indicators(self, ohlc_data: pd.DataFrame) -> Dict:
-        """วิเคราะห์ technical indicators"""
+    def _is_4d_cache_valid(self) -> bool:
+        """เช็คว่า 4D analysis cache ยังใช้ได้หรือไม่"""
         try:
-            close_prices = ohlc_data['close'].values
-            high_prices = ohlc_data['high'].values
-            low_prices = ohlc_data['low'].values
+            if not self.last_4d_analysis:
+                return False
             
-            # RSI
-            rsi = talib.RSI(close_prices, timeperiod=self.rsi_period)[-1]
+            time_diff = (datetime.now() - self.last_analysis_time).total_seconds()
+            return time_diff < self.analysis_cache_duration
             
-            # Bollinger Bands
-            bb_upper, bb_middle, bb_lower = talib.BBANDS(close_prices, timeperiod=self.bb_period, nbdevup=self.bb_deviation, nbdevdn=self.bb_deviation)
-            current_price = close_prices[-1]
-            bb_position = (current_price - bb_lower[-1]) / (bb_upper[-1] - bb_lower[-1])
-            
-            # Moving Averages
-            ma_fast = talib.SMA(close_prices, timeperiod=self.ma_fast)[-1]
-            ma_slow = talib.SMA(close_prices, timeperiod=self.ma_slow)[-1]
-            ma_distance = (ma_fast - ma_slow) / current_price * 100
-            
-            # MACD
-            macd_line, macd_signal, macd_histogram = talib.MACD(close_prices)
-            macd_value = macd_line[-1]
-            macd_signal_value = macd_signal[-1]
-            
-            # Stochastic
-            stoch_k, stoch_d = talib.STOCH(high_prices, low_prices, close_prices)
-            stoch_k_value = stoch_k[-1]
-            
-            return {
-                "rsi": round(rsi, 2),
-                "rsi_condition": self._classify_rsi(rsi),
-                "bollinger_position": round(bb_position, 3),
-                "bollinger_upper": round(bb_upper[-1], 5),
-                "bollinger_middle": round(bb_middle[-1], 5),
-                "bollinger_lower": round(bb_lower[-1], 5),
-                "ma_fast": round(ma_fast, 5),
-                "ma_slow": round(ma_slow, 5),
-                "ma_distance": round(ma_distance, 3),
-                "ma_direction": "BULLISH" if ma_distance > 0 else "BEARISH",
-                "macd": round(macd_value, 6),
-                "macd_signal": round(macd_signal_value, 6),
-                "macd_histogram": round(macd_line[-1] - macd_signal[-1], 6),
-                "stochastic": round(stoch_k_value, 2),
-                "stoch_condition": self._classify_stochastic(stoch_k_value)
-            }
-            
-        except Exception as e:
-            print(f"❌ Technical analysis error: {e}")
-            return {
-                "rsi": 50, "rsi_condition": "NEUTRAL",
-                "bollinger_position": 0.5, "ma_direction": "NEUTRAL",
-                "macd": 0, "stochastic": 50, "stoch_condition": "NEUTRAL"
-            }
+        except:
+            return False
     
-    def _analyze_trend_and_momentum(self, ohlc_data: pd.DataFrame) -> Dict:
-        """วิเคราะห์ trend และ momentum"""
-        try:
-            close_prices = ohlc_data['close'].values
+    def _minimal_4d_analysis(self, current_data: Dict = None) -> Dict:
+        """การวิเคราะห์ 4D ขั้นต่ำเมื่อไม่มีข้อมูล"""
+        if current_data is None:
+            current_data = {"current_price": 0, "bid": 0, "ask": 0, "spread": 0.05}
             
-            # Trend direction
-            price_change_5 = (close_prices[-1] - close_prices[-6]) / close_prices[-6] * 100
-            price_change_20 = (close_prices[-1] - close_prices[-21]) / close_prices[-21] * 100
+        return {
+            # Basic data
+            "current_price": current_data.get("current_price", 0),
+            "bid": current_data.get("bid", 0),
+            "ask": current_data.get("ask", 0),
+            "spread": current_data.get("spread", 0.05),
+            "timestamp": datetime.now(),
             
-            # Trend strength
-            price_volatility = np.std(close_prices[-20:]) / np.mean(close_prices[-20:])
-            trend_consistency = self._calculate_trend_consistency(close_prices[-20:])
+            # Dimension 1: Trend
+            "trend_direction": "SIDEWAYS",
+            "trend_strength": 0.0,
+            "trend_dimension_score": 0.0,
             
-            # Momentum
-            momentum_short = price_change_5 / 100
-            momentum_long = price_change_20 / 100
-            momentum = (momentum_short * 0.7 + momentum_long * 0.3)
+            # Dimension 2: Volume
+            "volume_trend": "UNKNOWN",
+            "volume_dimension_score": 0.5,
             
-            # Classify trend direction
-            if price_change_5 > 0.1 and price_change_20 > 0.05:
-                trend_direction = "UP"
-            elif price_change_5 < -0.1 and price_change_20 < -0.05:
-                trend_direction = "DOWN"
+            # Dimension 3: Session
+            "market_session": "UNKNOWN",
+            "session_dimension_score": 0.5,
+            
+            # Dimension 4: Volatility
+            "volatility_level": "MEDIUM",
+            "volatility_dimension_score": 0.5,
+            
+            # 4D Assessment
+            "market_condition_4d": "POOR_4D",
+            "market_score_4d": 0.25,
+            "four_d_confidence": 0.1,
+            "analysis_quality": 0.1
+        }
+    
+    # Supporting calculation methods
+    def _calculate_trend_direction(self, prices: np.ndarray) -> str:
+        """คำนวณทิศทาง trend"""
+        if len(prices) < 3:
+            return "SIDEWAYS"
+        
+        first_third = np.mean(prices[:len(prices)//3])
+        last_third = np.mean(prices[-len(prices)//3:])
+        change_pct = ((last_third - first_third) / first_third) * 100
+        
+        if change_pct > 0.05:
+            return "UP"
+        elif change_pct < -0.05:
+            return "DOWN" 
+        else:
+            return "SIDEWAYS"
+    
+    def _calculate_trend_strength(self, prices: np.ndarray) -> float:
+        """คำนวณความแรงของ trend"""
+        if len(prices) < 5:
+            return 0.0
+        
+        # Linear regression slope
+        x = np.arange(len(prices))
+        slope = np.polyfit(x, prices, 1)[0]
+        
+        # Normalize slope to 0-1 scale
+        price_range = np.max(prices) - np.min(prices)
+        if price_range == 0:
+            return 0.0
+            
+        normalized_slope = abs(slope) / (price_range / len(prices))
+        return min(1.0, normalized_slope)
+    
+    def _calculate_trend_consistency(self, prices: np.ndarray) -> float:
+        """คำนวณความสม่ำเสมอของ trend"""
+        if len(prices) < 5:
+            return 0.0
+        
+        directions = []
+        for i in range(1, len(prices)):
+            if prices[i] > prices[i-1]:
+                directions.append(1)
+            elif prices[i] < prices[i-1]:
+                directions.append(-1)
             else:
-                trend_direction = "SIDEWAYS"
-            
-            # Calculate trend strength (0.0-1.0)
-            trend_strength = min(1.0, (abs(price_change_20) + trend_consistency) / 2)
-            
-            return {
-                "trend_direction": trend_direction,
-                "trend_strength": round(trend_strength, 3),
-                "momentum": round(momentum, 4),
-                "price_change_5m": round(price_change_5, 3),
-                "price_change_20m": round(price_change_20, 3),
-                "trend_consistency": round(trend_consistency, 3),
-                "price_volatility": round(price_volatility, 4)
-            }
-            
-        except Exception as e:
-            print(f"❌ Trend analysis error: {e}")
-            return {
-                "trend_direction": "SIDEWAYS", "trend_strength": 0.0, "momentum": 0.0,
-                "price_change_5m": 0.0, "price_change_20m": 0.0, "trend_consistency": 0.0
-            }
+                directions.append(0)
+        
+        if not directions:
+            return 0.0
+        
+        direction_sum = sum(directions)
+        consistency = abs(direction_sum) / len(directions)
+        return min(1.0, consistency)
     
-    def _analyze_volatility(self, ohlc_data: pd.DataFrame) -> Dict:
-        """วิเคราะห์ volatility แบบละเอียด"""
+    def _calculate_obv_trend(self, prices: np.ndarray, volumes: np.ndarray) -> str:
+        """คำนวณ On-Balance Volume trend"""
         try:
-            close_prices = ohlc_data['close'].values
-            high_prices = ohlc_data['high'].values
-            low_prices = ohlc_data['low'].values
+            if len(prices) < 2 or len(volumes) < 2:
+                return "NEUTRAL"
             
-            # Calculate different volatility measures
-            price_volatility = np.std(close_prices[-20:]) / np.mean(close_prices[-20:])
-            range_volatility = np.mean((high_prices[-20:] - low_prices[-20:]) / close_prices[-20:])
+            obv = [volumes[0]]
+            for i in range(1, len(prices)):
+                if prices[i] > prices[i-1]:
+                    obv.append(obv[-1] + volumes[i])
+                elif prices[i] < prices[i-1]:
+                    obv.append(obv[-1] - volumes[i])
+                else:
+                    obv.append(obv[-1])
             
-            # ATR (Average True Range)
-            atr = talib.ATR(high_prices, low_prices, close_prices, timeperiod=14)[-1]
-            atr_percentage = atr / close_prices[-1] * 100
+            obv_change = (obv[-1] - obv[0]) / abs(obv[0]) if obv[0] != 0 else 0
             
-            # Volatility factor (normalized)
-            volatility_factor = (price_volatility + range_volatility + atr_percentage/100) / 3
-            
-            # Classify volatility level
-            if volatility_factor < 0.5:
-                volatility_level = "VERY_LOW"
-            elif volatility_factor < 1.0:
-                volatility_level = "LOW"
-            elif volatility_factor < 1.5:
-                volatility_level = "MEDIUM"
-            elif volatility_factor < 2.5:
-                volatility_level = "HIGH"
+            if obv_change > 0.05:
+                return "BULLISH"
+            elif obv_change < -0.05:
+                return "BEARISH"
             else:
-                volatility_level = "VERY_HIGH"
-            
-            return {
-                "volatility_factor": round(volatility_factor, 3),
-                "volatility_level": volatility_level,
-                "price_volatility": round(price_volatility, 4),
-                "range_volatility": round(range_volatility, 4),
-                "atr": round(atr, 5),
-                "atr_percentage": round(atr_percentage, 3)
-            }
-            
-        except Exception as e:
-            print(f"❌ Volatility analysis error: {e}")
-            return {
-                "volatility_factor": 1.0, "volatility_level": "MEDIUM",
-                "price_volatility": 0.01, "atr": 0.5
-            }
-    
-    def _analyze_support_resistance(self, ohlc_data: pd.DataFrame) -> Dict:
-        """วิเคราะห์ support และ resistance levels"""
-        try:
-            # Update S/R levels if needed
-            if (datetime.now() - self.last_sr_update).total_seconds() > 300:  # 5 minutes
-                self._update_support_resistance_levels(ohlc_data)
-            
-            current_price = ohlc_data['close'].iloc[-1]
-            
-            # หา support/resistance ที่ใกล้ที่สุด
-            nearest_support = None
-            nearest_resistance = None
-            
-            for level in self.support_levels:
-                if level["level"] < current_price:
-                    if nearest_support is None or level["level"] > nearest_support["level"]:
-                        nearest_support = level
-            
-            for level in self.resistance_levels:
-                if level["level"] > current_price:
-                    if nearest_resistance is None or level["level"] < nearest_resistance["level"]:
-                        nearest_resistance = level
-            
-            return {
-                "support_levels": self.support_levels,
-                "resistance_levels": self.resistance_levels,
-                "nearest_support": nearest_support,
-                "nearest_resistance": nearest_resistance,
-                "support_distance": abs(current_price - nearest_support["level"]) if nearest_support else float('inf'),
-                "resistance_distance": abs(current_price - nearest_resistance["level"]) if nearest_resistance else float('inf')
-            }
-            
-        except Exception as e:
-            print(f"❌ S/R analysis error: {e}")
-            return {
-                "support_levels": [], "resistance_levels": [],
-                "nearest_support": None, "nearest_resistance": None
-            }
-    
-    def _analyze_market_session(self) -> Dict:
-        """วิเคราะห์ market session ปัจจุบัน"""
-        try:
-            current_hour = datetime.now().hour
-            
-            # กำหนด session
-            if 1 <= current_hour <= 7:
-                session = "ASIAN"
-                activity_level = "LOW"
-            elif 8 <= current_hour <= 12:
-                session = "LONDON"
-                activity_level = "HIGH"
-            elif 13 <= current_hour <= 17:
-                session = "OVERLAP"  # London-NY overlap
-                activity_level = "VERY_HIGH"
-            elif 18 <= current_hour <= 22:
-                session = "NEW_YORK"
-                activity_level = "HIGH"
-            else:
-                session = "QUIET"
-                activity_level = "VERY_LOW"
-            
-            # คำนวณ session factor สำหรับ grid expansion
-            session_factors = {
-                "ASIAN": 0.7,
-                "LONDON": 1.2,
-                "OVERLAP": 1.5,
-                "NEW_YORK": 1.1,
-                "QUIET": 0.5
-            }
-            
-            session_factor = session_factors.get(session, 1.0)
-            
-            return {
-                "market_session": session,
-                "activity_level": activity_level,
-                "session_factor": session_factor,
-                "current_hour": current_hour,
-                "is_major_session": session in ["LONDON", "NEW_YORK", "OVERLAP"]
-            }
-            
-        except Exception as e:
-            print(f"❌ Session analysis error: {e}")
-            return {
-                "market_session": "UNKNOWN", "activity_level": "MEDIUM",
-                "session_factor": 1.0, "is_major_session": False
-            }
-    
-    def _analyze_spread_and_liquidity(self, current_data: Dict) -> Dict:
-        """วิเคราะห์ spread และ liquidity"""
-        try:
-            current_spread = current_data.get("spread", 0)
-            
-            # คำนวณ average spread จากประวัติ
-            recent_spreads = []
-            for price_data in list(self.price_history)[-10:]:
-                if "spread" in price_data:
-                    recent_spreads.append(price_data["spread"])
-            
-            avg_spread = statistics.mean(recent_spreads) if recent_spreads else current_spread
-            
-            # Classify spread condition
-            if current_spread <= avg_spread * 1.2:
-                spread_condition = "NORMAL"
-                liquidity_level = "HIGH"
-            elif current_spread <= avg_spread * 2.0:
-                spread_condition = "WIDE"
-                liquidity_level = "MEDIUM"
-            else:
-                spread_condition = "VERY_WIDE"
-                liquidity_level = "LOW"
-            
-            return {
-                "spread": current_spread,
-                "avg_spread": round(avg_spread, 5),
-                "spread_condition": spread_condition,
-                "liquidity_level": liquidity_level,
-                "spread_ratio": round(current_spread / avg_spread, 2) if avg_spread > 0 else 1.0
-            }
-            
-        except Exception as e:
-            print(f"❌ Spread analysis error: {e}")
-            return {
-                "spread": 0.05, "avg_spread": 0.05, "spread_condition": "NORMAL",
-                "liquidity_level": "HIGH", "spread_ratio": 1.0
-            }
-    
-    def _update_support_resistance_levels(self, ohlc_data: pd.DataFrame):
-        """อัพเดท support และ resistance levels"""
-        try:
-            high_prices = ohlc_data['high'].values
-            low_prices = ohlc_data['low'].values
-            close_prices = ohlc_data['close'].values
-            
-            # หา local peaks และ troughs
-            peaks = []
-            troughs = []
-            
-            for i in range(2, len(high_prices) - 2):
-                # Peak detection
-                if (high_prices[i] > high_prices[i-1] and high_prices[i] > high_prices[i-2] and
-                    high_prices[i] > high_prices[i+1] and high_prices[i] > high_prices[i+2]):
-                    peaks.append(high_prices[i])
+                return "NEUTRAL"
                 
-                # Trough detection
-                if (low_prices[i] < low_prices[i-1] and low_prices[i] < low_prices[i-2] and
-                    low_prices[i] < low_prices[i+1] and low_prices[i] < low_prices[i+2]):
-                    troughs.append(low_prices[i])
+        except Exception as e:
+            return "NEUTRAL"
+    
+    def _calculate_volume_price_correlation(self, price_changes: np.ndarray, 
+                                          volume_changes: np.ndarray) -> float:
+        """คำนวณความสัมพันธ์ volume-price"""
+        try:
+            if len(price_changes) < 3 or len(volume_changes) < 3:
+                return 0.0
             
-            # สร้าง resistance levels จาก peaks
-            self.resistance_levels = []
-            for peak in peaks[-10:]:  # เอา 10 peaks ล่าสุด
-                strength = peaks.count(peak) / len(peaks)  # ความแข็งแกร่งตามความถี่
-                self.resistance_levels.append({
-                    "level": round(peak, 2),
-                    "strength": round(strength, 3),
-                    "type": "RESISTANCE",
-                    "last_updated": datetime.now()
-                })
-            
-            # สร้าง support levels จาก troughs
-            self.support_levels = []
-            for trough in troughs[-10:]:  # เอา 10 troughs ล่าสุด
-                strength = troughs.count(trough) / len(troughs)
-                self.support_levels.append({
-                    "level": round(trough, 2),
-                    "strength": round(strength, 3),
-                    "type": "SUPPORT",
-                    "last_updated": datetime.now()
-                })
-            
-            self.last_sr_update = datetime.now()
+            correlation = np.corrcoef(price_changes, volume_changes)[0, 1]
+            return round(correlation if not np.isnan(correlation) else 0.0, 3)
             
         except Exception as e:
-            print(f"❌ S/R update error: {e}")
+            return 0.0
     
-    def _determine_market_condition(self, technical: Dict, trend: Dict, volatility: Dict) -> str:
-        """กำหนดสภาวะตลาดโดยรวม"""
-        try:
-            trend_direction = trend.get("trend_direction", "SIDEWAYS")
-            trend_strength = trend.get("trend_strength", 0)
-            volatility_level = volatility.get("volatility_level", "MEDIUM")
-            rsi = technical.get("rsi", 50)
-            
-            # Trending conditions
-            if trend_strength > 0.6:
-                if trend_direction == "UP":
-                    return "TRENDING_UP_STRONG"
-                elif trend_direction == "DOWN":
-                    return "TRENDING_DOWN_STRONG"
-            elif trend_strength > 0.3:
-                if trend_direction == "UP":
-                    return "TRENDING_UP"
-                elif trend_direction == "DOWN":
-                    return "TRENDING_DOWN"
-            
-            # Ranging conditions
-            if volatility_level in ["LOW", "VERY_LOW"]:
-                return "RANGING_QUIET"
-            elif volatility_level in ["HIGH", "VERY_HIGH"]:
-                return "RANGING_VOLATILE"
-            else:
-                return "RANGING"
-            
-        except Exception as e:
-            return "UNKNOWN"
+    def _identify_trading_session(self, hour: int) -> Dict:
+        """ระบุ trading session"""
+        if 0 <= hour <= 6:
+            return {
+                "session": "ASIAN",
+                "activity_level": "LOW", 
+                "session_factor": 0.7,
+                "is_major_session": False
+            }
+        elif 7 <= hour <= 11:
+            return {
+                "session": "LONDON_OPEN",
+                "activity_level": "HIGH",
+                "session_factor": 1.3,
+                "is_major_session": True
+            }
+        elif 12 <= hour <= 16:
+            return {
+                "session": "LONDON_NY_OVERLAP",
+                "activity_level": "VERY_HIGH",
+                "session_factor": 1.5,
+                "is_major_session": True
+            }
+        elif 17 <= hour <= 21:
+            return {
+                "session": "NEW_YORK",
+                "activity_level": "HIGH",
+                "session_factor": 1.2,
+                "is_major_session": True
+            }
+        else:
+            return {
+                "session": "QUIET_HOURS",
+                "activity_level": "VERY_LOW",
+                "session_factor": 0.5,
+                "is_major_session": False
+            }
     
-    def _calculate_market_score(self, technical: Dict, trend: Dict, volatility: Dict) -> float:
-        """คำนวณคะแนนตลาดโดยรวม (0.0-1.0) สำหรับการตัดสินใจ"""
+    def _get_session_volatility_profile(self, session: str) -> str:
+        """ดึง volatility profile ของแต่ละ session"""
+        profiles = {
+            "ASIAN": "LOW",
+            "LONDON_OPEN": "HIGH",
+            "LONDON_NY_OVERLAP": "VERY_HIGH", 
+            "NEW_YORK": "HIGH",
+            "QUIET_HOURS": "VERY_LOW"
+        }
+        return profiles.get(session, "MEDIUM")
+    
+    def _detect_session_overlaps(self, hour: int) -> bool:
+        """ตรวจจับการ overlap ของ session"""
+        # London-NY overlap (12:00-16:00)
+        return 12 <= hour <= 16
+    
+    def _calculate_time_activity_score(self, hour: int) -> float:
+        """คำนวณคะแนน activity ตามเวลา"""
+        activity_scores = {
+            0: 0.2, 1: 0.1, 2: 0.1, 3: 0.1, 4: 0.2, 5: 0.3,
+            6: 0.5, 7: 0.8, 8: 1.0, 9: 1.0, 10: 0.9, 11: 0.8,
+            12: 1.0, 13: 1.0, 14: 1.0, 15: 1.0, 16: 0.9, 17: 0.8,
+            18: 0.9, 19: 0.8, 20: 0.7, 21: 0.6, 22: 0.4, 23: 0.3
+        }
+        return activity_scores.get(hour, 0.5)
+    
+    def _calculate_session_proximity(self, hour: int) -> Dict:
+        """คำนวณความใกล้เคียงกับการเปิด/ปิด session"""
+        # Major session times (London: 7-17, NY: 12-22)
+        london_open_distance = min(abs(hour - 7), abs(hour - (7 + 24))) if hour != 7 else 0
+        london_close_distance = min(abs(hour - 17), abs(hour - (17 - 24))) if hour != 17 else 0
+        ny_open_distance = min(abs(hour - 12), abs(hour - (12 + 24))) if hour != 12 else 0
+        ny_close_distance = min(abs(hour - 22), abs(hour - (22 - 24))) if hour != 22 else 0
+        
+        return {
+            "open_proximity": 1.0 / (1 + min(london_open_distance, ny_open_distance)),
+            "close_proximity": 1.0 / (1 + min(london_close_distance, ny_close_distance))
+        }
+    
+    def _calculate_level_strength(self, prices: np.ndarray, level: float, level_type: str) -> float:
+        """คำนวณความแรงของ support/resistance level"""
+        touches = 0
+        tolerance = level * 0.001  # 0.1% tolerance
+        
+        for price in prices:
+            if abs(price - level) <= tolerance:
+                touches += 1
+        
+        # Normalize to 0-1 scale
+        return min(1.0, touches / 5.0)
+    
+    def _calculate_analysis_quality(self, ohlc_data: pd.DataFrame) -> float:
+        """คำนวณคุณภาพของการวิเคราะห์"""
         try:
-            # Components
-            trend_score = trend.get("trend_strength", 0) * 0.3
+            if ohlc_data is None or len(ohlc_data) < 20:
+                return 0.2
             
-            # RSI score (closer to 50 = better for grid)
-            rsi = technical.get("rsi", 50)
-            rsi_score = (1 - abs(rsi - 50) / 50) * 0.2
+            # Data completeness
+            data_completeness = len(ohlc_data) / self.analysis_period
             
-            # Volatility score (moderate volatility = better)
-            vol_factor = volatility.get("volatility_factor", 1.0)
-            vol_score = max(0, 1 - abs(vol_factor - 1.0)) * 0.3
+            # Data freshness
+            last_time = ohlc_data.index[-1] 
+            time_diff = (datetime.now() - last_time).total_seconds()
+            freshness = max(0, 1 - time_diff / 600)  # Fresh within 10 minutes
             
-            # Liquidity score
-            spread_condition = technical.get("spread_condition", "NORMAL")
-            liquidity_score = {"NORMAL": 0.2, "WIDE": 0.1, "VERY_WIDE": 0.0}.get(spread_condition, 0.1)
-            
-            total_score = trend_score + rsi_score + vol_score + liquidity_score
-            
-            return round(min(1.0, max(0.0, total_score)), 3)
+            quality = (data_completeness * 0.7 + freshness * 0.3)
+            return round(min(1.0, quality), 3)
             
         except Exception as e:
             return 0.5
     
-    # ========================================================================================
-    # 🔧 HELPER METHODS
-    # ========================================================================================
-    
-    def _calculate_trend_consistency(self, prices: np.ndarray) -> float:
-        """คำนวณความสม่ำเสมอของ trend"""
+    def _calculate_data_freshness(self, ohlc_data: pd.DataFrame) -> float:
+        """คำนวณความใหม่ของข้อมูล"""
         try:
-            if len(prices) < 5:
+            if ohlc_data is None:
                 return 0.0
             
-            # คำนวณทิศทางแต่ละช่วง
-            directions = []
-            for i in range(1, len(prices)):
-                if prices[i] > prices[i-1]:
-                    directions.append(1)
-                elif prices[i] < prices[i-1]:
-                    directions.append(-1)
-                else:
-                    directions.append(0)
+            last_time = ohlc_data.index[-1]
+            time_diff = (datetime.now() - last_time).total_seconds()
             
-            if not directions:
-                return 0.0
-            
-            # คำนวณความสม่ำเสมอ
-            direction_sum = sum(directions)
-            consistency = abs(direction_sum) / len(directions)
-            
-            return min(1.0, consistency)
+            # Fresh data = 1.0, old data approaches 0.0
+            return max(0.0, 1.0 - time_diff / 1800)  # 30 minutes max age
             
         except Exception as e:
             return 0.0
+    
+    # Technical indicator calculations
+    def _calculate_rsi(self, prices: np.ndarray, period: int = 14) -> float:
+        """คำนวณ RSI"""
+        try:
+            if len(prices) < period + 1:
+                return 50.0
+            
+            deltas = np.diff(prices)
+            gains = np.where(deltas > 0, deltas, 0)
+            losses = np.where(deltas < 0, -deltas, 0)
+            
+            avg_gain = np.mean(gains[-period:])
+            avg_loss = np.mean(losses[-period:])
+            
+            if avg_loss == 0:
+                return 100.0
+            
+            rs = avg_gain / avg_loss
+            rsi = 100 - (100 / (1 + rs))
+            
+            return round(rsi, 2)
+            
+        except Exception as e:
+            return 50.0
+    
+    def _calculate_ema(self, prices: np.ndarray, period: int) -> np.ndarray:
+        """คำนวณ EMA"""
+        try:
+            if len(prices) < period:
+                return np.array([])
+            
+            alpha = 2.0 / (period + 1)
+            ema = [prices[0]]
+            
+            for i in range(1, len(prices)):
+                ema.append(alpha * prices[i] + (1 - alpha) * ema[-1])
+            
+            return np.array(ema)
+            
+        except Exception as e:
+            return np.array([])
     
     def _classify_rsi(self, rsi: float) -> str:
         """จำแนก RSI condition"""
@@ -657,73 +1068,29 @@ class MarketAnalyzer:
         else:
             return "OVERBOUGHT"
     
-    def _is_analysis_cache_valid(self) -> bool:
-        """เช็คว่า analysis cache ยังใช้ได้หรือไม่"""
-        try:
-            time_diff = (datetime.now() - self.last_analysis_time).total_seconds()
-            return time_diff < self.analysis_cache_duration and bool(self.last_analysis)
-        except:
-            return False
-    
-    def _minimal_analysis(self, current_data: Dict) -> Dict:
-        """การวิเคราะห์ขั้นต่ำเมื่อไม่มีข้อมูล"""
-        return {
-            "current_price": current_data.get("current_price", 0),
-            "bid": current_data.get("bid", 0),
-            "ask": current_data.get("ask", 0),
-            "spread": current_data.get("spread", 0.05),
-            "timestamp": datetime.now(),
-            "rsi": 50,
-            "trend_direction": "SIDEWAYS",
-            "trend_strength": 0.0,
-            "volatility_factor": 1.0,
-            "volatility_level": "MEDIUM",
-            "market_session": "UNKNOWN",
-            "condition": "RANGING",
-            "market_score": 0.5,
-            "analysis_quality": 0.3,
-            "data_freshness": 0
-        }
-    
-    def _calculate_analysis_quality(self, ohlc_data: pd.DataFrame) -> float:
-        """คำนวณคุณภาพของการวิเคราะห์"""
-        try:
-            if ohlc_data is None or len(ohlc_data) < 20:
-                return 0.2
-            
-            # เช็คความสมบูรณ์ของข้อมูล
-            data_completeness = len(ohlc_data) / self.analysis_period
-            
-            # เช็คความใหม่ของข้อมูล
-            last_time = ohlc_data.index[-1]
-            time_diff = (datetime.now() - last_time).total_seconds()
-            freshness = max(0, 1 - time_diff / 300)  # ใหม่ใน 5 นาที = 1.0
-            
-            quality = (data_completeness * 0.7 + freshness * 0.3)
-            return round(min(1.0, quality), 3)
-            
-        except Exception as e:
-            return 0.5
-    
     def log(self, message: str):
         """Log message with timestamp"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
+        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         print(f"[{timestamp}] 📊 MarketAnalyzer: {message}")
 
 
 # ========================================================================================
-# 🧪 TEST FUNCTION
+# 🧪 4D ANALYSIS TEST FUNCTIONS
 # ========================================================================================
 
-def test_market_analyzer_compatibility():
-    """Test compatibility with Modern Rule Engine"""
-    print("🧪 Testing Market Analyzer compatibility...")
-    print("✅ get_comprehensive_analysis() method updated")
-    print("✅ Complete market data format for Rule Engine")
-    print("✅ Dynamic volatility analysis")
-    print("✅ Market session detection")
-    print("✅ Support/Resistance analysis")
-    print("✅ Ready for Modern Rule Engine integration")
+# def test_4d_market_analyzer():
+#     """Test 4D Market Analyzer functionality"""
+#     print("🧪 Testing 4D Market Analyzer...")
+#     print("✅ 4D Comprehensive Analysis method")
+#     print("✅ Trend Analysis (Dimension 1)")
+#     print("✅ Volume Analysis (Dimension 2)")  
+#     print("✅ Session Analysis (Dimension 3)")
+#     print("✅ Volatility Analysis (Dimension 4)")
+#     print("✅ 4D Scoring and Assessment")
+#     print("✅ Market Condition Classification")
+#     print("✅ Real-time Analysis Caching")
+#     print("✅ Performance Tracking Integration")
+#     print("✅ Ready for 4D AI Rule Engine")
 
-if __name__ == "__main__":
-    test_market_analyzer_compatibility()
+# if __name__ == "__main__":
+#     test_4d_market_analyzer()
