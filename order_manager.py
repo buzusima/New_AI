@@ -1,8 +1,16 @@
 """
-🎯 Modern Order Manager - Updated for New Rule Engine
+🎯 Modern Order Manager - Market Order Enhanced Edition
 order_manager.py
-เพิ่ม place_smart_order() method และปรับปรุงให้เข้ากับ Modern Rule Engine
-** PRODUCTION READY - COMPATIBLE WITH NEW RULE ENGINE **
+
+Enhanced Features:
+- Market Order Approach (ไม่รอราคา)
+- ลบ Collision Detection (วางได้เสมอ)
+- 4D AI Integration Support
+- Hybrid Entry Logic Support
+- Dynamic Lot Sizing
+- Smart Recovery Integration
+
+** PRODUCTION READY - MARKET ORDER FOCUS **
 """
 
 import time
@@ -17,13 +25,13 @@ from collections import deque
 import json
 
 class OrderType(Enum):
-    """ประเภทออเดอร์"""
+    """ประเภทออเดอร์ - เน้น Market Orders"""
     BUY_LIMIT = "BUY_LIMIT"
     SELL_LIMIT = "SELL_LIMIT"
     BUY_STOP = "BUY_STOP"
     SELL_STOP = "SELL_STOP"
-    MARKET_BUY = "MARKET_BUY"
-    MARKET_SELL = "MARKET_SELL"
+    MARKET_BUY = "MARKET_BUY"      # ⭐ Primary focus
+    MARKET_SELL = "MARKET_SELL"    # ⭐ Primary focus
 
 class OrderStatus(Enum):
     """สถานะออเดอร์"""
@@ -33,510 +41,652 @@ class OrderStatus(Enum):
     REJECTED = "REJECTED"
 
 class OrderReason(Enum):
-    """เหตุผลการวางออเดอร์"""
+    """เหตุผลการวางออเดอร์ - Enhanced with 4D AI"""
     TREND_FOLLOWING = "TREND_FOLLOWING"
     MEAN_REVERSION = "MEAN_REVERSION"
     SUPPORT_RESISTANCE = "SUPPORT_RESISTANCE"
     VOLATILITY_BREAKOUT = "VOLATILITY_BREAKOUT"
-    PORTFOLIO_BALANCE = "PORTFOLIO_BALANCE"
+    PORTFOLIO_BALANCE = "PORTFOLIO_BALANCE"      # ⭐ Primary focus
     GRID_EXPANSION = "GRID_EXPANSION"
-    RISK_MANAGEMENT = "RISK_MANAGEMENT"
+    RISK_MANAGEMENT = "RISK_MANAGEMENT"          # ⭐ Recovery focus
+    FOUR_D_AI_ENTRY = "FOUR_D_AI_ENTRY"         # ⭐ New AI reason
+    SMART_RECOVERY = "SMART_RECOVERY"            # ⭐ New recovery reason
 
 @dataclass
 class OrderRequest:
-    """คำขอวางออเดอร์"""
+    """คำขอวางออเดอร์ - Enhanced for Market Orders"""
     order_type: OrderType
     volume: float
-    price: float
-    sl: float = 0.0
-    tp: float = 0.0
-    reason: OrderReason = OrderReason.GRID_EXPANSION
+    price: float = 0.0                    # 0.0 for market orders
+    sl: float = 0.0                       # No stop loss (use recovery instead)
+    tp: float = 0.0                       # No take profit (use management)
+    reason: OrderReason = OrderReason.PORTFOLIO_BALANCE
     confidence: float = 0.5
     reasoning: str = ""
-    max_slippage: int = 10
+    max_slippage: int = 20                # ⭐ Higher slippage for market orders
     magic_number: int = 100001
+    four_d_score: float = 0.0             # ⭐ 4D AI Score
+    hybrid_factors: Dict = None           # ⭐ Hybrid factors
 
 @dataclass
 class OrderResult:
-    """ผลลัพธ์การวางออเดอร์"""
+    """ผลลัพธ์การวางออเดอร์ - Enhanced"""
     success: bool
     ticket: int = 0
-    error_code: int = 0
-    error_message: str = ""
-    execution_price: float = 0.0
-    slippage: float = 0.0
-    timestamp: datetime = None
-    
-    def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = datetime.now()
+    price: float = 0.0
+    volume: float = 0.0
+    message: str = ""
+    slippage: float = 0.0                 # ⭐ Track actual slippage
+    execution_time: float = 0.0           # ⭐ Track execution speed
+    four_d_score: float = 0.0             # ⭐ Associated 4D score
 
-@dataclass
-class SmartOrderParameters:
-    """พารามิเตอร์สำหรับ Smart Order"""
-    base_lot_size: float
-    current_spacing: int
-    max_spread_multiplier: float = 3.0
-    min_distance_points: int = 50
-    volatility_adjustment: float = 1.0
-    trend_bias: float = 0.0  # -1 to 1 (bearish to bullish)
-    risk_per_trade: float = 0.01  # 1% risk per trade
+# ========================================================================================
+# 🎯 ENHANCED ORDER MANAGER CLASS
+# ========================================================================================
 
 class OrderManager:
     """
-    🎯 Modern Order Manager - Updated Edition
+    🎯 Enhanced Order Manager - Market Order Focus
     
-    ความสามารถ:
-    - ✅ place_smart_order() method สำหรับ Rule Engine ใหม่
-    - ✅ รองรับ target_price จาก Rule Engine
-    - ✅ Dynamic spacing และ lot sizing
-    - ✅ Anti-collision protection
-    - ✅ Performance tracking
-    ** COMPATIBLE WITH NEW RULE ENGINE **
+    ความสามารถใหม่:
+    - Market Order Primary Approach
+    - No Collision Detection (วางได้เสมอ)
+    - 4D AI Integration 
+    - Smart Recovery Support
+    - Dynamic Execution Parameters
+    - Enhanced Performance Tracking
     """
     
-    def __init__(self, mt5_connector, spacing_manager, lot_calculator, config: Dict):
-        """Initialize Order Manager"""
-        if not mt5_connector:
-            raise ValueError("MT5 connector is required for production Order Manager")
-            
+    def __init__(self, mt5_connector, spacing_manager, lot_calculator, config):
+        """Initialize Enhanced Order Manager"""
+        # Core components
         self.mt5_connector = mt5_connector
         self.spacing_manager = spacing_manager
         self.lot_calculator = lot_calculator
         self.config = config
         
-        # Order tracking
-        self.pending_orders: Dict[int, Dict] = {}
-        self.order_history = deque(maxlen=500)
-        self.last_order_time = {}
+        # Trading parameters
+        self.symbol = config.get("trading", {}).get("symbol", "XAUUSD")
+        self.max_daily_orders = config.get("risk_management", {}).get("max_daily_orders", 100)
+        self.min_lot = config.get("trading", {}).get("min_lot_size", 0.01)
+        self.max_lot = config.get("trading", {}).get("max_lot_size", 1.0)
         
-        # Performance tracking
-        self.order_performance = {
-            reason.value: {"count": 0, "success": 0, "total_profit": 0.0}
-            for reason in OrderReason
+        # Market order parameters - Enhanced
+        self.market_order_config = {
+            "max_slippage_points": 30,        # ⭐ ยอมรับ slippage สูงขึ้น
+            "retry_attempts": 3,              # ⭐ ลองใหม่ถ้าไม่สำเร็จ
+            "retry_delay": 0.5,               # วินาที
+            "execution_timeout": 10.0,        # Timeout สำหรับ market order
+            "min_spacing_override": False      # ⭐ ไม่เช็ค spacing (วางได้เสมอ)
         }
         
-        # Risk management
-        self.max_orders_per_direction = config.get("trading", {}).get("max_positions", 20)
-        self.max_daily_orders = 100
+        # Symbol info
+        self.point_value = 0.01
+        self.tick_size = 0.01
+        self.min_distance = 30
+        
+        # Performance tracking - Enhanced
+        self.order_performance = {}
+        self.execution_stats = {
+            "market_orders": {"count": 0, "success": 0, "avg_slippage": 0.0, "avg_execution_time": 0.0},
+            "limit_orders": {"count": 0, "success": 0, "fill_rate": 0.0},
+            "recovery_orders": {"count": 0, "success": 0, "recovery_rate": 0.0}
+        }
+        
+        # State tracking
         self.daily_order_count = 0
         self.last_reset_date = datetime.now().date()
+        self.last_order_time = datetime.now()
+        self.order_history = deque(maxlen=100)
         
-        # Smart parameters
-        self.smart_params = SmartOrderParameters(
-            base_lot_size=config.get("trading", {}).get("base_lot_size", 0.01),
-            current_spacing=config.get("trading", {}).get("min_spacing_points", 80)
-        )
-        
-        # Symbol info
-        self.symbol = config.get("trading", {}).get("symbol", "XAUUSD")
-        self.point_value = 0.01
-        self.min_lot = 0.01
-        self.max_lot = 100.0
-        self.lot_step = 0.01
-        
-        # Initialize from MT5
+        # Initialize symbol info
         self._update_symbol_info()
         
-        print("🎯 Order Manager initialized - Compatible with Modern Rule Engine")
+        print("🎯 Enhanced Order Manager initialized - Market Order Focus")
+        print(f"   Symbol: {self.symbol}")
+        print(f"   Market Order Config: {self.market_order_config}")
     
     # ========================================================================================
-    # 🆕 NEW PRIMARY INTERFACE FOR RULE ENGINE
+    # ⚡ MARKET ORDER METHODS - CORE FEATURES
     # ========================================================================================
     
-    def place_smart_order(self, order_type: str, volume: float, price: float, 
-                         reasoning: str, confidence: float, **kwargs) -> Dict:
-        """
-        🆕 หลัก Method สำหรับ Modern Rule Engine
-        
-        Args:
-            order_type: ประเภทออเดอร์ (BUY_LIMIT, SELL_LIMIT, etc.)
-            volume: ขนาดออเดอร์
-            price: ราคาเป้าหมายจาก Rule Engine
-            reasoning: เหตุผลการวางออเดอร์
-            confidence: ระดับความเชื่อมั่น
-            **kwargs: พารามิเตอร์เพิ่มเติม
-            
-        Returns:
-            Dict: {"success": bool, "ticket": int, "error": str, ...}
-        """
+    def place_market_order(self, order_request: OrderRequest) -> OrderResult:
+        """⚡ วาง Market Order ทันที - Core Method"""
         try:
-            print(f"🎯 === PLACE SMART ORDER ===")
-            print(f"   Type: {order_type}")
-            print(f"   Volume: {volume:.3f}")
-            print(f"   Price: {price:.5f}")
-            print(f"   Confidence: {confidence:.2f}")
-            print(f"   Reasoning: {reasoning}")
+            start_time = time.time()
+            
+            print(f"⚡ === MARKET ORDER EXECUTION ===")
+            print(f"   Type: {order_request.order_type.value}")
+            print(f"   Volume: {order_request.volume:.3f}")
+            print(f"   Reason: {order_request.reason.value}")
+            print(f"   4D Score: {order_request.four_d_score:.3f}")
+            print(f"   Confidence: {order_request.confidence:.3f}")
+            
+            # Validate connection
+            if not self.mt5_connector.is_connected:
+                return OrderResult(False, 0, 0, 0, "MT5 not connected")
             
             # Validate inputs
-            if not self._validate_order_inputs(order_type, volume, price):
-                return {"success": False, "error": "Invalid order inputs"}
+            if not self._validate_market_order_inputs(order_request):
+                return OrderResult(False, 0, 0, 0, "Invalid order inputs")
             
-            # Check MT5 connection
-            if not self.mt5_connector.is_connected:
-                self.log("❌ MT5 not connected")
-                return {"success": False, "error": "MT5 not connected"}
+            # Get current market price
+            current_price = self._get_current_price()
+            if current_price <= 0:
+                return OrderResult(False, 0, 0, 0, "Cannot get current price")
             
-            # Check daily limits
-            if not self._check_daily_limits():
-                return {"success": False, "error": "Daily order limit reached"}
+            # Prepare MT5 order request
+            mt5_request = self._prepare_mt5_market_request(order_request, current_price)
             
-            # Prepare market data with target price
-            market_data = kwargs.get("market_data", {})
-            if not market_data:
-                market_data = self._get_current_market_data()
+            # Execute with retry logic
+            result = self._execute_market_order_with_retry(mt5_request, order_request)
             
-            # ⭐ เพิ่ม target_price จาก Rule Engine ลงใน market_data
-            market_data["target_price"] = price
-            market_data["rule_volume"] = volume  # เพิ่ม volume ที่ Rule Engine คำนวณแล้ว
+            # Track execution stats
+            execution_time = time.time() - start_time
+            self._track_market_order_performance(order_request, result, execution_time)
             
-            # Route to appropriate method
-            if order_type in ["BUY_LIMIT", "BUY_STOP", "MARKET_BUY"]:
-                success = self.place_smart_buy_order(confidence, reasoning, market_data)
-                return {"success": success, "order_type": order_type, "direction": "BUY"}
-                
-            elif order_type in ["SELL_LIMIT", "SELL_STOP", "MARKET_SELL"]:
-                success = self.place_smart_sell_order(confidence, reasoning, market_data)
-                return {"success": success, "order_type": order_type, "direction": "SELL"}
+            return result
             
-            else:
-                return {"success": False, "error": f"Unknown order type: {order_type}"}
-                
         except Exception as e:
-            self.log(f"❌ Place smart order error: {e}")
-            return {"success": False, "error": str(e)}
+            self.log(f"❌ Market order execution error: {e}")
+            return OrderResult(False, 0, 0, 0, f"Execution error: {e}")
     
-    def _validate_order_inputs(self, order_type: str, volume: float, price: float) -> bool:
-        """ตรวจสอบความถูกต้องของ inputs"""
+    def _prepare_mt5_market_request(self, order_request: OrderRequest, current_price: float) -> Dict:
+        """เตรียม MT5 request สำหรับ Market Order"""
+        try:
+            # กำหนด order type สำหรับ MT5
+            if order_request.order_type == OrderType.MARKET_BUY:
+                mt5_order_type = mt5.ORDER_TYPE_BUY
+                execution_price = current_price  # Market price
+            elif order_request.order_type == OrderType.MARKET_SELL:
+                mt5_order_type = mt5.ORDER_TYPE_SELL
+                execution_price = current_price  # Market price
+            else:
+                raise ValueError(f"Not a market order type: {order_request.order_type}")
+            
+            # เตรียม request
+            mt5_request = {
+                "action": mt5.TRADE_ACTION_DEAL,        # ⭐ DEAL for immediate execution
+                "symbol": self.symbol,
+                "volume": order_request.volume,
+                "type": mt5_order_type,
+                "price": execution_price,
+                "deviation": order_request.max_slippage,  # Slippage tolerance
+                "magic": order_request.magic_number,
+                "comment": f"{order_request.reason.value}|4D:{order_request.four_d_score:.2f}",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_IOC   # ⭐ Immediate or Cancel
+            }
+            
+            # ไม่ใส่ SL/TP (ใช้ recovery system แทน)
+            # if order_request.sl > 0:
+            #     mt5_request["sl"] = order_request.sl
+            # if order_request.tp > 0:
+            #     mt5_request["tp"] = order_request.tp
+            
+            return mt5_request
+            
+        except Exception as e:
+            self.log(f"❌ Prepare MT5 request error: {e}")
+            return {}
+    
+    def _execute_market_order_with_retry(self, mt5_request: Dict, 
+                                        order_request: OrderRequest) -> OrderResult:
+        """Execute Market Order with Retry Logic"""
+        try:
+            max_attempts = self.market_order_config["retry_attempts"]
+            retry_delay = self.market_order_config["retry_delay"]
+            
+            for attempt in range(max_attempts):
+                print(f"🎯 Market order attempt {attempt + 1}/{max_attempts}")
+                
+                # ส่งออเดอร์
+                result = mt5.order_send(mt5_request)
+                
+                if result is None:
+                    error_msg = f"MT5 order_send returned None (attempt {attempt + 1})"
+                    print(f"❌ {error_msg}")
+                    
+                    if attempt < max_attempts - 1:
+                        time.sleep(retry_delay)
+                        continue
+                    else:
+                        return OrderResult(False, 0, 0, 0, error_msg)
+                
+                # เช็คผลลัพธ์
+                if result.retcode == mt5.TRADE_RETCODE_DONE:
+                    # สำเร็จ!
+                    actual_price = result.price
+                    requested_price = mt5_request["price"]
+                    slippage = abs(actual_price - requested_price)
+                    
+                    self.log(f"✅ Market order SUCCESS")
+                    self.log(f"   Ticket: {result.order}")
+                    self.log(f"   Price: {actual_price:.5f}")
+                    self.log(f"   Slippage: {slippage:.5f}")
+                    self.log(f"   Volume: {result.volume:.3f}")
+                    
+                    # Update counters
+                    self.daily_order_count += 1
+                    self.last_order_time = datetime.now()
+                    
+                    # Add to history
+                    self.order_history.append({
+                        'timestamp': datetime.now(),
+                        'ticket': result.order,
+                        'type': order_request.order_type.value,
+                        'volume': result.volume,
+                        'price': actual_price,
+                        'reason': order_request.reason.value,
+                        'four_d_score': order_request.four_d_score,
+                        'slippage': slippage,
+                        'attempt': attempt + 1
+                    })
+                    
+                    return OrderResult(
+                        success=True,
+                        ticket=result.order,
+                        price=actual_price,
+                        volume=result.volume,
+                        message="Market order executed successfully",
+                        slippage=slippage,
+                        execution_time=time.time() - time.time(),  # Will be updated by caller
+                        four_d_score=order_request.four_d_score
+                    )
+                
+                else:
+                    # ไม่สำเร็จ
+                    error_msg = f"MT5 error {result.retcode}: {result.comment}"
+                    print(f"❌ {error_msg}")
+                    
+                    # เช็คว่าควรลองใหม่หรือไม่
+                    if self._should_retry_market_order(result.retcode):
+                        if attempt < max_attempts - 1:
+                            print(f"🔄 Retrying in {retry_delay} seconds...")
+                            time.sleep(retry_delay)
+                            continue
+                    
+                    return OrderResult(False, 0, 0, 0, error_msg)
+            
+            return OrderResult(False, 0, 0, 0, "Max retry attempts reached")
+            
+        except Exception as e:
+            self.log(f"❌ Execute market order error: {e}")
+            return OrderResult(False, 0, 0, 0, f"Execution error: {e}")
+    
+    def _should_retry_market_order(self, retcode: int) -> bool:
+        """ตัดสินใจว่าควรลองใหม่หรือไม่"""
+        # Retryable errors
+        retryable_codes = [
+            mt5.TRADE_RETCODE_REQUOTE,
+            mt5.TRADE_RETCODE_CONNECTION,
+            mt5.TRADE_RETCODE_TIMEOUT,
+            mt5.TRADE_RETCODE_PRICE_OFF,
+            mt5.TRADE_RETCODE_REJECT
+        ]
+        
+        return retcode in retryable_codes
+    
+    def _validate_market_order_inputs(self, order_request: OrderRequest) -> bool:
+        """ตรวจสอบความถูกต้องของ Market Order inputs"""
         try:
             # เช็ค order type
-            valid_types = ["BUY_LIMIT", "SELL_LIMIT", "BUY_STOP", "SELL_STOP", "MARKET_BUY", "MARKET_SELL"]
-            if order_type not in valid_types:
-                self.log(f"❌ Invalid order type: {order_type}")
+            if order_request.order_type not in [OrderType.MARKET_BUY, OrderType.MARKET_SELL]:
+                self.log(f"❌ Not a market order type: {order_request.order_type}")
                 return False
             
             # เช็ค volume
-            if volume < self.min_lot or volume > self.max_lot:
-                self.log(f"❌ Invalid volume: {volume} (range: {self.min_lot}-{self.max_lot})")
+            if order_request.volume < self.min_lot or order_request.volume > self.max_lot:
+                self.log(f"❌ Invalid volume: {order_request.volume} (range: {self.min_lot}-{self.max_lot})")
                 return False
             
-            # เช็ค price
-            if price <= 0:
-                self.log(f"❌ Invalid price: {price}")
+            # เช็ค confidence
+            if order_request.confidence < 0 or order_request.confidence > 1:
+                self.log(f"❌ Invalid confidence: {order_request.confidence}")
                 return False
             
             return True
             
         except Exception as e:
-            self.log(f"❌ Input validation error: {e}")
+            self.log(f"❌ Market order validation error: {e}")
             return False
     
     # ========================================================================================
-    # 🔄 UPDATED EXISTING METHODS
+    # 🚀 HYBRID ENTRY METHODS - INTEGRATION WITH 4D AI
     # ========================================================================================
     
-    def place_smart_buy_order(self, confidence: float = 0.5, reasoning: str = "",
-                             market_data: Dict = None) -> bool:
-        """Updated: รองรับ target_price จาก Rule Engine"""
+    def place_hybrid_entry_order(self, direction: str, four_d_analysis: Any, 
+                                 hybrid_factors: Dict) -> OrderResult:
+        """🚀 วาง Hybrid Entry Order ตาม 4D AI Analysis"""
         try:
-            # Validate MT5 connection
-            if not self.mt5_connector.is_connected:
-                self.log("❌ Cannot place BUY order - MT5 not connected")
-                return False
+            print(f"🚀 === HYBRID ENTRY ORDER ===")
+            print(f"   Direction: {direction}")
+            print(f"   4D Overall Score: {four_d_analysis.overall_score:.3f}")
+            print(f"   Recommendation: {four_d_analysis.recommendation}")
             
-            # Get market data
-            if market_data is None:
-                market_data = self._get_current_market_data()
+            # คำนวณ volume ตาม 4D Analysis
+            volume = self._calculate_4d_volume(four_d_analysis, hybrid_factors)
             
-            if not market_data:
-                self.log("❌ Cannot get market data for buy order")
-                return False
+            # สร้าง OrderRequest
+            order_type = OrderType.MARKET_BUY if direction == "BUY" else OrderType.MARKET_SELL
             
-            # Calculate order parameters
-            order_params = self._calculate_smart_buy_parameters(confidence, market_data, reasoning)
-            
-            if not order_params:
-                self.log("❌ Cannot calculate buy order parameters")
-                return False
-            
-            # Determine order type
-            order_type = self._determine_buy_order_type(market_data, confidence)
-            
-            # Create and execute order
             order_request = OrderRequest(
                 order_type=order_type,
-                volume=order_params["volume"],
-                price=order_params["price"],
-                sl=order_params.get("sl", 0.0),
-                tp=order_params.get("tp", 0.0),
-                reason=order_params["reason"],
-                confidence=confidence,
-                reasoning=reasoning,
-                max_slippage=order_params.get("slippage", 10)
+                volume=volume,
+                price=0.0,  # Market price
+                reason=OrderReason.FOUR_D_AI_ENTRY,
+                confidence=four_d_analysis.overall_score,
+                reasoning=f"4D AI Hybrid Entry: {four_d_analysis.recommendation}",
+                max_slippage=25,  # ยอมรับ slippage เพิ่ม
+                four_d_score=four_d_analysis.overall_score,
+                hybrid_factors=hybrid_factors
             )
             
-            result = self._execute_real_order(order_request)
+            # Execute market order
+            result = self.place_market_order(order_request)
             
             if result.success:
-                self.log(f"✅ BUY order placed: Ticket {result.ticket} @ {order_request.price:.5f}")
-                self._track_order_performance(order_request.reason, True)
-                return True
+                print(f"✅ Hybrid entry executed: {volume:.3f} lots {direction}")
+                print(f"   4D Score: {four_d_analysis.overall_score:.3f}")
+                print(f"   Balance Factor: {hybrid_factors.get('balance_factor', 0):.3f}")
             else:
-                self.log(f"❌ BUY order failed: {result.error_message}")
-                self._track_order_performance(order_request.reason, False)
-                return False
-                
+                print(f"❌ Hybrid entry failed: {result.message}")
+            
+            return result
+            
         except Exception as e:
-            self.log(f"❌ Smart buy order error: {e}")
-            return False
+            self.log(f"❌ Hybrid entry order error: {e}")
+            return OrderResult(False, 0, 0, 0, f"Hybrid entry error: {e}")
     
-    def place_smart_sell_order(self, confidence: float = 0.5, reasoning: str = "",
-                              market_data: Dict = None) -> bool:
-        """Updated: รองรับ target_price จาก Rule Engine"""
+    def place_recovery_order(self, target_position: Dict, recovery_strategy: Dict,
+                            four_d_analysis: Any) -> OrderResult:
+        """🎯 วาง Recovery Order สำหรับ Smart Recovery"""
         try:
-            # Validate MT5 connection
-            if not self.mt5_connector.is_connected:
-                self.log("❌ Cannot place SELL order - MT5 not connected")
-                return False
+            print(f"🎯 === RECOVERY ORDER ===")
+            print(f"   Target Position: {target_position.get('ticket', 'unknown')}")
+            print(f"   Recovery Strategy: {recovery_strategy.get('action', 'unknown')}")
+            print(f"   Hedge Direction: {recovery_strategy.get('direction', 'unknown')}")
             
-            # Get market data
-            if market_data is None:
-                market_data = self._get_current_market_data()
+            # สร้าง recovery order
+            direction = recovery_strategy.get('direction', 'BUY')
+            volume = recovery_strategy.get('volume', 0.01)
             
-            if not market_data:
-                self.log("❌ Cannot get market data for sell order")
-                return False
+            order_type = OrderType.MARKET_BUY if direction == "BUY" else OrderType.MARKET_SELL
             
-            # Calculate order parameters
-            order_params = self._calculate_smart_sell_parameters(confidence, market_data, reasoning)
-            
-            if not order_params:
-                self.log("❌ Cannot calculate sell order parameters")
-                return False
-            
-            # Determine order type
-            order_type = self._determine_sell_order_type(market_data, confidence)
-            
-            # Create and execute order
             order_request = OrderRequest(
                 order_type=order_type,
-                volume=order_params["volume"],
-                price=order_params["price"],
-                sl=order_params.get("sl", 0.0),
-                tp=order_params.get("tp", 0.0),
-                reason=order_params["reason"],
-                confidence=confidence,
-                reasoning=reasoning,
-                max_slippage=order_params.get("slippage", 10)
+                volume=volume,
+                price=0.0,  # Market price
+                reason=OrderReason.SMART_RECOVERY,
+                confidence=four_d_analysis.hedge_opportunity_score,
+                reasoning=f"Smart Recovery for position {target_position.get('ticket')}",
+                max_slippage=30,  # ยอมรับ slippage สูงสำหรับ recovery
+                four_d_score=four_d_analysis.overall_score
             )
             
-            result = self._execute_real_order(order_request)
+            # Execute recovery order
+            result = self.place_market_order(order_request)
             
             if result.success:
-                self.log(f"✅ SELL order placed: Ticket {result.ticket} @ {order_request.price:.5f}")
-                self._track_order_performance(order_request.reason, True)
-                return True
-            else:
-                self.log(f"❌ SELL order failed: {result.error_message}")
-                self._track_order_performance(order_request.reason, False)
-                return False
+                print(f"✅ Recovery order executed: {volume:.3f} lots {direction}")
+                print(f"   For position: {target_position.get('ticket')}")
                 
+                # Track recovery attempt
+                self._track_recovery_attempt(target_position, result, recovery_strategy)
+                
+            else:
+                print(f"❌ Recovery order failed: {result.message}")
+            
+            return result
+            
         except Exception as e:
-            self.log(f"❌ Smart sell order error: {e}")
-            return False
+            self.log(f"❌ Recovery order error: {e}")
+            return OrderResult(False, 0, 0, 0, f"Recovery error: {e}")
     
-    def _calculate_smart_buy_parameters(self, confidence: float, market_data: Dict, 
-                                      reasoning: str) -> Optional[Dict]:
-        """Updated: รองรับ target_price จาก Rule Engine"""
+    def _calculate_4d_volume(self, four_d_analysis: Any, hybrid_factors: Dict) -> float:
+        """คำนวณ Volume ตาม 4D Analysis"""
         try:
-            current_price = market_data.get("current_price", 0)
-            if current_price == 0:
-                self.log("❌ Invalid current price")
-                return None
+            # Base volume
+            base_volume = 0.01
             
-            # Determine reason
-            reason = self._determine_order_reason(reasoning)
+            # ปรับตาม 4D Overall Score
+            score_multiplier = 1 + (four_d_analysis.overall_score - 0.5)  # 0.5-1.5 range
             
-            # ⭐ ใช้ volume จาก Rule Engine ถ้ามี
-            rule_volume = market_data.get("rule_volume")
-            if rule_volume:
-                volume = rule_volume
-                print(f"💰 Using Rule Engine volume: {volume:.3f}")
-            else:
-                # คำนวณ volume เอง
-                volume = self.lot_calculator.calculate_optimal_lot_size(
-                    market_data=market_data,
-                    confidence=confidence,
-                    order_type="BUY"
-                ) if self.lot_calculator else self.smart_params.base_lot_size
+            # ปรับตาม Portfolio Safety
+            safety_multiplier = 1.0
+            if four_d_analysis.portfolio_safety_score > 0.8:
+                safety_multiplier = 1.4  # ปลอดภัย = เพิ่มได้
+            elif four_d_analysis.portfolio_safety_score < 0.3:
+                safety_multiplier = 0.6  # อันตราย = ลดลง
             
-            # ⭐ ใช้ target_price จาก Rule Engine ถ้ามี (Priority สูงสุด)
-            rule_target_price = market_data.get("target_price")
+            # ปรับตาม Balance Factor
+            balance_factor = hybrid_factors.get('balance_factor', 0.5)
+            balance_multiplier = 0.8 + (balance_factor * 0.4)  # 0.8-1.2 range
             
-            if rule_target_price:
-                target_price = rule_target_price
-                print(f"🎯 Using Rule Engine target price: {target_price:.5f}")
+            # ปรับตาม Market Context
+            market_multiplier = 1.0
+            if four_d_analysis.market_context_score > 0.7:
+                market_multiplier = 1.2  # ตลาดดี = เพิ่มได้
+            elif four_d_analysis.market_context_score < 0.4:
+                market_multiplier = 0.8  # ตลาดไม่ดี = ลดลง
+            
+            # คำนวณ volume สุดท้าย
+            final_volume = (base_volume * score_multiplier * safety_multiplier * 
+                           balance_multiplier * market_multiplier)
+            
+            # จำกัดขอบเขต
+            final_volume = max(self.min_lot, min(final_volume, 0.08))  # ขั้นต่ำ min_lot, สูงสุด 0.08
+            
+            # Round ให้ถูกต้อง
+            final_volume = round(final_volume, 2)
+            
+            print(f"📊 4D Volume Calculation:")
+            print(f"   Base: {base_volume:.3f}")
+            print(f"   Score Mult: {score_multiplier:.2f}")
+            print(f"   Safety Mult: {safety_multiplier:.2f}")
+            print(f"   Balance Mult: {balance_multiplier:.2f}")
+            print(f"   Market Mult: {market_multiplier:.2f}")
+            print(f"   Final Volume: {final_volume:.3f}")
+            
+            return final_volume
+            
+        except Exception as e:
+            self.log(f"❌ 4D volume calculation error: {e}")
+            return 0.01  # Safe default
+    
+    # ========================================================================================
+    # 📊 PERFORMANCE TRACKING - ENHANCED
+    # ========================================================================================
+    
+    def _track_market_order_performance(self, order_request: OrderRequest, 
+                                       result: OrderResult, execution_time: float):
+        """ติดตามประสิทธิภาพ Market Order"""
+        try:
+            # Update execution stats
+            stats = self.execution_stats["market_orders"]
+            stats["count"] += 1
+            
+            if result.success:
+                stats["success"] += 1
                 
-            else:
-                # คำนวณราคาเอง (Fallback)
-                print("🔄 Calculating target price (Rule Engine price not provided)")
-                
-                volatility_factor = market_data.get("volatility_factor", 1.0)
-                trend_strength = market_data.get("trend_strength", 0.0)
-                
-                # Dynamic spacing
-                spacing = self.spacing_manager.get_current_spacing(
-                    volatility_factor=volatility_factor,
-                    trend_strength=trend_strength,
-                    direction="BUY"
-                ) if self.spacing_manager else self.smart_params.current_spacing
-                
-                # Price calculation varies by reason
-                if reason == OrderReason.SUPPORT_RESISTANCE:
-                    support_levels = market_data.get("support_levels", [])
-                    if support_levels:
-                        target_price = max([level["level"] for level in support_levels], 
-                                        key=lambda x: abs(x - current_price))
-                    else:
-                        target_price = current_price - (spacing * self.point_value)
-                elif reason == OrderReason.MEAN_REVERSION:
-                    deviation = market_data.get("price_deviation_from_mean", 0)
-                    adjustment = abs(deviation) * 10 * self.point_value if deviation < 0 else spacing * self.point_value
-                    target_price = current_price - adjustment
+                # Update average slippage
+                if stats["count"] > 1:
+                    stats["avg_slippage"] = (
+                        (stats["avg_slippage"] * (stats["count"] - 1) + result.slippage) 
+                        / stats["count"]
+                    )
                 else:
-                    # Standard grid placement
-                    target_price = current_price - (spacing * self.point_value)
+                    stats["avg_slippage"] = result.slippage
                 
-                # Ensure minimum distance
-                min_distance = self.config.get("trading", {}).get("min_spacing_points", 50) * self.point_value
-                if abs(target_price - current_price) < min_distance:
-                    target_price = current_price - min_distance
+                # Update average execution time
+                if stats["count"] > 1:
+                    stats["avg_execution_time"] = (
+                        (stats["avg_execution_time"] * (stats["count"] - 1) + execution_time)
+                        / stats["count"]
+                    )
+                else:
+                    stats["avg_execution_time"] = execution_time
             
-            # ⭐ เช็ค collision (สำคัญมาก)
-            safe_price = self._avoid_order_collisions(target_price, "BUY")
-            if safe_price is None:
-                self.log("❌ Price collision detected - skipping BUY order")
-                return None
+            # Track by reason
+            reason_key = order_request.reason.value
+            if reason_key not in self.order_performance:
+                self.order_performance[reason_key] = {
+                    "count": 0, "success": 0, "total_profit": 0.0,
+                    "avg_4d_score": 0.0, "avg_execution_time": 0.0
+                }
+            
+            perf = self.order_performance[reason_key]
+            perf["count"] += 1
+            
+            if result.success:
+                perf["success"] += 1
                 
-            target_price = safe_price
+                # Update average 4D score
+                perf["avg_4d_score"] = (
+                    (perf["avg_4d_score"] * (perf["count"] - 1) + order_request.four_d_score)
+                    / perf["count"]
+                )
+                
+                # Update average execution time
+                perf["avg_execution_time"] = (
+                    (perf["avg_execution_time"] * (perf["count"] - 1) + execution_time)
+                    / perf["count"]
+                )
             
-            # Validate final price
-            if target_price <= 0:
-                self.log(f"❌ Invalid target price: {target_price}")
-                return None
+            # Log performance update
+            success_rate = stats["success"] / stats["count"]
+            print(f"📊 Market Order Performance: {success_rate:.1%} ({stats['success']}/{stats['count']})")
+            print(f"   Avg Slippage: {stats['avg_slippage']:.5f}")
+            print(f"   Avg Execution: {stats['avg_execution_time']:.3f}s")
+            
+        except Exception as e:
+            self.log(f"❌ Track market order performance error: {e}")
+    
+    def _track_recovery_attempt(self, target_position: Dict, result: OrderResult, 
+                               recovery_strategy: Dict):
+        """ติดตามความสำเร็จของ Recovery"""
+        try:
+            # Update recovery stats
+            stats = self.execution_stats["recovery_orders"]
+            stats["count"] += 1
+            
+            if result.success:
+                stats["success"] += 1
+                
+                # Calculate recovery rate
+                stats["recovery_rate"] = stats["success"] / stats["count"]
+                
+                print(f"📈 Recovery Stats: {stats['recovery_rate']:.1%} ({stats['success']}/{stats['count']})")
+            
+            # Log recovery attempt details
+            recovery_log = {
+                'timestamp': datetime.now(),
+                'target_ticket': target_position.get('ticket', 0),
+                'target_profit': target_position.get('profit', 0),
+                'recovery_direction': recovery_strategy.get('direction', 'unknown'),
+                'recovery_volume': result.volume,
+                'success': result.success,
+                'hedge_ticket': result.ticket if result.success else 0
+            }
+            
+            # Store in order history
+            self.order_history.append(recovery_log)
+            
+        except Exception as e:
+            self.log(f"❌ Track recovery attempt error: {e}")
+    
+    # ========================================================================================
+    # 🔧 UTILITY METHODS - ENHANCED
+    # ========================================================================================
+    
+    def get_market_order_stats(self) -> Dict:
+        """ดึงสถิติ Market Orders"""
+        try:
+            stats = self.execution_stats["market_orders"]
+            
+            if stats["count"] == 0:
+                return {"message": "No market orders executed yet"}
+            
+            success_rate = stats["success"] / stats["count"]
             
             return {
-                "volume": volume,
-                "price": round(target_price, 5),
-                "sl": 0.0,  # ไม่ใช้ SL
-                "tp": 0.0,  # ไม่ใช้ TP
-                "reason": reason,
-                "slippage": min(20, int(market_data.get("volatility_factor", 1.0) * 10))
+                "total_orders": stats["count"],
+                "successful_orders": stats["success"],
+                "success_rate": f"{success_rate:.1%}",
+                "average_slippage": f"{stats['avg_slippage']:.5f}",
+                "average_execution_time": f"{stats['avg_execution_time']:.3f}s",
+                "daily_count": self.daily_order_count,
+                "last_order": self.last_order_time.strftime("%H:%M:%S") if self.last_order_time else "None"
             }
             
         except Exception as e:
-            self.log(f"❌ Smart buy parameters error: {e}")
-            return None
+            self.log(f"❌ Market order stats error: {e}")
+            return {"error": str(e)}
     
-    def _calculate_smart_sell_parameters(self, confidence: float, market_data: Dict, 
-                                       reasoning: str) -> Optional[Dict]:
-        """Updated: รองรับ target_price จาก Rule Engine"""
+    def get_recovery_stats(self) -> Dict:
+        """ดึงสถิติ Recovery Orders"""
         try:
-            current_price = market_data.get("current_price", 0)
-            if current_price == 0:
-                self.log("❌ Invalid current price")
-                return None
+            stats = self.execution_stats["recovery_orders"]
             
-            # Determine reason
-            reason = self._determine_order_reason(reasoning)
-            
-            # ⭐ ใช้ volume จาก Rule Engine ถ้ามี
-            rule_volume = market_data.get("rule_volume")
-            if rule_volume:
-                volume = rule_volume
-                print(f"💰 Using Rule Engine volume: {volume:.3f}")
-            else:
-                # คำนวณ volume เอง
-                volume = self.lot_calculator.calculate_optimal_lot_size(
-                    market_data=market_data,
-                    confidence=confidence,
-                    order_type="SELL"
-                ) if self.lot_calculator else self.smart_params.base_lot_size
-            
-            # ⭐ ใช้ target_price จาก Rule Engine ถ้ามี (Priority สูงสุด)
-            rule_target_price = market_data.get("target_price")
-            
-            if rule_target_price:
-                target_price = rule_target_price
-                print(f"🎯 Using Rule Engine target price: {target_price:.5f}")
-                
-            else:
-                # คำนวณราคาเอง (Fallback)
-                print("🔄 Calculating target price (Rule Engine price not provided)")
-                
-                volatility_factor = market_data.get("volatility_factor", 1.0)
-                trend_strength = market_data.get("trend_strength", 0.0)
-                
-                # Dynamic spacing
-                spacing = self.spacing_manager.get_current_spacing(
-                    volatility_factor=volatility_factor,
-                    trend_strength=trend_strength,
-                    direction="SELL"
-                ) if self.spacing_manager else self.smart_params.current_spacing
-                
-                # Price calculation varies by reason
-                if reason == OrderReason.SUPPORT_RESISTANCE:
-                    resistance_levels = market_data.get("resistance_levels", [])
-                    if resistance_levels:
-                        target_price = min([level["level"] for level in resistance_levels], 
-                                        key=lambda x: abs(x - current_price))
-                    else:
-                        target_price = current_price + (spacing * self.point_value)
-                elif reason == OrderReason.MEAN_REVERSION:
-                    deviation = market_data.get("price_deviation_from_mean", 0)
-                    adjustment = abs(deviation) * 10 * self.point_value if deviation > 0 else spacing * self.point_value
-                    target_price = current_price + adjustment
-                else:
-                    # Standard grid placement
-                    target_price = current_price + (spacing * self.point_value)
-                
-                # Ensure minimum distance
-                min_distance = self.config.get("trading", {}).get("min_spacing_points", 50) * self.point_value
-                if abs(target_price - current_price) < min_distance:
-                    target_price = current_price + min_distance
-            
-            # ⭐ เช็ค collision (สำคัญมาก)
-            safe_price = self._avoid_order_collisions(target_price, "SELL")
-            if safe_price is None:
-                self.log("❌ Price collision detected - skipping SELL order")
-                return None
-                
-            target_price = safe_price
-            
-            # Validate final price
-            if target_price <= 0:
-                self.log(f"❌ Invalid target price: {target_price}")
-                return None
+            if stats["count"] == 0:
+                return {"message": "No recovery orders executed yet"}
             
             return {
-                "volume": volume,
-                "price": round(target_price, 5),
-                "sl": 0.0,  # ไม่ใช้ SL
-                "tp": 0.0,  # ไม่ใช้ TP
-                "reason": reason,
-                "slippage": min(20, int(market_data.get("volatility_factor", 1.0) * 10))
+                "total_attempts": stats["count"],
+                "successful_recoveries": stats["success"],
+                "recovery_rate": f"{stats['recovery_rate']:.1%}",
+                "recent_recoveries": len([h for h in self.order_history 
+                                        if h.get('target_ticket') and 
+                                        (datetime.now() - h.get('timestamp', datetime.now())).total_seconds() < 3600])
             }
             
         except Exception as e:
-            self.log(f"❌ Smart sell parameters error: {e}")
-            return None
+            self.log(f"❌ Recovery stats error: {e}")
+            return {"error": str(e)}
     
-    # ========================================================================================
-    # 🔧 HELPER METHODS
-    # ========================================================================================
+    def get_recent_orders(self, count: int = 10) -> List[Dict]:
+        """ดึงออเดอร์ล่าสุด"""
+        try:
+            recent_orders = list(self.order_history)[-count:] if self.order_history else []
+            
+            formatted_orders = []
+            for order in recent_orders:
+                formatted_orders.append({
+                    'time': order.get('timestamp', datetime.now()).strftime('%H:%M:%S'),
+                    'ticket': order.get('ticket', 0),
+                    'type': order.get('type', 'unknown'),
+                    'volume': f"{order.get('volume', 0):.3f}",
+                    'price': f"{order.get('price', 0):.5f}",
+                    'reason': order.get('reason', 'unknown'),
+                    '4d_score': f"{order.get('four_d_score', 0):.3f}",
+                    'slippage': f"{order.get('slippage', 0):.5f}" if 'slippage' in order else 'N/A'
+                })
+            
+            return formatted_orders
+            
+        except Exception as e:
+            self.log(f"❌ Recent orders error: {e}")
+            return []
+    
+    def _get_current_price(self) -> float:
+        """ดึงราคาปัจจุบัน"""
+        try:
+            if not self.mt5_connector.is_connected:
+                return 0.0
+            
+            tick = mt5.symbol_info_tick(self.symbol)
+            if not tick:
+                return 0.0
+            
+            # ใช้ mid price
+            return (tick.bid + tick.ask) / 2
+            
+        except Exception as e:
+            self.log(f"❌ Get current price error: {e}")
+            return 0.0
     
     def _update_symbol_info(self):
-        """Update symbol information from MT5"""
+        """อัปเดตข้อมูล Symbol"""
         try:
             if not self.mt5_connector.is_connected:
                 return
@@ -544,344 +694,165 @@ class OrderManager:
             symbol_info = mt5.symbol_info(self.symbol)
             if symbol_info:
                 self.point_value = symbol_info.point
-                self.min_lot = symbol_info.volume_min
-                self.max_lot = symbol_info.volume_max
-                self.lot_step = symbol_info.volume_step
+                self.tick_size = symbol_info.trade_tick_size
+                self.min_distance = getattr(symbol_info, 'trade_stops_level', 30)
                 
-                self.log(f"✅ Symbol info updated: Point={self.point_value}, "
-                      f"Lot range={self.min_lot}-{self.max_lot}")
+                print(f"📊 Symbol Info Updated:")
+                print(f"   Point Value: {self.point_value}")
+                print(f"   Tick Size: {self.tick_size}")
+                print(f"   Min Distance: {self.min_distance}")
             
         except Exception as e:
             self.log(f"❌ Symbol info update error: {e}")
     
-    def _get_current_market_data(self) -> Dict:
-        """Get current market data from MT5"""
-        try:
-            if not self.mt5_connector.is_connected:
-                return {}
-            
-            # Get current tick
-            tick = mt5.symbol_info_tick(self.symbol)
-            if not tick:
-                return {}
-            
-            return {
-                "current_price": (tick.bid + tick.ask) / 2,
-                "bid": tick.bid,
-                "ask": tick.ask,
-                "spread": tick.ask - tick.bid,
-                "timestamp": datetime.fromtimestamp(tick.time)
-            }
-            
-        except Exception as e:
-            self.log(f"❌ Market data error: {e}")
-            return {}
+    # ========================================================================================
+    # 🎮 LEGACY COMPATIBILITY METHODS - KEPT FOR TRANSITION
+    # ========================================================================================
     
-    def _check_daily_limits(self) -> bool:
-        """Check daily order limits"""
+    def place_smart_order(self, order_type: str, volume: float, price: float,
+                         reasoning: str = "", confidence: float = 0.5, **kwargs) -> Dict:
+        """🎮 Legacy Compatibility Method - Routes to Market Orders"""
         try:
-            # Reset counter if new day
-            current_date = datetime.now().date()
-            if current_date != self.last_reset_date:
-                self.daily_order_count = 0
-                self.last_reset_date = current_date
-                self.log("🔄 Daily order counter reset")
+            print(f"🔄 Legacy smart order call - routing to market order")
             
-            # Check limits
-            if self.daily_order_count >= self.max_daily_orders:
-                self.log(f"⚠️ Daily limit reached: {self.daily_order_count}/{self.max_daily_orders}")
-                return False
-            
-            return True
-            
-        except Exception as e:
-            self.log(f"❌ Daily limit check error: {e}")
-            return True
-    
-    def _avoid_order_collisions(self, target_price: float, direction: str) -> Optional[float]:
-        """เช็คและป้องกันการ collision ของออเดอร์ - แก้ไข syntax error"""
-        try:
-            # Get existing orders ก่อนเลย - แก้ไข variable scope
-            pending_orders = self.get_pending_orders()
-            existing_prices = [order.get("price", 0) for order in pending_orders if order.get("price", 0) > 0]
-            existing_prices.sort()
-            
-            # Get current market price
-            current_price = self._get_current_price()
-            if current_price <= 0:
-                print(f"❌ Invalid current price: {current_price}")
-                return None
-            
-            print(f"🔍 COLLISION CHECK: {direction} @ {target_price:.5f}")
-            print(f"   Current Price: {current_price:.5f}")
-            print(f"   Existing orders: {len(existing_prices)}")
-            
-            # 1. เช็ค grid density ก่อน - ถ้าหนาแน่นให้หยุด
-            if len(existing_prices) >= 12:
-                print(f"🛑 Grid has enough orders ({len(existing_prices)}) - STOPPING to maintain quality")
-                return None
-            
-            # 2. วิเคราะห์ spacing ถ้ามีออเดอร์มากพอ
-            if len(existing_prices) >= 2:
-                distances = []
-                for i in range(1, len(existing_prices)):
-                    distance = existing_prices[i] - existing_prices[i-1]
-                    distance_points = distance / self.point_value
-                    distances.append(distance_points)
-                
-                min_gap = min(distances)
-                avg_gap = sum(distances) / len(distances)
-                
-                print(f"📊 Current Grid Spacing:")
-                print(f"   Min Gap: {min_gap:.1f} points")
-                print(f"   Avg Gap: {avg_gap:.1f} points")
-                
-                # ถ้า spacing หนาแน่นเกินไปให้หยุด
-                if min_gap < 20:
-                    print(f"🛑 Grid too dense (min gap: {min_gap:.1f} points) - STOPPING")
-                    return None
-            
-            # 3. Collision detection ปกติ
-            tolerance_points = 15
-            tolerance = tolerance_points * self.point_value
-            
-            # เช็คระยะห่างจากราคาปัจจุบัน
-            distance_from_current = abs(target_price - current_price)
-            min_distance_from_current = 30 * self.point_value
-            
-            if distance_from_current < min_distance_from_current:
-                print(f"⚠️ Too close to current price: {distance_from_current/self.point_value:.1f} points")
-                
-                # ปรับราคาให้ห่างขึ้น
-                if direction == "BUY":
-                    adjusted_price = current_price - min_distance_from_current
-                else:  # SELL
-                    adjusted_price = current_price + min_distance_from_current
-                
-                print(f"🔧 Adjusted price: {adjusted_price:.5f}")
-                target_price = adjusted_price
-            
-            # เช็ค collision กับออเดอร์ที่มีอยู่
-            collision_detected = False
-            for existing_price in existing_prices:
-                if abs(target_price - existing_price) <= tolerance:
-                    print(f"❌ COLLISION detected @ {existing_price:.5f} (distance: {abs(target_price - existing_price)/self.point_value:.1f} points)")
-                    collision_detected = True
-                    break
-            
-            if not collision_detected:
-                # ตรวจสอบ price format แบบง่าย
-                if target_price <= 0:
-                    print(f"❌ Invalid price: {target_price}")
-                    return None
-                
-                formatted_price = round(target_price, 5)
-                
-                # เช็คทิศทางให้ถูกต้อง
-                if direction == "BUY" and formatted_price >= current_price:
-                    print(f"❌ BUY price must be below current price")
-                    return None
-                elif direction == "SELL" and formatted_price <= current_price:
-                    print(f"❌ SELL price must be above current price")
-                    return None
-                
-                print(f"✅ Safe to place @ {formatted_price:.5f}")
-                return formatted_price
-            
-            # 4. ถ้าเจอ collision ให้หยุดแทนที่จะฝืน
-            print(f"🛑 SMART DECISION: Collision detected - skipping order placement")
-            print(f"   Grid has adequate coverage with {len(existing_prices)} orders")
-            print(f"   Better to wait for market movement than force placement")
-            
-            return None  # หยุดส่งออเดอร์
-            
-        except Exception as e:
-            self.log(f"❌ Collision check error: {e}")
-            return None
-                
-            
-    def _determine_order_reason(self, reasoning: str) -> OrderReason:
-        """Determine order reason from reasoning text"""
-        reasoning_lower = reasoning.lower()
-        
-        if "trend" in reasoning_lower:
-            return OrderReason.TREND_FOLLOWING
-        elif "reversion" in reasoning_lower or "oversold" in reasoning_lower or "overbought" in reasoning_lower:
-            return OrderReason.MEAN_REVERSION
-        elif "support" in reasoning_lower or "resistance" in reasoning_lower:
-            return OrderReason.SUPPORT_RESISTANCE
-        elif "breakout" in reasoning_lower or "volatility" in reasoning_lower:
-            return OrderReason.VOLATILITY_BREAKOUT
-        elif "balance" in reasoning_lower or "hedge" in reasoning_lower:
-            return OrderReason.PORTFOLIO_BALANCE
-        elif "grid" in reasoning_lower or "expansion" in reasoning_lower:
-            return OrderReason.GRID_EXPANSION
-        else:
-            return OrderReason.GRID_EXPANSION  # Default
-    
-    def _determine_buy_order_type(self, market_data: Dict, confidence: float) -> OrderType:
-        """Determine best order type for BUY"""
-        try:
-            volatility_level = market_data.get("volatility_level", "MEDIUM")
-            trend_direction = market_data.get("trend_direction", "SIDEWAYS")
-            market_condition = market_data.get("condition", "UNKNOWN")
-            
-            # High confidence + low volatility = Limit order
-            if confidence > 0.7 and volatility_level in ["LOW", "VERY_LOW"]:
-                return OrderType.BUY_LIMIT
-            
-            # High volatility = Limit order to avoid slippage
-            if volatility_level in ["HIGH", "VERY_HIGH"]:
-                return OrderType.BUY_LIMIT
-            
-            # Trending up + breakout = Stop order above current price
-            if trend_direction == "UP" and "BREAKOUT" in str(market_condition):
-                return OrderType.BUY_STOP
-            
-            # Default to limit order
-            return OrderType.BUY_LIMIT
-            
-        except Exception as e:
-            self.log(f"❌ Buy order type error: {e}")
-            return OrderType.BUY_LIMIT
-    
-    def _determine_sell_order_type(self, market_data: Dict, confidence: float) -> OrderType:
-        """Determine best order type for SELL"""
-        try:
-            volatility_level = market_data.get("volatility_level", "MEDIUM")
-            trend_direction = market_data.get("trend_direction", "SIDEWAYS")
-            market_condition = market_data.get("condition", "UNKNOWN")
-            
-            # High confidence + low volatility = Limit order
-            if confidence > 0.7 and volatility_level in ["LOW", "VERY_LOW"]:
-                return OrderType.SELL_LIMIT
-            
-            # High volatility = Limit order to avoid slippage
-            if volatility_level in ["HIGH", "VERY_HIGH"]:
-                return OrderType.SELL_LIMIT
-            
-            # Trending down + breakout = Stop order below current price
-            if trend_direction == "DOWN" and "BREAKOUT" in str(market_condition):
-                return OrderType.SELL_STOP
-            
-            # Default to limit order
-            return OrderType.SELL_LIMIT
-            
-        except Exception as e:
-            self.log(f"❌ Sell order type error: {e}")
-            return OrderType.SELL_LIMIT
-    
-    def _execute_real_order(self, order_request: OrderRequest) -> OrderResult:
-        """Execute REAL order in MT5"""
-        try:
-            # Convert order type to MT5 format
-            mt5_order_types = {
-                OrderType.BUY_LIMIT: mt5.ORDER_TYPE_BUY_LIMIT,
-                OrderType.SELL_LIMIT: mt5.ORDER_TYPE_SELL_LIMIT,
-                OrderType.BUY_STOP: mt5.ORDER_TYPE_BUY_STOP,
-                OrderType.SELL_STOP: mt5.ORDER_TYPE_SELL_STOP,
-                OrderType.MARKET_BUY: mt5.ORDER_TYPE_BUY,
-                OrderType.MARKET_SELL: mt5.ORDER_TYPE_SELL
-            }
-            
-            mt5_type = mt5_order_types.get(order_request.order_type)
-            if mt5_type is None:
-                return OrderResult(success=False, error_message="Invalid order type")
-            
-            # Prepare order request
-            request = {
-                "action": mt5.TRADE_ACTION_PENDING if mt5_type in [
-                    mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_SELL_LIMIT,
-                    mt5.ORDER_TYPE_BUY_STOP, mt5.ORDER_TYPE_SELL_STOP
-                ] else mt5.TRADE_ACTION_DEAL,
-                "symbol": self.symbol,
-                "volume": order_request.volume,
-                "type": mt5_type,
-                "price": order_request.price,
-                "sl": order_request.sl if order_request.sl > 0 else None,
-                "tp": order_request.tp if order_request.tp > 0 else None,
-                "deviation": order_request.max_slippage,
-                "magic": order_request.magic_number,
-                "comment": f"{order_request.reason.value}_{datetime.now().strftime('%H%M%S')}",
-                "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": mt5.ORDER_FILLING_IOC,
-            }
-            
-            # Remove None values
-            request = {k: v for k, v in request.items() if v is not None}
-            
-            # Send order to MT5
-            result = mt5.order_send(request)
-            
-            if result is None:
-                return OrderResult(success=False, error_message="MT5 order_send returned None")
-            
-            if result.retcode == mt5.TRADE_RETCODE_DONE:
-                # Increment daily counter
-                self.daily_order_count += 1
-                
-                return OrderResult(
-                    success=True,
-                    ticket=result.order if hasattr(result, 'order') else result.deal,
-                    execution_price=result.price if hasattr(result, 'price') else order_request.price,
-                    timestamp=datetime.now()
-                )
+            # แปลง legacy call เป็น modern OrderRequest
+            if "BUY" in order_type.upper():
+                modern_order_type = OrderType.MARKET_BUY
+            elif "SELL" in order_type.upper():
+                modern_order_type = OrderType.MARKET_SELL
             else:
-                return OrderResult(
-                    success=False,
-                    error_code=result.retcode,
-                    error_message=f"MT5 Error {result.retcode}: {result.comment if hasattr(result, 'comment') else 'Unknown error'}"
-                )
-                
+                return {"success": False, "error": f"Unknown order type: {order_type}"}
+            
+            # สร้าง OrderRequest
+            order_request = OrderRequest(
+                order_type=modern_order_type,
+                volume=volume,
+                price=0.0,  # Market order
+                reason=self._determine_order_reason(reasoning),
+                confidence=confidence,
+                reasoning=reasoning,
+                max_slippage=20
+            )
+            
+            # Execute
+            result = self.place_market_order(order_request)
+            
+            # แปลงกลับเป็น legacy format
+            return {
+                "success": result.success,
+                "ticket": result.ticket,
+                "price": result.price,
+                "volume": result.volume,
+                "error": result.message if not result.success else "",
+                "order_type": order_type,
+                "direction": "BUY" if "BUY" in order_type else "SELL"
+            }
+            
         except Exception as e:
-            return OrderResult(success=False, error_message=str(e))
+            self.log(f"❌ Legacy smart order error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    def place_smart_buy_order(self, confidence: float = 0.5, reasoning: str = "",
+                             market_data: Dict = None) -> bool:
+        """🎮 Legacy Method - Route to Market Buy"""
+        try:
+            # Get volume from legacy method or use default
+            volume = market_data.get("rule_volume", 0.01) if market_data else 0.01
+            
+            order_request = OrderRequest(
+                order_type=OrderType.MARKET_BUY,
+                volume=volume,
+                price=0.0,
+                reason=OrderReason.PORTFOLIO_BALANCE,
+                confidence=confidence,
+                reasoning=reasoning,
+                max_slippage=20
+            )
+            
+            result = self.place_market_order(order_request)
+            return result.success
+            
+        except Exception as e:
+            self.log(f"❌ Legacy buy order error: {e}")
+            return False
+    
+    def place_smart_sell_order(self, confidence: float = 0.5, reasoning: str = "",
+                              market_data: Dict = None) -> bool:
+        """🎮 Legacy Method - Route to Market Sell"""
+        try:
+            # Get volume from legacy method or use default
+            volume = market_data.get("rule_volume", 0.01) if market_data else 0.01
+            
+            order_request = OrderRequest(
+                order_type=OrderType.MARKET_SELL,
+                volume=volume,
+                price=0.0,
+                reason=OrderReason.PORTFOLIO_BALANCE,
+                confidence=confidence,
+                reasoning=reasoning,
+                max_slippage=20
+            )
+            
+            result = self.place_market_order(order_request)
+            return result.success
+            
+        except Exception as e:
+            self.log(f"❌ Legacy sell order error: {e}")
+            return False
     
     def get_pending_orders(self) -> List[Dict]:
-        """Get REAL pending orders from MT5"""
+        """ดึงออเดอร์ที่รออยู่ - สำหรับ compatibility"""
         try:
             if not self.mt5_connector.is_connected:
                 return []
             
             orders = mt5.orders_get(symbol=self.symbol)
-            if orders is None:
+            if not orders:
                 return []
             
-            pending_list = []
+            pending_orders = []
             for order in orders:
-                pending_list.append({
+                pending_orders.append({
                     "ticket": order.ticket,
                     "type": self._order_type_to_string(order.type),
                     "volume": order.volume_initial,
                     "price": order.price_open,
-                    "sl": order.sl,
-                    "tp": order.tp,
-                    "time_setup": datetime.fromtimestamp(order.time_setup),
+                    "time": datetime.fromtimestamp(order.time_setup),
                     "comment": order.comment,
                     "magic": order.magic
                 })
             
-            return pending_list
+            return pending_orders
             
         except Exception as e:
             self.log(f"❌ Get pending orders error: {e}")
             return []
     
-    def _track_order_performance(self, reason: OrderReason, success: bool):
-        """Track order performance by reason"""
-        try:
-            reason_key = reason.value
-            if reason_key not in self.order_performance:
-                self.order_performance[reason_key] = {"count": 0, "success": 0, "total_profit": 0.0}
-            
-            self.order_performance[reason_key]["count"] += 1
-            if success:
-                self.order_performance[reason_key]["success"] += 1
-            
-        except Exception as e:
-            self.log(f"❌ Performance tracking error: {e}")
+    def _determine_order_reason(self, reasoning: str) -> OrderReason:
+        """แปลง reasoning text เป็น OrderReason"""
+        reasoning_lower = reasoning.lower()
+        
+        if "4d ai" in reasoning_lower or "4d" in reasoning_lower:
+            return OrderReason.FOUR_D_AI_ENTRY
+        elif "recovery" in reasoning_lower or "hedge" in reasoning_lower:
+            return OrderReason.SMART_RECOVERY
+        elif "balance" in reasoning_lower:
+            return OrderReason.PORTFOLIO_BALANCE
+        elif "trend" in reasoning_lower:
+            return OrderReason.TREND_FOLLOWING
+        elif "reversion" in reasoning_lower:
+            return OrderReason.MEAN_REVERSION
+        elif "support" in reasoning_lower or "resistance" in reasoning_lower:
+            return OrderReason.SUPPORT_RESISTANCE
+        elif "breakout" in reasoning_lower or "volatility" in reasoning_lower:
+            return OrderReason.VOLATILITY_BREAKOUT
+        elif "risk" in reasoning_lower:
+            return OrderReason.RISK_MANAGEMENT
+        else:
+            return OrderReason.GRID_EXPANSION  # Default
     
     def _order_type_to_string(self, order_type: int) -> str:
-        """Convert MT5 order type to string"""
+        """แปลง MT5 order type เป็น string"""
         type_mapping = {
             mt5.ORDER_TYPE_BUY: "MARKET_BUY",
             mt5.ORDER_TYPE_SELL: "MARKET_SELL",
@@ -892,8 +863,293 @@ class OrderManager:
         }
         return type_mapping.get(order_type, "UNKNOWN")
     
+    # ========================================================================================
+    # 🎯 ENHANCED ORDER PLACEMENT METHODS
+    # ========================================================================================
+    
+    def place_immediate_entry(self, direction: str, reason: str = "IMMEDIATE_OPPORTUNITY") -> OrderResult:
+        """🎯 วางออเดอร์ทันทีไม่รอเงื่อนไข - Emergency Entry"""
+        try:
+            print(f"🚨 === IMMEDIATE ENTRY ===")
+            print(f"   Direction: {direction}")
+            print(f"   Reason: {reason}")
+            
+            # คำนวณ volume แบบ conservative
+            volume = 0.01  # Safe volume for immediate entry
+            
+            # สร้าง order request
+            order_type = OrderType.MARKET_BUY if direction.upper() == "BUY" else OrderType.MARKET_SELL
+            
+            order_request = OrderRequest(
+                order_type=order_type,
+                volume=volume,
+                price=0.0,
+                reason=OrderReason.RISK_MANAGEMENT,
+                confidence=0.8,  # High confidence for immediate action
+                reasoning=f"Immediate Entry: {reason}",
+                max_slippage=50  # ยอมรับ slippage สูงเพื่อความรวดเร็ว
+            )
+            
+            # Execute ทันที
+            result = self.place_market_order(order_request)
+            
+            if result.success:
+                print(f"⚡ Immediate entry executed: {volume:.3f} lots {direction}")
+            else:
+                print(f"❌ Immediate entry failed: {result.message}")
+            
+            return result
+            
+        except Exception as e:
+            self.log(f"❌ Immediate entry error: {e}")
+            return OrderResult(False, 0, 0, 0, f"Immediate entry error: {e}")
+    
+    def place_balanced_entry(self, imbalance_ratio: float) -> OrderResult:
+        """🎯 วางออเดอร์เพื่อสร้างสมดุล Portfolio"""
+        try:
+            print(f"⚖️ === BALANCED ENTRY ===")
+            print(f"   Imbalance Ratio: {imbalance_ratio:.3f}")
+            
+            # ตัดสินใจทิศทางจาก imbalance
+            if imbalance_ratio > 0:
+                # มี BUY มากเกินไป -> วาง SELL
+                direction = "SELL"
+                order_type = OrderType.MARKET_SELL
+            else:
+                # มี SELL มากเกินไป -> วาง BUY
+                direction = "BUY"
+                order_type = OrderType.MARKET_BUY
+            
+            # คำนวณ volume ตาม imbalance
+            base_volume = 0.01
+            imbalance_multiplier = min(abs(imbalance_ratio) * 2, 1.5)  # ยิ่งไม่สมดุล ยิ่งเพิ่ม volume
+            volume = round(base_volume * (1 + imbalance_multiplier), 2)
+            volume = max(self.min_lot, min(volume, 0.05))  # จำกัด 0.05
+            
+            # สร้าง order request
+            order_request = OrderRequest(
+                order_type=order_type,
+                volume=volume,
+                price=0.0,
+                reason=OrderReason.PORTFOLIO_BALANCE,
+                confidence=0.7 + min(abs(imbalance_ratio), 0.3),  # ยิ่งไม่สมดุล ยิ่งมั่นใจ
+                reasoning=f"Portfolio Balance: {direction} to fix imbalance {imbalance_ratio:.3f}",
+                max_slippage=25
+            )
+            
+            # Execute
+            result = self.place_market_order(order_request)
+            
+            if result.success:
+                print(f"⚖️ Balance entry executed: {volume:.3f} lots {direction}")
+                print(f"   Imbalance correction: {imbalance_ratio:.3f}")
+            else:
+                print(f"❌ Balance entry failed: {result.message}")
+            
+            return result
+            
+        except Exception as e:
+            self.log(f"❌ Balanced entry error: {e}")
+            return OrderResult(False, 0, 0, 0, f"Balance entry error: {e}")
+    
+    # ========================================================================================
+    # 📊 MONITORING & DIAGNOSTICS
+    # ========================================================================================
+    
+    def get_order_manager_status(self) -> Dict:
+        """ดึงสถานะ Order Manager แบบครบถ้วน"""
+        try:
+            return {
+                'connection_status': self.mt5_connector.is_connected if self.mt5_connector else False,
+                'symbol': self.symbol,
+                'daily_order_count': self.daily_order_count,
+                'max_daily_orders': self.max_daily_orders,
+                'market_order_config': self.market_order_config,
+                'execution_stats': self.execution_stats,
+                'recent_orders_count': len(self.order_history),
+                'performance_by_reason': self.get_order_performance_stats(),
+                'current_price': self._get_current_price(),
+                'symbol_info': {
+                    'point_value': self.point_value,
+                    'tick_size': self.tick_size,
+                    'min_distance': self.min_distance
+                }
+            }
+            
+        except Exception as e:
+            self.log(f"❌ Order manager status error: {e}")
+            return {'error': str(e)}
+    
+    def diagnose_order_issues(self) -> List[str]:
+        """🔍 วินิจฉัยปัญหาการวางออเดอร์"""
+        try:
+            issues = []
+            
+            # เช็ค connection
+            if not self.mt5_connector.is_connected:
+                issues.append("❌ MT5 connection lost")
+            
+            # เช็ค daily limits
+            if self.daily_order_count >= self.max_daily_orders:
+                issues.append(f"⚠️ Daily order limit reached: {self.daily_order_count}/{self.max_daily_orders}")
+            
+            # เช็ค success rate
+            stats = self.execution_stats["market_orders"]
+            if stats["count"] > 10:  # มีข้อมูลพอ
+                success_rate = stats["success"] / stats["count"]
+                if success_rate < 0.8:
+                    issues.append(f"⚠️ Low market order success rate: {success_rate:.1%}")
+            
+            # เช็ค slippage
+            if stats["count"] > 5 and stats["avg_slippage"] > 0.0005:  # 5 points
+                issues.append(f"⚠️ High average slippage: {stats['avg_slippage']:.5f}")
+            
+            # เช็ค execution time
+            if stats["count"] > 5 and stats["avg_execution_time"] > 2.0:
+                issues.append(f"⚠️ Slow execution time: {stats['avg_execution_time']:.2f}s")
+            
+            return issues if issues else ["✅ No issues detected"]
+            
+        except Exception as e:
+            self.log(f"❌ Diagnose issues error: {e}")
+            return [f"❌ Diagnostic error: {e}"]
+    
+    def reset_daily_counters(self):
+        """🔄 รีเซ็ต counters รายวัน"""
+        try:
+            self.daily_order_count = 0
+            self.last_reset_date = datetime.now().date()
+            self.log("🔄 Daily counters reset")
+            
+        except Exception as e:
+            self.log(f"❌ Reset counters error: {e}")
+    
+    def get_execution_efficiency(self) -> Dict:
+        """📊 วิเคราะห์ประสิทธิภาพการ execute"""
+        try:
+            total_orders = sum(stats["count"] for stats in self.execution_stats.values())
+            total_successes = sum(stats["success"] for stats in self.execution_stats.values())
+            
+            overall_success_rate = total_successes / total_orders if total_orders > 0 else 0
+            
+            return {
+                "overall_success_rate": f"{overall_success_rate:.1%}",
+                "total_orders_today": self.daily_order_count,
+                "market_orders": self.execution_stats["market_orders"],
+                "recovery_orders": self.execution_stats["recovery_orders"],
+                "efficiency_score": min(overall_success_rate * 1.2, 1.0)  # Bonus for high success
+            }
+            
+        except Exception as e:
+            self.log(f"❌ Execution efficiency error: {e}")
+            return {"error": str(e)}
+    
+    def log(self, message: str):
+        """Log message with timestamp"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] 🎯 OrderManager: {message}")
+    
+    # ========================================================================================
+    # 🎯 SPECIAL MARKET ORDER VARIANTS
+    # ========================================================================================
+    
+    def place_opportunity_order(self, opportunity_data: Dict) -> OrderResult:
+        """🎯 วางออเดอร์จากโอกาสพิเศษ"""
+        try:
+            direction = opportunity_data.get('direction', 'BUY')
+            confidence = opportunity_data.get('confidence', 0.6)
+            reasoning = opportunity_data.get('reasoning', 'Market opportunity detected')
+            
+            order_type = OrderType.MARKET_BUY if direction == "BUY" else OrderType.MARKET_SELL
+            
+            # Volume ตาม confidence
+            volume = 0.01 + (confidence - 0.5) * 0.02  # 0.01-0.02 range
+            volume = max(self.min_lot, min(volume, 0.03))
+            
+            order_request = OrderRequest(
+                order_type=order_type,
+                volume=volume,
+                price=0.0,
+                reason=OrderReason.VOLATILITY_BREAKOUT,
+                confidence=confidence,
+                reasoning=reasoning,
+                max_slippage=35  # ยอมรับ slippage เพิ่มสำหรับโอกาส
+            )
+            
+            return self.place_market_order(order_request)
+            
+        except Exception as e:
+            self.log(f"❌ Opportunity order error: {e}")
+            return OrderResult(False, 0, 0, 0, f"Opportunity error: {e}")
+    
+    def place_time_based_order(self, time_factor: float) -> OrderResult:
+        """🕐 วางออเดอร์ตาม Time Factor"""
+        try:
+            if time_factor < 0.5:
+                return OrderResult(False, 0, 0, 0, "Time factor too low")
+            
+            # ยิ่งห่างจาก last action ยิ่งมี pressure ให้เข้า
+            direction = "BUY" if datetime.now().minute % 2 == 0 else "SELL"  # Simple alternating
+            
+            order_type = OrderType.MARKET_BUY if direction == "BUY" else OrderType.MARKET_SELL
+            volume = 0.01 + (time_factor - 0.5) * 0.01  # เพิ่ม volume ตาม time pressure
+            
+            order_request = OrderRequest(
+                order_type=order_type,
+                volume=round(volume, 2),
+                price=0.0,
+                reason=OrderReason.GRID_EXPANSION,
+                confidence=0.5 + time_factor * 0.3,
+                reasoning=f"Time-based entry: factor {time_factor:.3f}",
+                max_slippage=20
+            )
+            
+            return self.place_market_order(order_request)
+            
+        except Exception as e:
+            self.log(f"❌ Time-based order error: {e}")
+            return OrderResult(False, 0, 0, 0, f"Time-based error: {e}")
+    
+    # ========================================================================================
+    # 🔧 ENHANCED UTILITY METHODS
+    # ========================================================================================
+    
+    def force_market_entry(self, direction: str, volume: float = 0.01, 
+                          reason: str = "FORCED_ENTRY") -> OrderResult:
+        """🚨 บังคับเข้าตลาดทันที - Emergency Method"""
+        try:
+            print(f"🚨 === FORCE MARKET ENTRY ===")
+            print(f"   Direction: {direction}")
+            print(f"   Volume: {volume:.3f}")
+            print(f"   Reason: {reason}")
+            
+            order_type = OrderType.MARKET_BUY if direction.upper() == "BUY" else OrderType.MARKET_SELL
+            
+            order_request = OrderRequest(
+                order_type=order_type,
+                volume=volume,
+                price=0.0,
+                reason=OrderReason.RISK_MANAGEMENT,
+                confidence=1.0,  # Maximum confidence for forced entry
+                reasoning=f"FORCED: {reason}",
+                max_slippage=100  # ยอมรับ slippage สูงมาก
+            )
+            
+            result = self.place_market_order(order_request)
+            
+            if result.success:
+                print(f"🚨 FORCED entry executed: {volume:.3f} lots {direction}")
+            else:
+                print(f"❌ FORCED entry failed: {result.message}")
+            
+            return result
+            
+        except Exception as e:
+            self.log(f"❌ Force market entry error: {e}")
+            return OrderResult(False, 0, 0, 0, f"Force entry error: {e}")
+    
     def get_order_performance_stats(self) -> Dict[str, Dict]:
-        """Get performance statistics by order reason"""
+        """ดึงสถิติประสิทธิภาพแยกตาม reason"""
         try:
             stats = {}
             
@@ -901,16 +1157,19 @@ class OrderManager:
                 if data["count"] > 0:
                     success_rate = data["success"] / data["count"]
                     avg_profit = data["total_profit"] / data["count"]
+                    avg_4d_score = data.get("avg_4d_score", 0)
+                    avg_execution = data.get("avg_execution_time", 0)
                 else:
-                    success_rate = 0.0
-                    avg_profit = 0.0
+                    success_rate = avg_profit = avg_4d_score = avg_execution = 0.0
                 
                 stats[reason] = {
                     "total_orders": data["count"],
                     "successful_orders": data["success"],
                     "success_rate": round(success_rate, 3),
                     "total_profit": round(data["total_profit"], 2),
-                    "average_profit": round(avg_profit, 2)
+                    "average_profit": round(avg_profit, 2),
+                    "avg_4d_score": round(avg_4d_score, 3),
+                    "avg_execution_time": round(avg_execution, 3)
                 }
             
             return stats
@@ -919,526 +1178,118 @@ class OrderManager:
             self.log(f"❌ Performance stats error: {e}")
             return {}
     
-    def log(self, message: str):
-        """Log message with timestamp"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] 🎯 OrderManager: {message}")
+    def cleanup_old_tracking_data(self, days_to_keep: int = 7):
+        """🧹 ทำความสะอาดข้อมูลติดตาม"""
+        try:
+            cutoff_date = datetime.now() - timedelta(days=days_to_keep)
+            
+            # ทำความสะอาด order_history
+            original_count = len(self.order_history)
+            self.order_history = deque([
+                order for order in self.order_history 
+                if order.get('timestamp', datetime.now()) > cutoff_date
+            ], maxlen=100)
+            
+            cleaned_count = original_count - len(self.order_history)
+            
+            if cleaned_count > 0:
+                print(f"🧹 Cleaned {cleaned_count} old order records")
+            
+        except Exception as e:
+            self.log(f"❌ Cleanup tracking data error: {e}")
     
-    def place_buy_order(self, price: float, lot_size: float, order_type: str = "BUY_LIMIT", 
-                       reason: str = "") -> Dict:
-        """
-        🆕 Alias สำหรับ Modern Rule Engine
-        เรียกใช้ place_smart_buy_order() ที่มีอยู่แล้ว
-        """
+    def emergency_stop_all_orders(self) -> Dict:
+        """🚨 หยุดการวางออเดอร์ฉุกเฉิน"""
         try:
-            print(f"🎯 place_buy_order() called:")
-            print(f"   Price: {price:.5f}")
-            print(f"   Lot Size: {lot_size:.3f}")
-            print(f"   Order Type: {order_type}")
-            print(f"   Reason: {reason}")
+            print("🚨 === EMERGENCY STOP ===")
             
-            # เตรียม market_data พิเศษสำหรับ Rule Engine
-            market_data = {
-                "target_price": price,           # ราคาที่ Rule Engine ต้องการ
-                "rule_volume": lot_size,         # ขนาดที่ Rule Engine คำนวณแล้ว
-                "current_price": price - 50 * 0.01,  # สมมุติราคาปัจจุบันสูงกว่า target
-                "order_type_preference": order_type,
-                "rule_engine_mode": True
+            # ไม่ได้ cancel ออเดอร์ที่วางแล้ว (เป็น position แล้ว)
+            # แต่หยุดการวางออเดอร์ใหม่
+            
+            # Reset daily counter เพื่อหยุดวางออเดอร์
+            original_limit = self.max_daily_orders
+            self.max_daily_orders = 0
+            
+            result = {
+                "emergency_stop_activated": True,
+                "timestamp": datetime.now().isoformat(),
+                "original_daily_limit": original_limit,
+                "current_daily_count": self.daily_order_count,
+                "message": "Order placement stopped. Use restore_order_placement() to resume."
             }
             
-            # เรียกใช้ method ที่มีอยู่
-            result = self.place_smart_buy_order(
-                confidence=0.85,  # ใช้ confidence สูงจาก Rule Engine
-                reasoning=reason,
-                market_data=market_data
-            )
-            
-            # ส่งผลลัพธ์กลับในรูปแบบที่ Rule Engine ต้องการ
-            return {
-                "success": result,
-                "order_type": order_type,
-                "direction": "BUY",
-                "price": price,
-                "volume": lot_size,
-                "error": "Order placement failed" if not result else None
-            }
+            print("🚨 Emergency stop activated - order placement halted")
+            return result
             
         except Exception as e:
-            print(f"❌ place_buy_order error: {e}")
-            return {"success": False, "error": str(e)}
-
-    def place_sell_order(self, price: float, lot_size: float, order_type: str = "SELL_LIMIT", 
-                        reason: str = "") -> Dict:
-        """
-        🆕 Alias สำหรับ Modern Rule Engine
-        เรียกใช้ place_smart_sell_order() ที่มีอยู่แล้ว
-        """
-        try:
-            print(f"🎯 place_sell_order() called:")
-            print(f"   Price: {price:.5f}")
-            print(f"   Lot Size: {lot_size:.3f}")
-            print(f"   Order Type: {order_type}")
-            print(f"   Reason: {reason}")
-            
-            # เตรียม market_data พิเศษสำหรับ Rule Engine
-            market_data = {
-                "target_price": price,           # ราคาที่ Rule Engine ต้องการ
-                "rule_volume": lot_size,         # ขนาดที่ Rule Engine คำนวณแล้ว
-                "current_price": price + 50 * 0.01,  # สมมุติราคาปัจจุบันต่ำกว่า target
-                "order_type_preference": order_type,
-                "rule_engine_mode": True
-            }
-            
-            # เรียกใช้ method ที่มีอยู่
-            result = self.place_smart_sell_order(
-                confidence=0.85,  # ใช้ confidence สูงจาก Rule Engine
-                reasoning=reason,
-                market_data=market_data
-            )
-            
-            # ส่งผลลัพธ์กลับในรูปแบบที่ Rule Engine ต้องการ
-            return {
-                "success": result,
-                "order_type": order_type,
-                "direction": "SELL",
-                "price": price,
-                "volume": lot_size,
-                "error": "Order placement failed" if not result else None
-            }
-            
-        except Exception as e:
-            print(f"❌ place_sell_order error: {e}")
-            return {"success": False, "error": str(e)}
-
-    def place_smart_buy_order(self, confidence: float = 0.5, reasoning: str = "",
-                             market_data: Dict = None) -> bool:
-        """Updated: รองรับ target_price จาก Rule Engine"""
-        try:
-            print(f"🎯 === PLACE SMART BUY ORDER ===")
-            print(f"   Confidence: {confidence:.2f}")
-            print(f"   Reasoning: {reasoning}")
-            
-            # Validate MT5 connection
-            if not self.mt5_connector.is_connected:
-                self.log("❌ Cannot place BUY order - MT5 not connected")
-                return False
-            
-            # ใช้ข้อมูลจาก Rule Engine ถ้ามี
-            if market_data and market_data.get("rule_engine_mode"):
-                target_price = market_data.get("target_price")
-                volume = market_data.get("rule_volume", 0.01)
-                
-                print(f"🎯 Using Rule Engine parameters:")
-                print(f"   Target Price: {target_price:.5f}")
-                print(f"   Volume: {volume:.3f}")
-                
-                if target_price and target_price > 0:
-                    # สร้าง order request โดยตรง
-                    order_request = OrderRequest(
-                        order_type=OrderType.BUY_LIMIT,
-                        volume=volume,
-                        price=target_price,
-                        sl=0.0,  # ไม่ใช้ stop loss
-                        tp=0.0,  # ไม่ใช้ take profit
-                        reason=OrderReason.GRID_EXPANSION,
-                        confidence=confidence,
-                        reasoning=reasoning,
-                        max_slippage=10
-                    )
-                    
-                    # Execute order
-                    result = self._execute_real_order(order_request)
-                    
-                    if result.success:
-                        self.log(f"✅ BUY order placed: Ticket {result.ticket} @ {target_price:.5f}")
-                        self._track_order_performance(OrderReason.GRID_EXPANSION, True)
-                        return True
-                    else:
-                        self.log(f"❌ BUY order failed: {result.error_message}")
-                        self._track_order_performance(OrderReason.GRID_EXPANSION, False)
-                        return False
-            
-            # ถ้าไม่มีข้อมูลจาก Rule Engine ใช้วิธีเดิม
-            else:
-                # Get market data
-                if market_data is None:
-                    market_data = self._get_current_market_data()
-                
-                if not market_data:
-                    self.log("❌ Cannot get market data for buy order")
-                    return False
-                
-                # Calculate order parameters
-                order_params = self._calculate_smart_buy_parameters(confidence, market_data, reasoning)
-                
-                if not order_params:
-                    self.log("❌ Cannot calculate buy order parameters")
-                    return False
-                
-                # Determine order type
-                order_type = self._determine_buy_order_type(market_data, confidence)
-                
-                # Create and execute order
-                order_request = OrderRequest(
-                    order_type=order_type,
-                    volume=order_params["volume"],
-                    price=order_params["price"],
-                    sl=order_params.get("sl", 0.0),
-                    tp=order_params.get("tp", 0.0),
-                    reason=order_params["reason"],
-                    confidence=confidence,
-                    reasoning=reasoning,
-                    max_slippage=order_params.get("slippage", 10)
-                )
-                
-                result = self._execute_real_order(order_request)
-                
-                if result.success:
-                    self.log(f"✅ BUY order placed: Ticket {result.ticket} @ {order_request.price:.5f}")
-                    self._track_order_performance(order_request.reason, True)
-                    return True
-                else:
-                    self.log(f"❌ BUY order failed: {result.error_message}")
-                    self._track_order_performance(order_request.reason, False)
-                    return False
-                
-        except Exception as e:
-            self.log(f"❌ Smart buy order error: {e}")
-            return False
-
-    def place_smart_sell_order(self, confidence: float = 0.5, reasoning: str = "",
-                              market_data: Dict = None) -> bool:
-        """Updated: รองรับ target_price จาก Rule Engine"""
-        try:
-            print(f"🎯 === PLACE SMART SELL ORDER ===")
-            print(f"   Confidence: {confidence:.2f}")
-            print(f"   Reasoning: {reasoning}")
-            
-            # Validate MT5 connection
-            if not self.mt5_connector.is_connected:
-                self.log("❌ Cannot place SELL order - MT5 not connected")
-                return False
-            
-            # ใช้ข้อมูลจาก Rule Engine ถ้ามี
-            if market_data and market_data.get("rule_engine_mode"):
-                target_price = market_data.get("target_price")
-                volume = market_data.get("rule_volume", 0.01)
-                
-                print(f"🎯 Using Rule Engine parameters:")
-                print(f"   Target Price: {target_price:.5f}")
-                print(f"   Volume: {volume:.3f}")
-                
-                if target_price and target_price > 0:
-                    # สร้าง order request โดยตรง
-                    order_request = OrderRequest(
-                        order_type=OrderType.SELL_LIMIT,
-                        volume=volume,
-                        price=target_price,
-                        sl=0.0,  # ไม่ใช้ stop loss
-                        tp=0.0,  # ไม่ใช้ take profit
-                        reason=OrderReason.GRID_EXPANSION,
-                        confidence=confidence,
-                        reasoning=reasoning,
-                        max_slippage=10
-                    )
-                    
-                    # Execute order
-                    result = self._execute_real_order(order_request)
-                    
-                    if result.success:
-                        self.log(f"✅ SELL order placed: Ticket {result.ticket} @ {target_price:.5f}")
-                        self._track_order_performance(OrderReason.GRID_EXPANSION, True)
-                        return True
-                    else:
-                        self.log(f"❌ SELL order failed: {result.error_message}")
-                        self._track_order_performance(OrderReason.GRID_EXPANSION, False)
-                        return False
-            
-            # ถ้าไม่มีข้อมูลจาก Rule Engine ใช้วิธีเดิม
-            else:
-                # Get market data
-                if market_data is None:
-                    market_data = self._get_current_market_data()
-                
-                if not market_data:
-                    self.log("❌ Cannot get market data for sell order")
-                    return False
-                
-                # Calculate order parameters
-                order_params = self._calculate_smart_sell_parameters(confidence, market_data, reasoning)
-                
-                if not order_params:
-                    self.log("❌ Cannot calculate sell order parameters")
-                    return False
-                
-                # Determine order type
-                order_type = self._determine_sell_order_type(market_data, confidence)
-                
-                # Create and execute order
-                order_request = OrderRequest(
-                    order_type=order_type,
-                    volume=order_params["volume"],
-                    price=order_params["price"],
-                    sl=order_params.get("sl", 0.0),
-                    tp=order_params.get("tp", 0.0),
-                    reason=order_params["reason"],
-                    confidence=confidence,
-                    reasoning=reasoning,
-                    max_slippage=order_params.get("slippage", 10)
-                )
-                
-                result = self._execute_real_order(order_request)
-                
-                if result.success:
-                    self.log(f"✅ SELL order placed: Ticket {result.ticket} @ {order_request.price:.5f}")
-                    self._track_order_performance(order_request.reason, True)
-                    return True
-                else:
-                    self.log(f"❌ SELL order failed: {result.error_message}")
-                    self._track_order_performance(order_request.reason, False)
-                    return False
-                
-        except Exception as e:
-            self.log(f"❌ Smart sell order error: {e}")
-            return False
-
-
-    def _find_wider_alternative_slot(self, direction: str, existing_prices: List[float], 
-                                   current_price: float) -> Optional[float]:
-        """หาตำแหน่งใหม่ด้วย spacing ที่กว้างขึ้น - เพิ่มใน order_manager.py"""
-        try:
-            print(f"🔍 Finding wider alternative for {direction}")
-            
-            # ใช้ spacing ที่กว้างขึ้น
-            wide_spacing = max(150, self.smart_params.current_spacing * 3)  # อย่างน้อย 150 points
-            wide_spacing_price = wide_spacing * self.point_value
-            
-            print(f"   Using wider spacing: {wide_spacing} points ({wide_spacing_price:.5f})")
-            
-            if direction == "BUY":
-                # หาตำแหน่งที่ต่ำกว่าออเดอร์ BUY ที่ต่ำสุด
-                buy_orders = [p for p in existing_prices if p < current_price]
-                if buy_orders:
-                    lowest_buy = min(buy_orders)
-                    candidate_price = lowest_buy - wide_spacing_price
-                    print(f"   Below lowest BUY: {lowest_buy:.5f} - {wide_spacing_price:.5f} = {candidate_price:.5f}")
-                else:
-                    candidate_price = current_price - wide_spacing_price
-                    print(f"   Below current: {current_price:.5f} - {wide_spacing_price:.5f} = {candidate_price:.5f}")
-                    
-            else:  # SELL
-                # หาตำแหน่งที่สูงกว่าออเดอร์ SELL ที่สูงสุด
-                sell_orders = [p for p in existing_prices if p > current_price]
-                if sell_orders:
-                    highest_sell = max(sell_orders)
-                    candidate_price = highest_sell + wide_spacing_price
-                    print(f"   Above highest SELL: {highest_sell:.5f} + {wide_spacing_price:.5f} = {candidate_price:.5f}")
-                else:
-                    candidate_price = current_price + wide_spacing_price
-                    print(f"   Above current: {current_price:.5f} + {wide_spacing_price:.5f} = {candidate_price:.5f}")
-            
-            # Validate candidate price - ใช้ wider validation
-            validated_price = self._validate_price_format_wider(candidate_price, direction, current_price)
-            
-            if validated_price:
-                # Final collision check with wider tolerance
-                min_distance = wide_spacing_price * 0.8  # ใช้ 80% ของ wide spacing
-                is_safe = all(abs(validated_price - p) >= min_distance for p in existing_prices)
-                
-                if is_safe:
-                    print(f"✅ Wide spacing alternative found: {validated_price:.5f}")
-                    return validated_price
-                else:
-                    print(f"❌ Wide spacing still has collision")
-                    return None
-            else:
-                print(f"❌ Wide spacing price validation failed")
-                return None
-                
-        except Exception as e:
-            print(f"❌ Wide alternative search error: {e}")
-            return None
-
-    def _find_alternative_slot(self, original_price: float, direction: str, 
-                              existing_prices: List[float], current_price: float, 
-                              min_spacing: float) -> Optional[float]:
-        """หาตำแหน่งทดแทนที่เหมาะสม - เพิ่มใน order_manager.py"""
-        try:
-            print(f"🔍 Finding alternative slot for {direction}")
-            
-            # กำหนดทิศทางการค้นหา
-            if direction == "BUY":
-                # สำหรับ BUY: ค้นหาจากราคาต่ำขึ้นไป
-                search_direction = -1
-                price_limit = current_price * 0.95  # ไม่ต่ำกว่า 5% ของราคาปัจจุบัน
-            else:  # SELL
-                # สำหรับ SELL: ค้นหาจากราคาสูงขึ้นไป  
-                search_direction = 1
-                price_limit = current_price * 1.05  # ไม่สูงกว่า 5% ของราคาปัจจุบัน
-            
-            # ค้นหาในช่วง ±300 points ด้วย step ที่ใหญ่ขึ้น
-            for offset in range(50, 301, 25):  # เริ่มจาก 50 points, step 25
-                candidate_price = original_price + (search_direction * offset * self.point_value)
-                
-                # เช็คว่าอยู่ในขอบเขตที่อนุญาต
-                if direction == "BUY" and candidate_price < price_limit:
-                    print(f"   ⚠️ Price too low: {candidate_price:.5f} < {price_limit:.5f}")
-                    continue
-                elif direction == "SELL" and candidate_price > price_limit:
-                    print(f"   ⚠️ Price too high: {candidate_price:.5f} > {price_limit:.5f}")
-                    continue
-                
-                # เช็คระยะห่างจากราคาปัจจุบัน
-                distance_from_current = abs(candidate_price - current_price)
-                min_distance = 40 * self.point_value  # เพิ่มเป็น 40 points
-                
-                if distance_from_current < min_distance:
-                    continue
-                
-                # เช็ค collision กับออเดอร์ที่มีอยู่ด้วย tolerance ที่กว้างขึ้น
-                is_safe = True
-                min_gap = max(min_spacing, 60 * self.point_value)  # อย่างน้อย 60 points
-                
-                for existing_price in existing_prices:
-                    if abs(candidate_price - existing_price) <= min_gap:
-                        is_safe = False
-                        break
-                
-                if is_safe:
-                    print(f"   ✅ Alternative found: {candidate_price:.5f} (offset: {offset} points)")
-                    return candidate_price
-                else:
-                    print(f"   ❌ Collision at offset {offset}: {candidate_price:.5f}")
-            
-            print(f"   ❌ No alternative found in 300 points range")
-            return None
-            
-        except Exception as e:
-            print(f"❌ Alternative slot search error: {e}")
-            return None
-
-    def _diagnose_spacing_problem(self) -> Dict:
-        """🔍 วิเคราะห์ปัญหา spacing"""
-        try:
-            # ดึงออเดอร์ที่มีอยู่
-            pending_orders = self.get_pending_orders()
-            existing_prices = [order.get("price", 0) for order in pending_orders if order.get("price", 0) > 0]
-            existing_prices.sort()
-            
-            current_price = self._get_current_price()
-            
-            print(f"🔍 === SPACING DIAGNOSIS ===")
-            print(f"   Current Price: {current_price:.5f}")
-            print(f"   Total Orders: {len(existing_prices)}")
-            
-            # วิเคราะห์ระยะห่างระหว่างออเดอร์
-            if len(existing_prices) >= 2:
-                distances = []
-                for i in range(1, len(existing_prices)):
-                    distance = existing_prices[i] - existing_prices[i-1]
-                    distance_points = distance / self.point_value
-                    distances.append(distance_points)
-                    print(f"   Gap {i}: {distance:.5f} ({distance_points:.1f} points)")
-                
-                min_gap = min(distances)
-                max_gap = max(distances)
-                avg_gap = sum(distances) / len(distances)
-                
-                print(f"📊 Gap Analysis:")
-                print(f"   Min Gap: {min_gap:.1f} points")
-                print(f"   Max Gap: {max_gap:.1f} points") 
-                print(f"   Avg Gap: {avg_gap:.1f} points")
-                
-                # เช็คปัญหา
-                if min_gap < 10:
-                    print(f"🚨 PROBLEM: Grid too dense (min gap: {min_gap:.1f} points)")
-                    return {"problem": "GRID_TOO_DENSE", "min_gap": min_gap}
-                elif avg_gap < 30:
-                    print(f"⚠️ WARNING: Grid quite dense (avg gap: {avg_gap:.1f} points)")
-                    return {"problem": "GRID_DENSE", "avg_gap": avg_gap}
-                else:
-                    print(f"✅ Grid spacing OK")
-                    return {"problem": "NONE", "spacing_ok": True}
-            
-            return {"problem": "INSUFFICIENT_DATA"}
-            
-        except Exception as e:
-            print(f"❌ Spacing diagnosis error: {e}")
-            return {"problem": "ERROR", "error": str(e)}
-
-    def _get_current_price(self) -> float:
-        """ดึงราคาปัจจุบันจาก MT5"""
-        try:
-            if not self.mt5_connector or not self.mt5_connector.is_connected:
-                return 0.0
-            
-            tick = mt5.symbol_info_tick(self.symbol)
-            if tick is None:
-                return 0.0
-            
-            return (tick.bid + tick.ask) / 2  # ใช้ mid price
-            
-        except Exception as e:
-            print(f"❌ Get current price error: {e}")
-            return 0.0
-
-    def _validate_price_format(self, price: float, direction: str, current_price: float) -> Optional[float]:
-        """ตรวจสอบและปรับ format ราคาให้ถูกต้องสำหรับ MT5"""
-        try:
-            # ตรวจสอบพื้นฐาน
-            if price <= 0:
-                print(f"❌ Invalid price: {price}")
-                return None
-            
-            # Round ให้เป็นทศนิยม 5 ตำแหน่ง (XAUUSD standard)
-            formatted_price = round(price, 5)
-            
-            # เช็คระยะห่างขั้นต่ำจากราคาปัจจุบัน
-            min_distance = 30 * self.point_value  # 30 points
-            distance = abs(formatted_price - current_price)
-            
-            if distance < min_distance:
-                print(f"❌ Too close to current price: {distance/self.point_value:.1f} points (min: 30)")
-                return None
-            
-            # เช็คว่าราคาไม่ห่างเกินไป
-            max_distance = 800 * self.point_value  # 800 points
-            if distance > max_distance:
-                print(f"❌ Too far from current price: {distance/self.point_value:.1f} points (max: 800)")
-                return None
-            
-            # เช็คทิศทางให้ถูกต้อง
-            if direction == "BUY" and formatted_price >= current_price:
-                print(f"❌ BUY price must be below current price: {formatted_price:.5f} >= {current_price:.5f}")
-                return None
-            elif direction == "SELL" and formatted_price <= current_price:
-                print(f"❌ SELL price must be above current price: {formatted_price:.5f} <= {current_price:.5f}")
-                return None
-            
-            # เช็คว่าราคาไม่เป็น 0 หรือค่าผิดปกติ
-            if formatted_price < current_price * 0.92 or formatted_price > current_price * 1.08:
-                print(f"❌ Price out of reasonable range: {formatted_price:.5f} (current: {current_price:.5f})")
-                return None
-            
-            print(f"✅ Price validation passed: {formatted_price:.5f}")
-            return formatted_price
-            
-        except Exception as e:
-            print(f"❌ Price validation error: {e}")
-            return None
+            self.log(f"❌ Emergency stop error: {e}")
+            return {"error": str(e)}
     
-# ========================================================================================
-# 🧪 TEST FUNCTION
-# ========================================================================================
-
-def test_order_manager_compatibility():
-    """Test compatibility with Modern Rule Engine"""
-    print("🧪 Testing Order Manager compatibility with Modern Rule Engine...")
-    print("✅ Updated Order Manager ready")
-    print("✅ place_smart_order() method added")
-    print("✅ target_price support from Rule Engine") 
-    print("✅ Enhanced collision detection")
-    print("✅ Dynamic volume and spacing support")
-
-if __name__ == "__main__":
-    test_order_manager_compatibility()
+    def restore_order_placement(self):
+        """🔄 คืนค่าการวางออเดอร์หลัง emergency stop"""
+        try:
+            # คืนค่า daily limit
+            self.max_daily_orders = self.config.get("risk_management", {}).get("max_daily_orders", 100)
+            
+            print(f"🔄 Order placement restored - daily limit: {self.max_daily_orders}")
+            
+        except Exception as e:
+            self.log(f"❌ Restore order placement error: {e}")
+    
+    def get_detailed_execution_report(self) -> str:
+        """📊 รายงานการ execution แบบละเอียด"""
+        try:
+            report_lines = []
+            report_lines.append("📊 DETAILED EXECUTION REPORT")
+            report_lines.append("=" * 50)
+            
+            # Overall stats
+            total_orders = sum(stats["count"] for stats in self.execution_stats.values())
+            total_successes = sum(stats["success"] for stats in self.execution_stats.values())
+            overall_rate = total_successes / total_orders if total_orders > 0 else 0
+            
+            report_lines.append(f"Overall Performance: {overall_rate:.1%} ({total_successes}/{total_orders})")
+            report_lines.append("")
+            
+            # Market order stats
+            market_stats = self.execution_stats["market_orders"]
+            if market_stats["count"] > 0:
+                market_rate = market_stats["success"] / market_stats["count"]
+                report_lines.append(f"📈 Market Orders: {market_rate:.1%} ({market_stats['success']}/{market_stats['count']})")
+                report_lines.append(f"   Avg Slippage: {market_stats['avg_slippage']:.5f}")
+                report_lines.append(f"   Avg Execution: {market_stats['avg_execution_time']:.3f}s")
+                report_lines.append("")
+            
+            # Recovery stats
+            recovery_stats = self.execution_stats["recovery_orders"]
+            if recovery_stats["count"] > 0:
+                recovery_rate = recovery_stats["success"] / recovery_stats["count"]
+                report_lines.append(f"🎯 Recovery Orders: {recovery_rate:.1%} ({recovery_stats['success']}/{recovery_stats['count']})")
+                report_lines.append("")
+            
+            # Performance by reason
+            if self.order_performance:
+                report_lines.append("📊 Performance by Reason:")
+                for reason, stats in self.order_performance.items():
+                    if stats["count"] > 0:
+                        rate = stats["success"] / stats["count"]
+                        report_lines.append(f"   {reason}: {rate:.1%} ({stats['success']}/{stats['count']})")
+                report_lines.append("")
+            
+            # Recent activity
+            if self.order_history:
+                report_lines.append("🕒 Recent Orders (last 5):")
+                recent_orders = list(self.order_history)[-5:]
+                for order in recent_orders:
+                    time_str = order.get('timestamp', datetime.now()).strftime('%H:%M:%S')
+                    ticket = order.get('ticket', 0)
+                    order_type = order.get('type', 'unknown')
+                    volume = order.get('volume', 0)
+                    price = order.get('price', 0)
+                    report_lines.append(f"   {time_str} | #{ticket} | {order_type} | {volume:.3f} @ {price:.5f}")
+            
+            return "\n".join(report_lines)
+            
+        except Exception as e:
+            self.log(f"❌ Detailed report error: {e}")
+            return f"Report generation error: {e}"

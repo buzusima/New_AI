@@ -1,145 +1,530 @@
 {
+  "config_version": "4D_AI_Enhanced_v1.0",
+  "last_updated": "2024-08-25T00:00:00Z",
+  "description": "Enhanced 4D AI Rule Configuration - Market Order Focus with Smart Recovery",
+  
   "rules": {
-    "grid_expansion": {
-      "enabled": true,
-      "weight": 0.45,
-      "confidence_threshold": 0.05,
-      "parameters": {
-        "auto_place_orders": true,
-        "initial_grid_per_side": 5,
-        "max_grid_per_side": 12,
-        "min_spacing_points": 80,
-        "max_spacing_points": 300,
-        "dynamic_spacing": true,
-        "spacing_multiplier_range": [0.7, 2.0],
-        "grid_quality_threshold": 0.6,
-        "balance_tolerance": 0.3,
-        "foundation_priority": true,
-        "maintenance_interval_minutes": 15,
-        "zone_based_expansion": true,
-        "progressive_grid_building": true
-      },
-      "risk_settings": {
-        "max_positions_per_signal": 25,
-        "position_size_multiplier": 1.0,
-        "margin_usage_limit": 0.7
-      }
-    },
     "portfolio_balance": {
       "enabled": true,
-      "weight": 0.25,
+      "weight": 4.0,
       "confidence_threshold": 0.15,
+      "description": "Primary rule - Portfolio balance maintenance with 4D AI insights",
       "parameters": {
-        "profit_take_threshold": 50.0,
-        "min_balanced_profit": 25.0,
-        "max_exposure_ratio": 0.8,
+        "profit_take_threshold": 30.0,
+        "min_balanced_profit": 15.0,
+        "max_exposure_ratio": 0.85,
+        "balance_target_ratio": 0.5,
+        "balance_tolerance": 0.2,
+        "imbalance_penalty_multiplier": 2.0,
         "hedge_protection_enabled": true,
-        "hedge_trigger_loss": -300.0,
-        "hedge_with_profit_ratio": 0.75,
+        "hedge_trigger_loss": -200.0,
+        "hedge_with_profit_ratio": 0.6,
         "partial_hedge_close": true,
-        "min_profitable_for_hedge": 75.0,
-        "emergency_hedge_loss": -500.0,
+        "min_profitable_for_hedge": 20.0,
+        "emergency_hedge_loss": -400.0,
         "smart_hedge_selection": true,
-        "recovery_opportunity_threshold": 10.0,
-        "net_positive_close_threshold": 5.0
+        "recovery_opportunity_threshold": 5.0,
+        "net_positive_close_threshold": 2.0,
+        "four_d_integration": {
+          "min_4d_score_for_action": 0.3,
+          "hedge_4d_weight": 0.25,
+          "balance_4d_weight": 0.30,
+          "safety_4d_weight": 0.25,
+          "market_4d_weight": 0.20
+        }
+      },
+      "market_order_settings": {
+        "use_market_orders": true,
+        "max_slippage_points": 25,
+        "retry_attempts": 3,
+        "execution_timeout": 8.0
+      },
+      "risk_settings": {
+        "max_positions_per_signal": 30,
+        "position_size_multiplier": 1.2,
+        "margin_usage_limit": 0.75,
+        "max_daily_risk_percentage": 6.0
+      }
+    },
+    
+    "grid_expansion": {
+      "enabled": true,
+      "weight": 3.0,
+      "confidence_threshold": 0.10,
+      "description": "Enhanced grid building with 4D AI guidance",
+      "parameters": {
+        "auto_place_orders": true,
+        "initial_grid_per_side": 3,
+        "max_grid_per_side": 20,
+        "min_spacing_points": 60,
+        "max_spacing_points": 400,
+        "dynamic_spacing": true,
+        "spacing_multiplier_range": [0.6, 2.5],
+        "grid_quality_threshold": 0.4,
+        "balance_tolerance": 0.35,
+        "foundation_priority": true,
+        "maintenance_interval_minutes": 10,
+        "zone_based_expansion": true,
+        "progressive_grid_building": true,
+        "no_collision_detection": true,
+        "unlimited_placement": true,
+        "four_d_guided_placement": {
+          "enable_4d_spacing": true,
+          "min_4d_score_for_expansion": 0.25,
+          "spacing_4d_weight": 0.20,
+          "opportunity_4d_weight": 0.30
+        }
+      },
+      "market_order_settings": {
+        "prefer_market_orders": true,
+        "market_order_ratio": 0.8,
+        "max_slippage_points": 20,
+        "immediate_execution": true
+      },
+      "risk_settings": {
+        "max_positions_per_signal": 40,
+        "position_size_multiplier": 1.0,
+        "margin_usage_limit": 0.80,
+        "no_position_limits": true
+      }
+    },
+    
+    "four_d_ai_entry": {
+      "enabled": true,
+      "weight": 2.5,
+      "confidence_threshold": 0.20,
+      "description": "Pure 4D AI driven entries with hybrid factors",
+      "parameters": {
+        "hybrid_entry_logic": {
+          "balance_factor_weight": 0.35,
+          "margin_factor_weight": 0.25,
+          "opportunity_factor_weight": 0.25,
+          "time_factor_weight": 0.15
+        },
+        "min_hybrid_confidence": 0.25,
+        "max_hybrid_confidence": 0.95,
+        "four_d_dimension_weights": {
+          "position_value": 0.30,
+          "portfolio_safety": 0.25,
+          "hedge_opportunity": 0.25,
+          "market_context": 0.20
+        },
+        "entry_frequency_limits": {
+          "min_time_between_entries": 60,
+          "max_entries_per_hour": 8,
+          "max_entries_per_session": 25
+        },
+        "dynamic_lot_sizing": {
+          "base_lot": 0.01,
+          "4d_score_multiplier_range": [0.5, 1.8],
+          "safety_multiplier_range": [0.6, 1.5],
+          "balance_multiplier_range": [0.8, 1.3],
+          "max_single_lot": 0.06
+        }
+      },
+      "market_order_settings": {
+        "use_market_orders_only": true,
+        "max_slippage_points": 30,
+        "execution_priority": "immediate"
+      },
+      "risk_settings": {
+        "max_positions_per_signal": 50,
+        "position_size_multiplier": 1.1,
+        "no_stop_loss": true,
+        "use_recovery_instead": true
+      }
+    },
+    
+    "smart_recovery": {
+      "enabled": true,
+      "weight": 3.5,
+      "confidence_threshold": 0.30,
+      "description": "4D AI guided recovery and hedge optimization",
+      "parameters": {
+        "recovery_scan_interval": 30,
+        "min_recovery_confidence": 0.55,
+        "min_hedge_net_positive": 3.0,
+        "max_position_age_hours": 48,
+        "portfolio_health_threshold": 0.35,
+        "hedge_urgency_threshold": 0.75,
+        "recovery_strategies": {
+          "full_hedge": {
+            "enabled": true,
+            "min_confidence": 0.70,
+            "max_positions_in_hedge": 5
+          },
+          "partial_hedge": {
+            "enabled": true,
+            "min_confidence": 0.60,
+            "partial_ratio_range": [0.5, 0.8]
+          },
+          "net_positive_close": {
+            "enabled": true,
+            "min_confidence": 0.50,
+            "min_net_result": 1.0
+          },
+          "strategic_wait": {
+            "enabled": true,
+            "max_wait_hours": 12,
+            "wait_4d_threshold": 0.40
+          }
+        },
+        "execution_parameters": {
+          "max_recovery_actions_per_cycle": 2,
+          "delay_between_recoveries": 1.0,
+          "execution_order_optimization": true,
+          "partial_execution_tolerance": 0.7
+        }
+      },
+      "market_order_settings": {
+        "recovery_uses_market_orders": true,
+        "recovery_max_slippage": 35,
+        "emergency_slippage_limit": 50
+      },
+      "risk_settings": {
+        "max_recovery_attempts_per_position": 3,
+        "recovery_position_size_multiplier": 0.9,
+        "emergency_recovery_threshold": -500.0
+      }
+    },
+    
+    "trend_following": {
+      "enabled": true,
+      "weight": 1.5,
+      "confidence_threshold": 0.20,
+      "description": "Enhanced trend following with 4D market context",
+      "parameters": {
+        "rsi_period": 14,
+        "rsi_oversold": 30,
+        "rsi_overbought": 70,
+        "trend_strength_threshold": 0.4,
+        "trend_confirmation_bars": 1,
+        "momentum_threshold": 0.25,
+        "trend_follow_in_grid": true,
+        "four_d_trend_integration": {
+          "market_context_weight": 0.40,
+          "trend_strength_multiplier": 1.5,
+          "counter_trend_tolerance": 0.3
+        }
+      },
+      "market_order_settings": {
+        "trend_uses_market_orders": true,
+        "trend_max_slippage": 20
       },
       "risk_settings": {
         "max_positions_per_signal": 15,
-        "position_size_multiplier": 0.9
+        "position_size_multiplier": 1.0,
+        "trend_reversal_protection": true
       }
     },
-    "trend_following": {
-      "enabled": true,
-      "weight": 0.15,
-      "confidence_threshold": 0.25,
-      "parameters": {
-        "rsi_period": 14,
-        "rsi_oversold": 35,
-        "rsi_overbought": 65,
-        "trend_strength_threshold": 0.6,
-        "trend_confirmation_bars": 2,
-        "momentum_threshold": 0.3,
-        "trend_follow_in_grid": true
-      },
-      "risk_settings": {
-        "max_positions_per_signal": 8,
-        "position_size_multiplier": 1.0
-      }
-    },
+    
     "mean_reversion": {
       "enabled": true,
-      "weight": 0.10,
-      "confidence_threshold": 0.30,
+      "weight": 1.2,
+      "confidence_threshold": 0.25,
+      "description": "Mean reversion with 4D volatility analysis",
       "parameters": {
         "bollinger_period": 20,
         "bollinger_deviation": 2.0,
         "reversal_confirmation_bars": 1,
-        "price_deviation_threshold": 0.5,
-        "rsi_oversold_threshold": 30,
-        "rsi_overbought_threshold": 70
+        "price_deviation_threshold": 0.4,
+        "rsi_oversold_threshold": 25,
+        "rsi_overbought_threshold": 75,
+        "four_d_reversion_integration": {
+          "volatility_context_weight": 0.35,
+          "position_value_weight": 0.30,
+          "safety_weight": 0.35
+        }
+      },
+      "market_order_settings": {
+        "reversion_uses_market_orders": true,
+        "reversion_max_slippage": 15
+      },
+      "risk_settings": {
+        "max_positions_per_signal": 8,
+        "position_size_multiplier": 0.9,
+        "reversion_stop_distance": 0
+      }
+    },
+    
+    "support_resistance": {
+      "enabled": true,
+      "weight": 0.8,
+      "confidence_threshold": 0.35,
+      "description": "Support/Resistance with 4D market alignment",
+      "parameters": {
+        "level_detection_period": 100,
+        "level_strength_threshold": 0.25,
+        "price_distance_threshold": 40,
+        "level_validation_touches": 1,
+        "dynamic_level_updates": true,
+        "four_d_level_integration": {
+          "market_alignment_weight": 0.50,
+          "level_confidence_multiplier": 1.3
+        }
+      },
+      "market_order_settings": {
+        "sr_uses_market_orders": false,
+        "sr_prefer_limit_orders": true,
+        "sr_max_slippage": 10
       },
       "risk_settings": {
         "max_positions_per_signal": 5,
         "position_size_multiplier": 0.8
       }
-    },
-    "support_resistance": {
-      "enabled": true,
-      "weight": 0.05,
-      "confidence_threshold": 0.40,
-      "parameters": {
-        "level_detection_period": 100,
-        "level_strength_threshold": 0.3,
-        "price_distance_threshold": 50,
-        "level_validation_touches": 2,
-        "dynamic_level_updates": true
-      },
-      "risk_settings": {
-        "max_positions_per_signal": 3,
-        "position_size_multiplier": 0.7
-      }
     }
   },
+  
+  "four_d_ai_settings": {
+    "analysis_enabled": true,
+    "analysis_interval_seconds": 30,
+    "real_time_updates": true,
+    "dimension_weights": {
+      "position_value_analysis": 0.30,
+      "portfolio_safety_analysis": 0.25,
+      "hedge_opportunity_analysis": 0.25,
+      "market_context_analysis": 0.20
+    },
+    "thresholds": {
+      "min_entry_confidence": 0.20,
+      "min_recovery_confidence": 0.55,
+      "portfolio_health_threshold": 0.35,
+      "hedge_urgency_threshold": 0.75,
+      "emergency_action_threshold": 0.15
+    },
+    "performance_tracking": {
+      "track_4d_scores": true,
+      "track_recovery_success": true,
+      "track_hedge_effectiveness": true,
+      "performance_window_hours": 24,
+      "learning_rate": 0.1
+    }
+  },
+  
+  "market_order_global_settings": {
+    "market_order_preference": 0.85,
+    "global_max_slippage": 30,
+    "global_retry_attempts": 3,
+    "global_execution_timeout": 10.0,
+    "emergency_slippage_limit": 60,
+    "slippage_monitoring": {
+      "track_slippage": true,
+      "alert_high_slippage": true,
+      "high_slippage_threshold": 0.0008,
+      "slippage_history_length": 100
+    }
+  },
+  
+  "hybrid_entry_settings": {
+    "hybrid_logic_enabled": true,
+    "balance_focus_mode": true,
+    "factors": {
+      "portfolio_balance_weight": 3.5,
+      "margin_safety_weight": 2.0,
+      "recovery_priority_weight": 4.0,
+      "market_opportunity_weight": 1.5,
+      "time_pressure_weight": 1.8
+    },
+    "entry_conditions": {
+      "min_total_confidence": 0.25,
+      "balance_imbalance_threshold": 0.3,
+      "margin_usage_limit": 0.75,
+      "time_since_last_action_minutes": 5,
+      "market_session_filter": true
+    },
+    "dynamic_adjustments": {
+      "adaptive_thresholds": true,
+      "performance_based_adjustment": true,
+      "adjustment_rate": 0.05,
+      "min_adjustment_samples": 20
+    }
+  },
+  
+  "recovery_system_settings": {
+    "recovery_system_enabled": true,
+    "real_time_scanner": true,
+    "scanner_interval_seconds": 30,
+    "auto_execute_high_confidence": true,
+    "recovery_parameters": {
+      "min_loss_for_recovery": -15.0,
+      "max_position_age_for_recovery": 72,
+      "min_hedge_confidence": 0.55,
+      "min_net_positive_result": 2.0,
+      "max_recovery_attempts_per_position": 4,
+      "recovery_cooldown_minutes": 15
+    },
+    "hedge_detection": {
+      "auto_detect_hedge_pairs": true,
+      "hedge_compatibility_threshold": 0.6,
+      "volume_compatibility_tolerance": 0.3,
+      "age_compatibility_hours": 24,
+      "profit_loss_ratio_limits": [0.3, 3.0]
+    },
+    "execution_strategies": {
+      "prefer_net_positive_only": true,
+      "allow_small_net_negative": true,
+      "small_negative_threshold": -10.0,
+      "prioritize_by_urgency": true,
+      "execute_in_batches": true,
+      "max_batch_size": 2
+    }
+  },
+  
   "adaptive_settings": {
     "learning_enabled": true,
-    "learning_rate": 0.1,
-    "performance_window": 50,
-    "weight_adjustment_threshold": 0.2,
+    "learning_rate": 0.15,
+    "performance_window": 30,
+    "weight_adjustment_threshold": 0.15,
     "confidence_calibration": true,
     "auto_threshold_adjustment": true,
-    "performance_tracking_period": 7
+    "performance_tracking_period": 3,
+    "four_d_learning": {
+      "learn_from_4d_scores": true,
+      "adjust_dimension_weights": true,
+      "learning_samples_required": 15,
+      "weight_adjustment_limit": 0.1
+    }
   },
+  
   "risk_management": {
-    "max_total_positions": 30,
-    "max_daily_risk_percentage": 5.0,
-    "emergency_stop_loss_percentage": 10.0,
-    "margin_usage_limit": 70.0,
-    "position_concentration_limit": 0.4,
-    "correlation_limit": 0.8
+    "max_total_positions": 50,
+    "max_daily_risk_percentage": 8.0,
+    "emergency_stop_loss_percentage": 15.0,
+    "margin_usage_limit": 80.0,
+    "position_concentration_limit": 0.5,
+    "correlation_limit": 0.9,
+    "four_d_risk_integration": {
+      "portfolio_health_monitoring": true,
+      "auto_risk_adjustment": true,
+      "health_based_position_limits": true,
+      "emergency_4d_threshold": 0.15
+    },
+    "no_stop_loss_system": {
+      "disable_traditional_sl": true,
+      "use_recovery_system_instead": true,
+      "max_individual_loss_before_recovery": -100.0,
+      "portfolio_loss_threshold": -800.0
+    }
   },
+  
   "market_filters": {
-    "min_market_score": 0.3,
-    "max_spread_multiplier": 3.0,
-    "min_liquidity_threshold": 0.5,
-    "news_impact_filter": true,
+    "min_market_score": 0.25,
+    "max_spread_multiplier": 4.0,
+    "min_liquidity_threshold": 0.4,
+    "news_impact_filter": false,
     "session_trading_enabled": {
       "ASIAN": true,
       "LONDON": true,
       "NEW_YORK": true,
       "OVERLAP": true,
-      "QUIET": false
+      "QUIET": true
+    },
+    "four_d_market_filtering": {
+      "use_4d_market_context": true,
+      "min_market_context_score": 0.20,
+      "session_weight_adjustments": {
+        "LONDON": 1.2,
+        "NEW_YORK": 1.1,
+        "OVERLAP": 1.3,
+        "ASIAN": 0.9,
+        "QUIET": 0.7
+      }
     }
   },
-  "grid_template": {
-    "core_zone_points": 100,
-    "expansion_zone_points": 200,
-    "buffer_zone_points": 400,
-    "zone_density_multipliers": {
-      "core": 1.2,
-      "expansion": 1.0,
-      "buffer": 0.7
+  
+  "trading_mode_configurations": {
+    "CONSERVATIVE": {
+      "portfolio_balance_weight": 2.8,
+      "grid_expansion_weight": 2.5,
+      "four_d_ai_entry_weight": 2.0,
+      "smart_recovery_weight": 3.0,
+      "min_entry_confidence": 0.30,
+      "max_positions": 30,
+      "margin_usage_limit": 0.65
     },
-    "progressive_spacing": true,
-    "spacing_progression_factor": 1.1
+    "MODERATE": {
+      "portfolio_balance_weight": 4.0,
+      "grid_expansion_weight": 3.0,
+      "four_d_ai_entry_weight": 2.5,
+      "smart_recovery_weight": 3.5,
+      "min_entry_confidence": 0.20,
+      "max_positions": 50,
+      "margin_usage_limit": 0.75
+    },
+    "AGGRESSIVE": {
+      "portfolio_balance_weight": 5.0,
+      "grid_expansion_weight": 3.5,
+      "four_d_ai_entry_weight": 3.0,
+      "smart_recovery_weight": 4.0,
+      "min_entry_confidence": 0.15,
+      "max_positions": 80,
+      "margin_usage_limit": 0.85
+    },
+    "ADAPTIVE": {
+      "portfolio_balance_weight": 4.5,
+      "grid_expansion_weight": 3.2,
+      "four_d_ai_entry_weight": 2.8,
+      "smart_recovery_weight": 3.8,
+      "min_entry_confidence": 0.18,
+      "max_positions": 60,
+      "margin_usage_limit": 0.80,
+      "auto_adjust_based_on_performance": true
+    }
+  },
+  
+  "performance_optimization": {
+    "auto_optimization_enabled": true,
+    "optimization_interval_minutes": 60,
+    "performance_metrics": {
+      "track_4d_accuracy": true,
+      "track_recovery_effectiveness": true,
+      "track_portfolio_health_trends": true,
+      "track_market_order_efficiency": true
+    },
+    "auto_adjustments": {
+      "adjust_weights_based_on_performance": true,
+      "adjust_thresholds_based_on_success": true,
+      "adjust_4d_weights_based_on_accuracy": true,
+      "min_data_points_for_adjustment": 25
+    }
+  },
+  
+  "logging_and_monitoring": {
+    "detailed_logging": true,
+    "log_4d_analysis": true,
+    "log_recovery_actions": true,
+    "log_market_orders": true,
+    "log_performance_metrics": true,
+    "alert_settings": {
+      "portfolio_health_alerts": true,
+      "recovery_opportunity_alerts": true,
+      "high_urgency_alerts": true,
+      "performance_degradation_alerts": true
+    }
+  },
+  
+  "emergency_protocols": {
+    "emergency_stop_enabled": true,
+    "emergency_triggers": {
+      "portfolio_health_below": 0.10,
+      "total_loss_exceeds": -1000.0,
+      "margin_usage_exceeds": 0.95,
+      "consecutive_failed_recoveries": 5
+    },
+    "emergency_actions": {
+      "stop_new_entries": true,
+      "force_recovery_scan": true,
+      "enable_emergency_closures": true,
+      "increase_slippage_tolerance": true
+    }
+  },
+  
+  "integration_settings": {
+    "mt5_connector_timeout": 10,
+    "market_data_refresh_interval": 5,
+    "position_update_interval": 3,
+    "performance_save_interval": 300,
+    "config_backup_enabled": true,
+    "config_backup_interval_hours": 6
   }
 }
