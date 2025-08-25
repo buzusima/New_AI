@@ -347,38 +347,149 @@ class ModernRuleEngine:
             return None
 
     def _rule_grid_expansion(self, config: Dict, weight: float) -> Optional[RuleResult]:
-        """Grid Expansion Rule - สำหรับออกไม้ต่อเนื่อง"""
+        """Enhanced Grid Expansion Rule with Order Cooldown & Price Collision Prevention"""
         try:
+            print("🔍 GRID RULE CALLED!")
+            
+            # *** เพิ่ม Order Cooldown ***
+            if not hasattr(self, 'last_grid_order_time'):
+                self.last_grid_order_time = {}
+            
+            now = datetime.now()
+            min_order_interval = timedelta(seconds=15)  # ห้ามวางเร็วกว่า 15 วินาที
+            
+            # เช็ค cooldown สำหรับ BUY
+            last_buy_time = self.last_grid_order_time.get("BUY", datetime.min)
+            can_place_buy = (now - last_buy_time) >= min_order_interval
+            
+            # เช็ค cooldown สำหรับ SELL  
+            last_sell_time = self.last_grid_order_time.get("SELL", datetime.min)
+            can_place_sell = (now - last_sell_time) >= min_order_interval
+            
+            print(f"⏰ Order Cooldown Status:")
+            print(f"   Can place BUY: {can_place_buy} (last: {(now - last_buy_time).total_seconds():.0f}s ago)")
+            print(f"   Can place SELL: {can_place_sell} (last: {(now - last_sell_time).total_seconds():.0f}s ago)")
+            
             portfolio_data = self.last_portfolio_data
             current_positions = portfolio_data.get("total_positions", 0)
-            max_positions = config["parameters"].get("grid_levels", 5)
+            buy_positions = portfolio_data.get("buy_positions", 0) 
+            sell_positions = portfolio_data.get("sell_positions", 0)
+            
+            # ดึงข้อมูล pending orders จาก order_manager
+            pending_orders_count = 0
+            pending_buy_orders = 0
+            pending_sell_orders = 0
+            
+            if self.order_manager:
+                try:
+                    pending_orders = self.order_manager.get_pending_orders()
+                    pending_orders_count = len(pending_orders)
+                    
+                    for order in pending_orders:
+                        if "BUY" in order.get("type", ""):
+                            pending_buy_orders += 1
+                        elif "SELL" in order.get("type", ""):
+                            pending_sell_orders += 1
+                except:
+                    pending_orders_count = 0
+            
+            # รวม positions + pending orders
+            total_buy_exposure = buy_positions + pending_buy_orders
+            total_sell_exposure = sell_positions + pending_sell_orders
+            total_exposure = current_positions + pending_orders_count
+            
+            # Configuration
+            initial_grid_per_side = config["parameters"].get("initial_grid_per_side", 5)
+            max_positions = config["parameters"].get("grid_levels", 10)
+            auto_place = config["parameters"].get("auto_place_orders", True)
+            
+            print(f"📊 Portfolio State:")
+            print(f"   Positions: {current_positions} (BUY: {buy_positions}, SELL: {sell_positions})")
+            print(f"   Pending: {pending_orders_count} (BUY: {pending_buy_orders}, SELL: {pending_sell_orders})")
+            print(f"   Total exposure: {total_exposure}")
+            print(f"   Target per side: {initial_grid_per_side}")
             
             confidence = 0.0
             decision = TradingDecision.WAIT
             reasoning = "Grid expansion analysis"
             
-            # ถ้ายังไม่มี positions เลย หรือ positions น้อย
-            if current_positions == 0:
-                decision = TradingDecision.BUY  # เริ่มด้วย BUY
-                confidence = 0.80
-                reasoning = "Grid expansion: No positions - initial BUY placement"
-            elif current_positions < max_positions:
-                # สลับ BUY/SELL ตามจำนวน positions ที่มี
-                if current_positions % 2 == 0:
-                    decision = TradingDecision.SELL
-                else:
+            # === PHASE 1: INITIAL GRID SETUP (ฝั่งละ 5 ไม้) ===
+            if total_exposure < (initial_grid_per_side * 2):
+                
+                # ตรวจสอบว่าต้องวางฝั่งไหน (พร้อม cooldown check)
+                need_buy_orders = max(0, initial_grid_per_side - total_buy_exposure)
+                need_sell_orders = max(0, initial_grid_per_side - total_sell_exposure)
+                
+                print(f"🏗️ INITIAL GRID PHASE:")
+                print(f"   Need BUY orders: {need_buy_orders} (cooldown ok: {can_place_buy})")
+                print(f"   Need SELL orders: {need_sell_orders} (cooldown ok: {can_place_sell})")
+                
+                # *** วาง BUY ก่อน ถ้าผ่าน cooldown ***
+                if need_buy_orders > 0 and can_place_buy:
                     decision = TradingDecision.BUY
+                    confidence = 0.95
+                    reasoning = f"🏗️ INITIAL GRID: Creating BUY grid ({total_buy_exposure}/{initial_grid_per_side}) - Priority setup"
                     
-                confidence = 0.60 + (max_positions - current_positions) * 0.05
-                reasoning = f"Grid expansion: {current_positions}/{max_positions} positions, placing {decision.value}"
+                    # บันทึกเวลาที่วาง BUY
+                    self.last_grid_order_time["BUY"] = now
+                    
+                # *** แล้วค่อยวาง SELL ถ้า BUY ครบแล้ว และผ่าน cooldown ***
+                elif need_sell_orders > 0 and can_place_sell:
+                    decision = TradingDecision.SELL  
+                    confidence = 0.95
+                    reasoning = f"🏗️ INITIAL GRID: Creating SELL grid ({total_sell_exposure}/{initial_grid_per_side}) - Priority setup"
+                    
+                    # บันทึกเวลาที่วาง SELL
+                    self.last_grid_order_time["SELL"] = now
+                    
+                else:
+                    # *** รอ cooldown หรือเสร็จแล้ว ***
+                    if need_buy_orders > 0 or need_sell_orders > 0:
+                        remaining_cooldown = min_order_interval.total_seconds() - min(
+                            (now - last_buy_time).total_seconds() if need_buy_orders > 0 else 999,
+                            (now - last_sell_time).total_seconds() if need_sell_orders > 0 else 999
+                        )
+                        reasoning = f"⏰ COOLDOWN: Waiting {remaining_cooldown:.0f}s before next order"
+                        print(reasoning)
+                    else:
+                        print("✅ Initial grid complete! Switching to normal operation...")
+                        reasoning = "✅ Initial grid setup completed - Ready for rule-based operation"
             
-            # Auto placement ถ้า enable
-            auto_place = config["parameters"].get("auto_place_orders", True)
-            if auto_place and confidence > 0:
-                confidence += 0.15  # Boost confidence for auto placement
+            # === PHASE 2: NORMAL GRID EXPANSION ===
+            else:
+                print("🔄 NORMAL GRID PHASE:")
+                
+                if total_exposure < max_positions and auto_place:
+                    portfolio_balance = total_buy_exposure / max(total_exposure, 1)
+                    
+                    print(f"   Portfolio balance: {portfolio_balance:.2f}")
+                    
+                    # *** เช็ค cooldown ก่อนวาง ***
+                    if portfolio_balance > 0.7 and can_place_sell:  # BUY มากเกินไป
+                        decision = TradingDecision.SELL
+                        confidence = 0.60 + (portfolio_balance - 0.7) * 1.0
+                        reasoning = f"📊 GRID BALANCE: Too many BUY ({portfolio_balance:.1%}) - Adding SELL"
+                        self.last_grid_order_time["SELL"] = now
+                        
+                    elif portfolio_balance < 0.3 and can_place_buy:  # SELL มากเกินไป
+                        decision = TradingDecision.BUY
+                        confidence = 0.60 + (0.3 - portfolio_balance) * 1.0
+                        reasoning = f"📊 GRID BALANCE: Too many SELL ({portfolio_balance:.1%}) - Adding BUY"
+                        self.last_grid_order_time["BUY"] = now
+                        
+                    else:
+                        # สมดุลแล้ว หรือยัง cooldown
+                        if portfolio_balance >= 0.3 and portfolio_balance <= 0.7:
+                            reasoning = "⚖️ GRID BALANCED: Portfolio in good balance"
+                        else:
+                            reasoning = f"⏰ COOLDOWN: Need to wait before rebalancing"
+            
+            print(f"🎯 Grid Decision: {decision.value}, Confidence: {confidence:.1%}")
+            print(f"💭 Reasoning: {reasoning}")
             
             # Check confidence threshold
-            if confidence >= config.get("confidence_threshold", 0.1):
+            threshold = config.get("confidence_threshold", 0.05)
+            if confidence >= threshold:
                 return RuleResult(
                     rule_name="grid_expansion",
                     decision=decision,
@@ -386,18 +497,25 @@ class ModernRuleEngine:
                     reasoning=reasoning,
                     supporting_data={
                         "current_positions": current_positions,
+                        "pending_orders": pending_orders_count,
+                        "total_buy_exposure": total_buy_exposure,
+                        "total_sell_exposure": total_sell_exposure,
+                        "initial_grid_per_side": initial_grid_per_side,
                         "max_positions": max_positions,
+                        "phase": "INITIAL" if total_exposure < (initial_grid_per_side * 2) else "NORMAL",
+                        "cooldown_active": not (can_place_buy and can_place_sell),
                         "auto_place": auto_place
                     },
                     weight=weight
                 )
-            
-            return None
-            
+            else:
+                print(f"❌ Grid confidence {confidence:.1%} below threshold {threshold:.1%}")
+                return None
+                
         except Exception as e:
             print(f"❌ Grid expansion rule error: {e}")
             return None
-        
+                
     def _rule_trend_following(self, config: Dict, weight: float) -> Optional[RuleResult]:
         """Trend Following Rule"""
         try:
@@ -847,16 +965,17 @@ class ModernRuleEngine:
     def _make_weighted_decision(self, rule_results: List[RuleResult]) -> Optional[RuleResult]:
         """
         Make final decision based on weighted rule results
-        
-        Args:
-            rule_results: List of rule results
-            
-        Returns:
-            Final decision or None
+        MODIFIED: ลด min_threshold เพื่อให้ Grid Expansion ทำงานได้
         """
         try:
             if not rule_results:
+                print("❌ No rule results to process")
                 return None
+            
+            print(f"🎯 Processing {len(rule_results)} rule results:")
+            for result in rule_results:
+                weighted_conf = result.confidence * result.weight
+                print(f"   {result.rule_name}: {result.confidence:.1%} × {result.weight:.2f} = {weighted_conf:.3f}")
             
             # Group by decision type
             decision_scores = {}
@@ -878,15 +997,25 @@ class ModernRuleEngine:
             
             # Find the decision with highest score
             if not decision_scores:
+                print("❌ No decision scores calculated")
                 return None
             
             best_decision = max(decision_scores.keys(), key=lambda k: decision_scores[k])
             best_score = decision_scores[best_decision]
             
-            # Minimum threshold for action - ลดลงให้ออกไม้ไวขึ้น
-            min_threshold = 0.25  # ลดจาก 0.5 เป็น 0.25
+            print(f"🏆 Decision scores:")
+            for decision, score in decision_scores.items():
+                print(f"   {decision.value}: {score:.3f}")
+            print(f"🎯 Best decision: {best_decision.value} (score: {best_score:.3f})")
+            
+            # MODIFIED: ลด threshold มากเพื่อให้ Grid ทำงานได้
+            min_threshold = 0.02  # ลดจาก 0.25 เป็น 0.02 (2%)
+            
             if best_score < min_threshold:
+                print(f"❌ Best score {best_score:.3f} below min threshold {min_threshold:.3f}")
                 return None
+            
+            print(f"✅ Decision approved: {best_decision.value} (score: {best_score:.3f} > {min_threshold:.3f})")
             
             # Create final result
             final_result = RuleResult(
@@ -895,9 +1024,10 @@ class ModernRuleEngine:
                 confidence=min(1.0, best_score),
                 reasoning=" | ".join(decision_reasons[best_decision]),
                 supporting_data={
-                    "decision_scores": decision_scores,
+                    "decision_scores": {k.value: v for k, v in decision_scores.items()},
                     "contributing_rules": len(decision_reasons[best_decision]),
-                    "total_weight": sum(r.weight for r in rule_results)
+                    "total_weight": sum(r.weight for r in rule_results),
+                    "threshold_used": min_threshold
                 }
             )
             
@@ -906,7 +1036,7 @@ class ModernRuleEngine:
         except Exception as e:
             print(f"❌ Weighted decision error: {e}")
             return None
-    
+        
     def _execute_trading_decision(self, decision_result: RuleResult):
         """Execute the trading decision"""
         try:

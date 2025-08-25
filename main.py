@@ -862,7 +862,7 @@ class ModernRuleBasedTradingGUI:
             self.show_message("Error", f"Parameter calculation error: {e}", "error")
     
     def start_trading(self):
-        """Start AI trading - NO MOCK"""
+        """Start AI trading - แบบใหม่ ไม่ใช้ Threading"""
         if not self.rule_engine or not hasattr(self, 'trading_params'):
             self.show_message("Warning", "Please complete initialization first", "warning")
             return
@@ -872,8 +872,9 @@ class ModernRuleBasedTradingGUI:
             
             self.is_trading = True
             
-            # Start rule engine
-            self.rule_engine.start()
+            # เปลี่ยนจาก threading เป็น GUI timer
+            self.log("🔄 Using GUI-based execution (no threading)")
+            self.rule_engine.is_running = True
             
             # Update GUI
             self.start_trading_btn.config(state='disabled')
@@ -881,7 +882,7 @@ class ModernRuleBasedTradingGUI:
             
             mode = self.trading_mode.get()
             self.log(f"🎯 Trading Mode: {mode}")
-            self.log("🧠 Rule Engine: ACTIVE")
+            self.log("🧠 Rule Engine: ACTIVE (GUI-based)")
             self.log("📊 Market Analyzer: MONITORING")
             self.log("🎯 Order Manager: READY")
             self.log("💰 Position Manager: MONITORING")
@@ -890,12 +891,87 @@ class ModernRuleBasedTradingGUI:
             # Update system status
             self.system_status['engine_running'] = True
             
+            # เริ่ม GUI-based rule execution
+            self.log("🔄 Starting GUI-based rule execution...")
+            self.execute_rule_cycle()  # เรียกทันที
+            
         except Exception as e:
             self.log(f"❌ Trading start error: {e}")
             self.show_message("Error", f"Trading start error: {e}", "error")
-    
+
+    def execute_rule_cycle(self):
+        """Execute one rule cycle (แทน threading)"""
+        try:
+            if not self.is_trading or not self.rule_engine:
+                return
+                
+            self.log("🔄 Executing rule cycle...")
+            
+            # Get market and portfolio data
+            try:
+                if self.market_analyzer:
+                    market_data = self.market_analyzer.get_comprehensive_analysis()
+                    self.rule_engine.last_market_data = market_data
+                    self.log(f"📊 Market data: {market_data.get('condition', 'UNKNOWN')}")
+                else:
+                    self.log("⚠️ No market analyzer")
+                    
+            except Exception as e:
+                self.log(f"⚠️ Market data error: {e}")
+            
+            try:
+                if self.position_manager:
+                    portfolio_data = self.position_manager.get_portfolio_status()
+                    self.rule_engine.last_portfolio_data = portfolio_data
+                    self.log(f"💰 Portfolio: {portfolio_data.get('total_positions', 0)} positions")
+                else:
+                    self.log("⚠️ No position manager")
+                    
+            except Exception as e:
+                self.log(f"⚠️ Portfolio data error: {e}")
+            
+            # Execute rule-based decision
+            try:
+                decision_result = self.rule_engine._execute_rule_based_decision()
+                
+                if decision_result:
+                    self.log(f"🎯 Rule Decision: {decision_result.decision.value} (confidence: {decision_result.confidence:.1%})")
+                    self.log(f"💭 Reasoning: {decision_result.reasoning}")
+                    
+                    # Execute the decision
+                    self.rule_engine._execute_trading_decision(decision_result)
+                    
+                    # Track decision
+                    if hasattr(self.rule_engine, 'decision_history'):
+                        self.rule_engine.decision_history.append(decision_result)
+                    if hasattr(self.rule_engine, 'recent_decisions'):
+                        self.rule_engine.recent_decisions.append(decision_result)
+                        
+                else:
+                    self.log("🔄 No decision made this cycle")
+                    
+            except Exception as e:
+                self.log(f"❌ Rule execution error: {e}")
+            
+            # Update rule performances
+            try:
+                if hasattr(self.rule_engine, '_update_rule_performances'):
+                    self.rule_engine._update_rule_performances()
+            except Exception as e:
+                self.log(f"⚠️ Performance update error: {e}")
+            
+            # Schedule next cycle (แทน threading)
+            if self.is_trading:
+                self.root.after(5000, self.execute_rule_cycle)  # ทุก 5 วินาที
+                
+        except Exception as e:
+            self.log(f"❌ Rule cycle error: {e}")
+            # ยัง schedule ต่อไปแม้มี error
+            if self.is_trading:
+                self.root.after(10000, self.execute_rule_cycle)  # รอนานกว่าเมื่อมี error
+
     def stop_trading(self):
-        """Stop AI trading"""
+        """Stop AI trading - แบบใหม่"""
         if not self.is_trading:
             return
             
@@ -905,7 +981,8 @@ class ModernRuleBasedTradingGUI:
             self.is_trading = False
             
             if self.rule_engine:
-                self.rule_engine.stop()
+                self.rule_engine.is_running = False
+                # ไม่ต้อง stop thread เพราะใช้ GUI timer
                 
             # Update GUI
             self.start_trading_btn.config(state='normal')
@@ -914,11 +991,11 @@ class ModernRuleBasedTradingGUI:
             # Update system status
             self.system_status['engine_running'] = False
             
-            self.log("✅ AI Trading stopped successfully")
+            self.log("✅ AI Trading stopped successfully (GUI-based)")
             
         except Exception as e:
             self.log(f"❌ Stop error: {e}")
-    
+
     # === GUI Update Methods ===
     
     def start_gui_updates(self):

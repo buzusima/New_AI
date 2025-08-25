@@ -572,41 +572,117 @@ class OrderManager:
             return OrderType.SELL_LIMIT
     
     def _avoid_order_collisions(self, target_price: float, direction: str) -> float:
-        """Avoid placing orders too close to existing REAL orders"""
+        """หลีกเลี่ยงการวางออเดอร์ซ้ำกันหรือใกล้กันเกินไป"""
         try:
             min_distance = self.config.get("trading", {}).get("min_spacing_points", 50) * self.point_value
+            
+            # *** ENHANCED: เพิ่มระยะห่างขั้นต่ำเป็น 2 เท่า ***
+            enhanced_min_distance = min_distance * 2.0
             
             # Get REAL pending orders from MT5
             pending_orders = self.get_pending_orders()
             
+            print(f"🔍 COLLISION CHECK: Target {direction} @ {target_price:.2f}")
+            print(f"   Min distance required: {enhanced_min_distance:.5f} ({enhanced_min_distance/self.point_value:.0f} points)")
+            print(f"   Checking against {len(pending_orders)} existing orders...")
+            
+            # เก็บราคาทั้งหมดของออเดอร์ที่มีอยู่
+            existing_prices = []
             for order in pending_orders:
                 order_price = order.get("price", 0)
                 order_type = order.get("type", "")
+                existing_prices.append(order_price)
                 
-                # Check same direction orders
-                if ((direction == "BUY" and "BUY" in order_type) or 
-                    (direction == "SELL" and "SELL" in order_type)):
+                print(f"     Existing: {order_type} @ {order_price:.2f}")
+                
+                # เช็คระยะห่างกับออเดอร์ที่มีอยู่
+                distance = abs(target_price - order_price)
+                
+                if distance < enhanced_min_distance:
+                    print(f"⚠️ COLLISION DETECTED! Distance: {distance:.5f} < Required: {enhanced_min_distance:.5f}")
                     
-                    distance = abs(target_price - order_price)
-                    if distance < min_distance:
-                        # Adjust price to maintain minimum distance
-                        if direction == "BUY":
-                            if target_price > order_price:
-                                target_price = order_price + min_distance
-                            else:
-                                target_price = order_price - min_distance
-                        else:  # SELL
-                            if target_price > order_price:
-                                target_price = order_price + min_distance
-                            else:
-                                target_price = order_price - min_distance
+                    # ปรับราคาให้ห่างจากออเดอร์ที่มีอยู่
+                    if direction == "BUY":
+                        if target_price > order_price:
+                            # วาง BUY เหนือออเดอร์เดิม
+                            adjusted_price = order_price + enhanced_min_distance
+                        else:
+                            # วาง BUY ใต้ออเดอร์เดิม  
+                            adjusted_price = order_price - enhanced_min_distance
+                    else:  # SELL
+                        if target_price > order_price:
+                            # วาง SELL เหนือออเดอร์เดิม
+                            adjusted_price = order_price + enhanced_min_distance
+                        else:
+                            # วาง SELL ใต้ออเดอร์เดิม
+                            adjusted_price = order_price - enhanced_min_distance
+                    
+                    print(f"🔧 PRICE ADJUSTED: {target_price:.2f} → {adjusted_price:.2f}")
+                    target_price = adjusted_price
             
+            # *** เช็คซ้ำอีกครั้งหลังปรับ ***
+            collision_found = True
+            max_adjustments = 10  # ป้องกัน infinite loop
+            adjustment_count = 0
+            
+            while collision_found and adjustment_count < max_adjustments:
+                collision_found = False
+                adjustment_count += 1
+                
+                for existing_price in existing_prices:
+                    distance = abs(target_price - existing_price)
+                    if distance < enhanced_min_distance:
+                        collision_found = True
+                        
+                        # สุ่มทิศทางการปรับ (ขึ้นหรือลง)
+                        if adjustment_count % 2 == 0:
+                            target_price = existing_price + enhanced_min_distance
+                        else:
+                            target_price = existing_price - enhanced_min_distance
+                        
+                        print(f"🔄 Re-adjustment #{adjustment_count}: → {target_price:.2f}")
+                        break
+            
+            if adjustment_count >= max_adjustments:
+                print("⚠️ Max adjustments reached - using current price with large offset")
+                current_market_price = self._get_current_market_price()
+                if direction == "BUY":
+                    target_price = current_market_price - (enhanced_min_distance * 3)
+                else:
+                    target_price = current_market_price + (enhanced_min_distance * 3)
+            
+            # *** FINAL VALIDATION: เช็คว่าไม่ได้ราคาติดลบหรือผิดปกติ ***
+            if target_price <= 0:
+                print(f"❌ Invalid final price: {target_price}")
+                current_market_price = self._get_current_market_price()
+                if direction == "BUY":
+                    target_price = current_market_price - enhanced_min_distance
+                else:
+                    target_price = current_market_price + enhanced_min_distance
+            
+            print(f"✅ FINAL PRICE: {direction} @ {target_price:.2f}")
             return target_price
             
         except Exception as e:
             self.log(f"❌ Collision avoidance error: {e}")
             return target_price
     
+    def _get_current_market_price(self) -> float:
+        """ดึงราคาตลาดปัจจุบันจาก MT5"""
+        try:
+            if not self.mt5_connector.is_connected:
+                return 2000.0  # fallback price
+                
+            tick = mt5.symbol_info_tick(self.symbol)
+            if tick:
+                return (tick.bid + tick.ask) / 2
+            else:
+                return 2000.0
+                
+        except Exception as e:
+            self.log(f"❌ Get market price error: {e}")
+            return 2000.0
+
     def _execute_real_order(self, order_request: OrderRequest) -> OrderResult:
         """Execute order request with REAL MT5 - NO SIMULATION"""
         try:
