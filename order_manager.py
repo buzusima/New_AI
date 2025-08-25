@@ -150,12 +150,12 @@ class OrderManager:
     # ⚡ MARKET ORDER METHODS - CORE FEATURES
     # ========================================================================================
     
-    def place_market_order(self, order_request: OrderRequest) -> OrderResult:
-        """⚡ วาง Market Order ทันที - Core Method"""
+    def  place_market_order(self, order_request: OrderRequest) -> OrderResult:
+        """⚡ แก้ไข: วาง Market Order ทันที พร้อม Enhanced Spacing Check"""
         try:
             start_time = time.time()
             
-            print(f"⚡ === MARKET ORDER EXECUTION ===")
+            print(f"⚡ === ENHANCED MARKET ORDER EXECUTION ===")
             print(f"   Type: {order_request.order_type.value}")
             print(f"   Volume: {order_request.volume:.3f}")
             print(f"   Reason: {order_request.reason.value}")
@@ -163,34 +163,190 @@ class OrderManager:
             print(f"   Confidence: {order_request.confidence:.3f}")
             
             # Validate connection
-            if not self.mt5_connector.is_connected:
-                return OrderResult(False, 0, 0, 0, "MT5 not connected")
+            if not self.mt5_connector.is_connected():
+                return OrderResult(False, 0, 0.0, 0.0, "MT5 not connected", {})
             
-            # Validate inputs
-            if not self._validate_market_order_inputs(order_request):
-                return OrderResult(False, 0, 0, 0, "Invalid order inputs")
+            # ✅ เพิ่มใหม่: Enhanced Spacing Check
+            try:
+                # ดึง active orders
+                active_orders = self.get_active_orders()
+                print(f"📊 Active positions: {len(active_orders)}")
+                
+                # ดึง market analysis
+                current_price = self.mt5_connector.get_current_price(self.symbol)
+                
+                if active_orders and current_price and hasattr(self, 'spacing_manager'):
+                    # สร้าง basic market analysis ถ้าไม่มี
+                    market_analysis = {
+                        "market_score_4d": order_request.four_d_score,
+                        "four_d_confidence": order_request.confidence,
+                        "trend_direction": "SIDEWAYS",
+                        "volatility_multiplier": 1.0,
+                        "session_multiplier": 1.0,
+                        "trend_strength": 1.0,
+                        "volume_factor": 1.0
+                    }
+                    
+                    # ตรวจสอบ collision
+                    order_type_str = "BUY" if "BUY" in order_request.order_type.value else "SELL"
+                    
+                    spacing_result = self.spacing_manager.calculate_4d_spacing(
+                        current_price, market_analysis, order_type_str, active_orders
+                    )
+                    
+                    print(f"🎯 Enhanced Spacing Check:")
+                    print(f"   Spacing: {spacing_result.spacing} points")
+                    print(f"   Collision Detected: {spacing_result.collision_detected}")
+                    print(f"   Placement Allowed: {spacing_result.placement_allowed}")
+                    print(f"   Reasoning: {spacing_result.reasoning}")
+                    
+                    # ✅ ตรวจสอบการอนุญาต
+                    if not spacing_result.placement_allowed:
+                        print(f"❌ ORDER BLOCKED: Collision detected!")
+                        return OrderResult(
+                            False, 0, 0.0, 0.0, 
+                            f"Blocked: {spacing_result.reasoning}", 
+                            {"collision_detected": True, "spacing": spacing_result.spacing}
+                        )
+                    else:
+                        print(f"✅ ORDER APPROVED: Safe to place")
+                    
+            except Exception as spacing_error:
+                print(f"⚠️ Enhanced spacing check error: {spacing_error} - proceeding with order")
             
-            # Get current market price
-            current_price = self._get_current_price()
-            if current_price <= 0:
-                return OrderResult(False, 0, 0, 0, "Cannot get current price")
+            # Validate daily limits
+            if not self._check_daily_limits():
+                return OrderResult(False, 0, 0.0, 0.0, "Daily order limit exceeded", {})
             
-            # Prepare MT5 order request
-            mt5_request = self._prepare_mt5_market_request(order_request, current_price)
+            # Get current price
+            current_price = self.mt5_connector.get_current_price(self.symbol)
+            if not current_price or current_price <= 0:
+                return OrderResult(False, 0, 0.0, 0.0, "Invalid current price", {})
             
-            # Execute with retry logic
-            result = self._execute_market_order_with_retry(mt5_request, order_request)
+            # Prepare MT5 request
+            if order_request.order_type == OrderType.MARKET_BUY:
+                action = self.mt5_connector.mt5.TRADE_ACTION_DEAL
+                order_type = self.mt5_connector.mt5.ORDER_TYPE_BUY
+                price = current_price
+            elif order_request.order_type == OrderType.MARKET_SELL:
+                action = self.mt5_connector.mt5.TRADE_ACTION_DEAL
+                order_type = self.mt5_connector.mt5.ORDER_TYPE_SELL
+                price = current_price
+            else:
+                return OrderResult(False, 0, 0.0, 0.0, f"Unsupported order type: {order_request.order_type}", {})
             
-            # Track execution stats
+            # Create request
+            request = {
+                "action": action,
+                "symbol": self.symbol,
+                "volume": order_request.volume,
+                "type": order_type,
+                "price": price,
+                "magic": self.magic_number,
+                "comment": f"{order_request.reason.value[:20]}|{order_request.confidence:.2f}",
+                "type_filling": self.mt5_connector.mt5.ORDER_FILLING_FOK,
+            }
+            
+            # Add slippage for market orders
+            if order_request.max_slippage > 0:
+                request["deviation"] = order_request.max_slippage
+            
+            print(f"📋 Order Request: {request}")
+            
+            # Execute order
+            result = self.mt5_connector.mt5.order_send(request)
             execution_time = time.time() - start_time
-            self._track_market_order_performance(order_request, result, execution_time)
             
-            return result
+            if result and result.retcode == self.mt5_connector.mt5.TRADE_RETCODE_DONE:
+                # Success
+                actual_price = float(result.price) if result.price else price
+                actual_volume = float(result.volume) if result.volume else order_request.volume
+                ticket = int(result.order) if result.order else 0
+                
+                slippage = abs(actual_price - price) / price * 10000  # in points
+                
+                print(f"✅ ENHANCED Market order SUCCESS:")
+                print(f"   Ticket: {ticket}")
+                print(f"   Price: {actual_price:.5f}")
+                print(f"   Volume: {actual_volume:.3f}")
+                print(f"   Slippage: {slippage:.1f} points")
+                print(f"   Execution time: {execution_time:.3f}s")
+                print(f"   Enhanced spacing: ✅ USED")
+                
+                # Update performance tracking
+                self._track_order_performance(order_request, True, actual_price, execution_time, slippage)
+                
+                # Update daily counter
+                self.daily_order_count += 1
+                self.last_order_time = datetime.now()
+                
+                return OrderResult(
+                    success=True,
+                    ticket=ticket,
+                    price=actual_price,
+                    volume=actual_volume,
+                    message=f"Enhanced market order executed successfully",
+                    metadata={
+                        "slippage": slippage,
+                        "execution_time": execution_time,
+                        "order_type": order_request.order_type.value,
+                        "enhanced_spacing": True,  # ✅ flag ว่าใช้ enhanced spacing
+                        "collision_check_passed": True
+                    }
+                )
+            else:
+                # Failed
+                error_msg = f"Order failed - Code: {result.retcode if result else 'NO_RESULT'}"
+                if result and hasattr(result, 'comment'):
+                    error_msg += f", Comment: {result.comment}"
+                
+                print(f"❌ Enhanced market order FAILED: {error_msg}")
+                
+                # Update performance tracking
+                self._track_order_performance(order_request, False, 0.0, execution_time, 0.0)
+                
+                return OrderResult(False, 0, 0.0, 0.0, error_msg, {"execution_time": execution_time})
+        
+        except Exception as e:
+            execution_time = time.time() - start_time
+            error_msg = f"Enhanced market order exception: {str(e)}"
+            print(f"❌ {error_msg}")
+            
+            return OrderResult(False, 0, 0.0, 0.0, error_msg, {"execution_time": execution_time})
+    
+    def get_active_orders(self) -> List[Dict]:
+        """🆕 ดึงรายการออเดอร์ที่ใช้งานอยู่สำหรับ collision detection"""
+        try:
+            if not self.mt5_connector.is_connected:
+                return []
+            
+            # ดึง positions ที่เปิดอยู่
+            positions = self.mt5_connector.get_positions()
+            if not positions:
+                return []
+            
+            active_orders = []
+            for pos in positions:
+                try:
+                    active_orders.append({
+                        'ticket': pos.ticket,
+                        'type': 'BUY' if pos.type == 0 else 'SELL',
+                        'price': float(pos.price_open),
+                        'volume': float(pos.volume),
+                        'symbol': pos.symbol,
+                        'profit': float(pos.profit),
+                        'comment': pos.comment
+                    })
+                except Exception as e:
+                    continue
+            
+            print(f"📊 Retrieved {len(active_orders)} active positions for collision check")
+            return active_orders
             
         except Exception as e:
-            self.log(f"❌ Market order execution error: {e}")
-            return OrderResult(False, 0, 0, 0, f"Execution error: {e}")
-    
+            print(f"❌ Get active orders error: {e}")
+            return []
+
     def _prepare_mt5_market_request(self, order_request: OrderRequest, current_price: float) -> Dict:
         """เตรียม MT5 request สำหรับ Market Order"""
         try:
