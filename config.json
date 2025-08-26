@@ -1,118 +1,149 @@
 {
-  "trading": {
-    "symbol": "XAUUSD.v",
-    "base_lot_size": 0.01,
-    "min_lot_size": 0.01,
-    "max_lot_size": 1.0,
-    "lot_step": 0.01,
-    "base_spacing": 100,
-    "min_spacing_points": 50,
-    "max_spacing_points": 300,
-    "max_positions": 25,
-    "max_daily_orders": 100,
-    "magic_number": 100001,
-    "order_timeout_minutes": 60,
-    "max_slippage_points": 20
-  },
-  "risk_management": {
-    "max_risk_percentage": 2.0,
-    "max_daily_risk": 5.0,
-    "margin_usage_limit": 70.0,
-    "position_size_limit": 0.1,
-    "emergency_stop_percentage": 10.0,
-    "drawdown_limit": 15.0,
-    "risk_per_trade": 1.0,
-    "portfolio_heat": 0.02
-  },
-  "market_analysis": {
-    "analysis_period": 100,
-    "rsi_period": 14,
-    "bollinger_period": 20,
-    "bollinger_deviation": 2.0,
-    "ma_fast_period": 10,
-    "ma_slow_period": 30,
-    "atr_period": 14,
-    "support_resistance_period": 100,
-    "trend_confirmation_bars": 2,
-    "volatility_lookback": 20
-  },
-  "spacing_management": {
-    "base_spacing": 100,
-    "volatility_multiplier": 1.5,
-    "trend_multiplier": 1.2,
-    "session_multipliers": {
-      "ASIAN": 0.8,
-      "LONDON": 1.2,
-      "NY": 1.1,
-      "OVERLAP": 1.4,
-      "QUIET": 0.6
+  "config_version": "Simple_Candlestick_v1.0",
+  "last_updated": "2024-08-25T00:00:00Z",
+  "description": "Simplified Candlestick + Volume Trading Rules - 50+ Signals per Day Target",
+  
+  "candlestick_rules": {
+    "buy_signal": {
+      "enabled": true,
+      "description": "BUY when GREEN candle + close > previous close",
+      "conditions": {
+        "candle_color": "GREEN",
+        "price_direction": "UP",
+        "min_body_ratio": 0.1
+      },
+      "weight": 1.0
     },
-    "adaptive_spacing": true,
-    "learning_rate": 0.1,
-    "performance_window": 50
-  },
-  "lot_calculation": {
-    "method": "DYNAMIC_HYBRID",
-    "confidence_weight": 0.25,
-    "volatility_weight": 0.25,
-    "risk_weight": 0.3,
-    "market_weight": 0.2,
-    "progressive_factor": 1.2,
-    "kelly_enabled": false,
-    "max_kelly_fraction": 0.25
-  },
-  "gui_settings": {
-    "update_interval_ms": 1000,
-    "log_max_lines": 1000,
-    "chart_update_interval": 5,
-    "performance_display_period": 24,
-    "color_theme": "dark",
-    "font_size": 9
-  },
-  "system": {
-    "debug_mode": false,
-    "verbose_logging": true,
-    "performance_monitoring": true,
-    "auto_backup": true,
-    "backup_interval_hours": 6,
-    "log_retention_days": 30,
-    "max_log_file_size_mb": 100
-  },
-  "grid_system": {
-    "phase_system_enabled": true,
-    "initialization_target_per_side": 3,
-    "monitoring_balance_range": [0.3, 0.7],
-    "rebalancing_urgency_threshold": [0.25, 0.75],
-    "maintenance_quality_threshold": 0.6,
-    "grid_template_enabled": true,
-    "zone_based_management": true,
-    "adaptive_grid_sizing": true,
-    "capital_based_sizing": true
-  },
-  "market_sessions": {
-    "timezone": "UTC",
-    "session_definitions": {
-      "ASIAN": {"start": 1, "end": 7},
-      "LONDON": {"start": 8, "end": 12},
-      "OVERLAP": {"start": 13, "end": 17},
-      "NEW_YORK": {"start": 18, "end": 22},
-      "QUIET": {"start": 23, "end": 0}
-    },
-    "session_trading_enabled": {
-      "ASIAN": true,
-      "LONDON": true,
-      "OVERLAP": true,
-      "NEW_YORK": true,
-      "QUIET": false
+    "sell_signal": {
+      "enabled": true,
+      "description": "SELL when RED candle + close < previous close", 
+      "conditions": {
+        "candle_color": "RED",
+        "price_direction": "DOWN",
+        "min_body_ratio": 0.1
+      },
+      "weight": 1.0
     }
   },
+  
+  "volume_settings": {
+    "volume_analysis_enabled": true,
+    "fallback_when_no_volume": true,
+    "volume_factors": {
+      "extremely_high": 2.0,
+      "high": 1.5,
+      "above_average": 1.2,
+      "normal": 1.0,
+      "low": 0.7,
+      "very_low": 0.5
+    },
+    "volume_thresholds": {
+      "extremely_high_ratio": 2.0,
+      "high_ratio": 1.5,
+      "above_average_ratio": 1.2,
+      "normal_min_ratio": 0.8,
+      "low_ratio": 0.5
+    }
+  },
+  
+  "candle_strength_settings": {
+    "candle_analysis_enabled": true,
+    "strength_factors": {
+      "strong_body": 1.5,
+      "medium_body": 1.0,
+      "weak_body": 0.6,
+      "doji_spinning": 0.3
+    },
+    "body_ratio_thresholds": {
+      "strong_threshold": 0.7,
+      "medium_threshold": 0.4,
+      "weak_threshold": 0.2
+    }
+  },
+  
+  "signal_generation": {
+    "target_signals_per_day": 50,
+    "minimum_signal_strength": 0.3,
+    "high_confidence_threshold": 0.7,
+    "cooldown_between_signals_seconds": 60,
+    "max_signals_per_hour": 20,
+    "signal_quality_levels": {
+      "excellent": 0.8,
+      "good": 0.6,
+      "acceptable": 0.4,
+      "poor": 0.2
+    }
+  },
+  
+  "dynamic_lot_sizing": {
+    "enabled": true,
+    "base_lot_size": 0.01,
+    "safety_limits": {
+      "max_total_multiplier": 3.0,
+      "min_total_multiplier": 0.3,
+      "safety_buffer": 0.85
+    },
+    "risk_management": {
+      "max_risk_percentage": 2.0,
+      "margin_safety_threshold": 200.0,
+      "max_lot_size": 0.10,
+      "min_lot_size": 0.01
+    }
+  },
+  
+  "market_timing": {
+    "session_preferences": {
+      "ASIAN": 0.7,
+      "LONDON": 1.0,
+      "NEW_YORK": 1.0,
+      "OVERLAP": 1.1,
+      "QUIET": 0.4
+    },
+    "active_hours_score": {
+      "peak_hours": [8, 9, 10, 11, 14, 15, 16, 17, 20, 21, 22, 23],
+      "moderate_hours": [1, 2, 3, 4, 5, 6, 7, 12, 13, 18, 19],
+      "quiet_hours": [0]
+    }
+  },
+  
+  "portfolio_management": {
+    "maintain_existing_hg_recovery": true,
+    "spacing_manager_integration": true,
+    "position_manager_integration": true,
+    "existing_safety_systems": {
+      "collision_avoidance": true,
+      "margin_protection": true,
+      "emergency_stop": true
+    }
+  },
+  
+  "compatibility_settings": {
+    "maintain_4d_interface": true,
+    "support_legacy_methods": true,
+    "smartdecisionscore_compatibility": true,
+    "existing_gui_integration": true
+  },
+  
   "performance_tracking": {
-    "decision_evaluation_delay_seconds": 300,
-    "profit_evaluation_delay_seconds": 1800,
-    "performance_window_decisions": 50,
-    "daily_stats_retention_days": 30,
-    "rule_learning_enabled": true,
-    "auto_weight_adjustment": true,
-    "performance_based_optimization": true
+    "track_signal_frequency": true,
+    "track_lot_size_distribution": true,
+    "track_volume_factor_effectiveness": true,
+    "track_candle_strength_correlation": true,
+    "daily_statistics": {
+      "signals_generated": 0,
+      "orders_placed": 0,
+      "buy_signals": 0,
+      "sell_signals": 0,
+      "volume_available_count": 0,
+      "high_confidence_signals": 0
+    }
+  },
+  
+  "debug_settings": {
+    "verbose_logging": true,
+    "log_candlestick_analysis": true,
+    "log_volume_calculations": true,
+    "log_lot_sizing_decisions": true,
+    "log_signal_generation": true
   }
 }
