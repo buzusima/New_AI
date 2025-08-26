@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-08-25T22:42:46.082715",
+  "timestamp": "2025-08-26T10:30:39.683010",
   "engine_version": "Modern_Smart_AI_v2.0",
   "trading_mode": "ADAPTIVE",
   "adaptive_thresholds": {
@@ -18,205 +18,426 @@
   "success_rate_history": [
     0.0,
     0.0,
+    0.0,
     0.0
   ],
   "decision_quality_history": [
-    0.5744088862000001,
-    0.5735498830303031,
-    0.5745748756111112,
-    0.5730303026666668,
-    0.5724781451785715,
-    0.5720219688333334,
-    0.5683728145312501,
-    0.5651529725000001,
-    0.5622908906944445,
-    0.5597447253947369,
-    0.557453176625,
-    0.551668101625,
-    0.5515292767750001,
-    0.5502987138750001,
-    0.5479773131750001,
-    0.5445812685583334,
-    0.5401009511416668,
-    0.5345258571750001
+    0.27243202788243226,
+    0.2723803617486797,
+    0.27234038057614585,
+    0.2723004669794323,
+    0.27225551080484384,
+    0.2722107235087162,
+    0.27216583494910157,
+    0.2721288376370782,
+    0.27209180658500787,
+    0.2720399043722709,
+    0.2720101571155495,
+    0.2719800723141041,
+    0.27192914876794266,
+    0.271894966514414,
+    0.27186152970367966,
+    0.271827853630724,
+    0.2717791043328073,
+    0.27172988201224213,
+    0.27170089092083327,
+    0.27169707234799734,
+    0.27169345623723695,
+    0.27168635016437237,
+    0.27166904408067705,
+    0.271651872914401,
+    0.2716389006260833,
+    0.27162548939165626,
+    0.27161305690618753,
+    0.27157356196134896,
+    0.27153308822582556,
+    0.27150768824025784,
+    0.27149285950470314,
+    0.2714778957690989,
+    0.27148532328351044,
+    0.27139860204867705,
+    0.27131242081305473,
+    0.2712261045775365,
+    0.2711331120925339,
+    0.27104025460683073,
+    0.2709270308712968,
+    0.2708097771356328,
+    0.270692219650013,
+    0.27057838841443227,
+    0.2704677771787786,
+    0.27035760469310677,
+    0.27024414470746094,
+    0.2701123234719063,
+    0.2699804009862657,
+    0.2698751022506719,
+    0.2697519485151199,
+    0.2696278497795703,
+    0.2694915935439792,
+    0.2693809148085443,
+    0.26926912232296873,
+    0.2692516135875208,
+    0.26921984110197916,
+    0.26918830486641404,
+    0.26916418738008596,
+    0.26915064114457554,
+    0.269135407409125,
+    0.2691236299236771,
+    0.2691410211863802,
+    0.2691584800078099,
+    0.2691724151138021,
+    0.2691819827539167,
+    0.26919087541380987,
+    0.26921812933722133,
+    0.2692480295438463,
+    0.2692779635042317,
+    0.26932608997211976,
+    0.26937065895266143,
+    0.2694162043656041,
+    0.26943607313801815,
+    0.2694667126414452,
+    0.26949786144337495,
+    0.2695430039945469,
+    0.2695739503139427,
+    0.26960496415462765,
+    0.2696252378682422,
+    0.269646659217862,
+    0.2696678781376276,
+    0.2696604345967943,
+    0.2696569197578594,
+    0.26965303366209376,
+    0.26965365005800523,
+    0.2696433577118698,
+    0.26963276161333594,
+    0.26961877676122653,
+    0.26960109939442706,
+    0.269583827030836,
+    0.269569639634862,
+    0.2695594845652135,
+    0.26954915864420836,
+    0.2695268132859141,
+    0.26965308982744535,
+    0.2697792644979635,
+    0.2699195341884401,
+    0.27005658384462766,
+    0.2701946124445287,
+    0.2703328771449375,
+    0.27044224289110935
   ],
   "recent_decisions": [
     {
-      "timestamp": "2025-08-25T22:40:30.715472",
-      "score": 0.6296152500000001,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:26:33.621305",
+      "score": 0.26871653430703124,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:40:35.600061",
-      "score": 0.5160409970000001,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:26:38.636999",
+      "score": 0.2692278230729687,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:40:40.638852",
-      "score": 0.5378757580000001,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:26:43.652749",
+      "score": 0.2692363368359896,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:40:45.673488",
-      "score": 0.5596925140000001,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:26:48.668472",
+      "score": 0.26922595060041665,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:40:50.635394",
-      "score": 0.5811853923333334,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:26:53.684201",
+      "score": 0.2689471643645312,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:40:55.637719",
-      "score": 0.6028708483333334,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:26:58.699918",
+      "score": 0.2689475781292708,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:41:00.669130",
-      "score": 0.6247663793333333,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:27:03.715957",
+      "score": 0.26894259187723957,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:41:05.671707",
-      "score": 0.629708,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:27:08.731382",
+      "score": 0.2691524056571875,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:41:10.754161",
-      "score": 0.5201792646666666,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:27:13.747053",
+      "score": 0.2691318944243229,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:41:15.763171",
-      "score": 0.5421544583333333,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:27:18.762802",
+      "score": 0.26912893318739584,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:41:21.024937",
-      "score": 0.5649598513333334,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:27:23.909693",
+      "score": 0.26970934691489584,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:41:25.844687",
-      "score": 0.585849794,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:27:28.774421",
+      "score": 0.26971111185307295,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:41:30.890978",
-      "score": 0.5544954273333333,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:27:33.774840",
+      "score": 0.26971085131041667,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:41:35.875222",
-      "score": 0.5653000978333333,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:27:38.778978",
+      "score": 0.2696306657575,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:41:40.888597",
-      "score": 0.5656355000000001,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:27:43.785601",
+      "score": 0.2696283799166146,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:41:45.919946",
-      "score": 0.5136355,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:27:48.798133",
+      "score": 0.26963081895197916,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:41:51.029403",
-      "score": 0.5136355,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:27:53.800092",
+      "score": 0.26970035838057294,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:41:55.935937",
-      "score": 0.5136355,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:27:58.813363",
+      "score": 0.2697054972206771,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:42:00.967130",
-      "score": 0.5139137500000001,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:28:03.841806",
+      "score": 0.26969713613697915,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:42:05.967232",
-      "score": 0.5139137500000001,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:28:08.838039",
+      "score": 0.26963180015416666,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:42:10.982946",
-      "score": 0.5139137500000001,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:28:15.567817",
+      "score": 0.2696274425658854,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:42:16.014258",
-      "score": 0.5132645,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:28:18.950389",
+      "score": 0.26962519852125,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:42:21.061255",
-      "score": 0.5132645,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:28:25.985098",
+      "score": 0.2698491269045312,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:42:26.030093",
-      "score": 0.5132645,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:28:28.968531",
+      "score": 0.2698489266390104,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:42:31.061458",
-      "score": 0.5132645,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:28:33.984551",
+      "score": 0.26985001538796877,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:42:36.061534",
-      "score": 0.5132645,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:28:38.995270",
+      "score": 0.2695665045171875,
+      "quality": "BLOCKED",
       "success": false
     },
     {
-      "timestamp": "2025-08-25T22:42:41.077247",
-      "score": 0.5132645,
-      "quality": "ACCEPTABLE",
+      "timestamp": "2025-08-26T10:28:44.001134",
+      "score": 0.2695628686909375,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:28:49.073352",
+      "score": 0.26955787992947916,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:28:54.057177",
+      "score": 0.2695603214167187,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:28:59.019613",
+      "score": 0.2695533115827083,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:29:04.020913",
+      "score": 0.26956047609822914,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:29:09.030572",
+      "score": 0.269640815074375,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:29:14.036615",
+      "score": 0.26963312939510414,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:29:19.041426",
+      "score": 0.26964299367572914,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:29:24.046517",
+      "score": 0.2694225329939062,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:29:29.057959",
+      "score": 0.26941889698130206,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:29:34.062303",
+      "score": 0.26942066133838544,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:29:39.082214",
+      "score": 0.2693519498846875,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:29:44.093789",
+      "score": 0.26935168886515626,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:29:49.117094",
+      "score": 0.2693480522346875,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:29:54.129480",
+      "score": 0.2694243411729167,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:29:59.143055",
+      "score": 0.26941868010114584,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:30:04.141018",
+      "score": 0.26940221973864587,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:30:09.711092",
+      "score": 0.2723744574696354,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:30:14.434075",
+      "score": 0.27237350879833333,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:30:19.436124",
+      "score": 0.27237189832671876,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:30:24.453158",
+      "score": 0.2723038618146875,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:30:29.442992",
+      "score": 0.27231845192750004,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:30:34.463842",
+      "score": 0.27232561542489586,
+      "quality": "BLOCKED",
+      "success": false
+    },
+    {
+      "timestamp": "2025-08-26T10:30:39.655831",
+      "score": 0.27174062650614583,
+      "quality": "BLOCKED",
       "success": false
     }
   ],
   "grid_intelligence": {
-    "density_score": 0.0,
-    "distribution_score": 0.0,
+    "density_score": 0.05,
+    "distribution_score": 0.7,
     "balance_score": 0.0,
-    "total_orders": 0
+    "total_orders": 1
   },
   "market_intelligence": {
-    "volatility_level": "VERY_LOW",
-    "trend_direction": "MIXED",
-    "current_session": "OVERLAP"
+    "volatility_level": "LOW",
+    "trend_direction": "DOWN",
+    "current_session": "ASIAN"
   },
   "learning_stats": {
-    "total_decisions": 27,
+    "total_decisions": 200,
     "recent_success_rate": 0.0,
     "current_threshold": 0.5,
     "learning_active": true
