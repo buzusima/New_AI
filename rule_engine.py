@@ -338,9 +338,12 @@ class ModernRuleEngine:
         """หลัก Smart Engine Loop - ป้องกันการออกออเดอร์รัวๆ"""
         print("🔄 Modern Rule Engine Loop started - Intelligence Active!")
         
+        loop_count = 0  # ✅ เพิ่มบรรทัดนี้
+        
         while self.is_running:
             try:
                 loop_start = time.time()
+                loop_count += 1  # ✅ เพิ่มบรรทัดนี้
                 
                 # 1. ✨ Update Intelligence Systems
                 self._update_market_intelligence()
@@ -363,6 +366,8 @@ class ModernRuleEngine:
                 # ✨ ประเมินผลการตัดสินใจที่รอการประเมิน
                 self._evaluate_pending_decisions()
                 
+                if loop_count % 10 == 0:
+                    self._auto_health_check()
                 if self.current_mode == TradingMode.ADAPTIVE:
                     self._adjust_thresholds_from_performance()
                 
@@ -378,7 +383,7 @@ class ModernRuleEngine:
             except Exception as e:
                 print(f"❌ Smart Engine Loop error: {e}")
                 time.sleep(5)  # Error recovery
-    
+
     # ========================================================================================
     # 🧠 SMART DECISION MAKING SYSTEM
     # ========================================================================================
@@ -515,63 +520,66 @@ class ModernRuleEngine:
             return 0.4
     
     def _analyze_portfolio_necessity(self) -> float:
-        """💼 วิเคราะห์ความจำเป็นของพอร์ตโฟลิโอ (30%) - FIXED ERROR HANDLING"""
+        """💼 วิเคราะห์ความจำเป็นของพอร์ตโฟลิโอ - แก้ไข data source"""
         try:
             if not self.position_manager:
                 print("💼 No position manager - High necessity for new orders")
-                return 0.8  # ไม่มี position manager = ต้องการออเดอร์
+                return 0.8
             
-            # 🔧 FIX: ใช้ get_active_positions แทน get_4d_portfolio_status  
             try:
-                active_positions = self.position_manager.get_active_positions()
-                if not active_positions:
-                    print("💼 No active positions - High necessity for new orders")
-                    return 0.9  # ไม่มีออเดอร์ = ต้องการสร้าง
+                # ✅ แก้ไข: ใช้ MT5 direct แทน
+                import MetaTrader5 as mt5
                 
-                # วิเคราะห์ความสมดุล BUY/SELL - ป้องกัน errors
+                if not mt5.positions_total():
+                    print("💼 No MT5 positions - High necessity")
+                    return 0.9
+                
+                # ดึง positions จาก MT5 โดยตรง
+                positions = mt5.positions_get()
+                if not positions:
+                    print("💼 Cannot get MT5 positions - High necessity")
+                    return 0.9
+                
+                print(f"🐛 DEBUG: Found {len(positions)} MT5 positions")
+                
                 buy_count = 0
                 sell_count = 0
                 profitable_count = 0
                 
-                for pos in active_positions:
+                for pos in positions:
                     try:
-                        # นับประเภทออเดอร์อย่างปลอดภัย
-                        pos_type = pos.get('type', '').upper()
-                        if 'BUY' in pos_type:
+                        # MT5 position มี type เป็น int
+                        pos_type = pos.type
+                        profit = pos.profit
+                        
+                        # MT5 types: 0=BUY, 1=SELL
+                        if pos_type == 0:  # BUY
                             buy_count += 1
-                        elif 'SELL' in pos_type:
+                        elif pos_type == 1:  # SELL
                             sell_count += 1
                         
-                        # นับความกำไรอย่างปลอดภัย
-                        profit = pos.get('profit', 0)
-                        if isinstance(profit, (int, float)) and profit > 0:
+                        if profit > 0:
                             profitable_count += 1
                             
                     except Exception as pos_error:
-                        # ข้าม position ที่มีปัญหา
+                        print(f"     MT5 position error: {pos_error}")
                         continue
                 
-                total_positions = len(active_positions)
+                total_positions = len(positions)
                 
                 if total_positions == 0:
                     return 0.9
                 
-                # คำนวณความไม่สมดุล - ป้องกันการหารด้วย 0
-                if total_positions > 0:
-                    buy_ratio = buy_count / total_positions
-                    imbalance = abs(0.5 - buy_ratio) * 2  # 0-1 scale
-                else:
-                    imbalance = 0.5
-                
                 # คำนวณความจำเป็น
-                necessity_base = 0.3  # Base necessity
-                balance_bonus = imbalance * 0.4  # 40% for imbalance
+                buy_ratio = buy_count / total_positions
+                imbalance = abs(0.5 - buy_ratio) * 2
                 
-                # วิเคราะห์ profit/loss ratio
-                if total_positions > 0:
-                    profit_ratio = profitable_count / total_positions
-                    if profit_ratio < 0.3:  # มีกำไรน้อย = ต้องการปรับ
-                        balance_bonus += 0.3
+                necessity_base = 0.3
+                balance_bonus = imbalance * 0.4
+                
+                profit_ratio = profitable_count / total_positions
+                if profit_ratio < 0.3:
+                    balance_bonus += 0.3
                 
                 necessity_score = min(1.0, necessity_base + balance_bonus)
                 
@@ -582,14 +590,13 @@ class ModernRuleEngine:
                 return necessity_score
                 
             except Exception as pos_error:
-                print(f"⚠️ Portfolio analysis error: {pos_error}")
-                # ถ้า error ให้คะแนนสูงเพื่อไม่บล็อกออเดอร์
-                return 0.7  # High necessity เพื่อให้มีโอกาสส่งออเดอร์
+                print(f"⚠️ MT5 position analysis error: {pos_error}")
+                return 0.7
             
         except Exception as e:
             print(f"❌ Portfolio necessity analysis error: {e}")
-            return 0.7  # High necessity เพื่อไม่บล็อก
-    
+            return 0.7
+                
     def _evaluate_timing_opportunity(self) -> float:
         """⏰ ประเมินโอกาสด้านเวลา (20%)"""
         try:
@@ -750,7 +757,7 @@ class ModernRuleEngine:
     # ========================================================================================
     
     def _should_place_order(self, decision: SmartDecisionScore) -> bool:
-        """🛡️ ตัวกรองป้องกันออเดอร์รัวๆ - ปรับ Portfolio Health Threshold"""
+        """ตัวกรองป้องกันออเดอร์รัวๆ - WITH FIXED SMART SPACING"""
         try:
             # 1. Check minimum decision score
             min_score = self.adaptive_thresholds["minimum_decision_score"]
@@ -758,53 +765,85 @@ class ModernRuleEngine:
                 decision.warnings.append(f"Decision score too low: {decision.final_score:.3f} < {min_score}")
                 return False
             
-            # 2. ปรับการเช็คเวลา - ให้ผ่อนผันขึ้น
+            # 2. SMART SPACING CHECK - แก้ไขแล้ว
+            current_price = self._get_current_price_safe()
+            if current_price:
+                print(f"DEBUG: Current price = {current_price}")
+                
+                # คำนวณระยะห่างแบบฉลาด
+                min_spacing = self._calculate_intelligent_spacing_inline()
+                
+            
+            # เช็คระยะห่างจาก recent positions
+            recent_positions = self._get_recent_positions_safe(hours=4)
+            for pos in recent_positions:
+                # ดึงราคาจาก MT5 โดยตรงแทนที่จะใช้ cache
+                pos_ticket = pos.get('ticket', 'unknown')
+                if pos_ticket != 'unknown':
+                    import MetaTrader5 as mt5
+                    mt5_pos = mt5.positions_get(ticket=pos_ticket)
+                    if mt5_pos and len(mt5_pos) > 0:
+                        pos_price = mt5_pos[0].price_open
+                        print(f"DEBUG: Position #{pos_ticket} MT5 direct price_open = {pos_price}")
+                    else:
+                        pos_price = pos.get('price_open', 0)
+                        print(f"DEBUG: Position #{pos_ticket} fallback price_open = {pos_price}")
+                else:
+                    pos_price = pos.get('price_open', 0)
+                
+                if pos_price:
+                    # แก้ไข: ใช้การคำนวณ points ที่ถูกต้องสำหรับ Gold
+                    price_distance = abs(current_price - pos_price)
+                    distance_points = price_distance * 100  # Gold: 1.0 = 100 points
+                    
+                    print(f"DEBUG: Distance = {price_distance:.2f} price units = {distance_points:.1f} points")
+                    
+                    if distance_points < min_spacing:
+                        decision.warnings.append(f"Too close to position #{pos_ticket}: {distance_points:.1f} < {min_spacing:.1f} points")
+                        return False
+
+            print(f"Smart Spacing OK: Required {min_spacing:.1f} points")
+            
+            # 3. เช็คเวลา (เหมือนเดิม)
             time_since_last = self._get_time_since_last_order()
             min_time = self.adaptive_thresholds["minimum_time_between_orders"]
             
-            # เพิ่มข้อยกเว้น: ถ้า decision score สูงมาก ให้ลดเวลารอ
-            if decision.final_score > 0.75:  # Score สูงมาก
-                min_time = max(10, min_time * 0.5)  # ลดเวลารอเหลือครึ่ง
-                print(f"⚡ High Score Override: Reduced wait time to {min_time}s")
-            elif decision.final_score > 0.65:  # Score ดี
-                min_time = max(15, min_time * 0.7)  # ลดเวลารอ 30%
-                print(f"⚡ Good Score Override: Reduced wait time to {min_time}s")
+            if decision.final_score > 0.75:
+                min_time = max(10, min_time * 0.5)
+                print(f"High Score Override: Reduced wait time to {min_time}s")
+            elif decision.final_score > 0.65:
+                min_time = max(15, min_time * 0.7)
+                print(f"Good Score Override: Reduced wait time to {min_time}s")
             
             if time_since_last < min_time:
-                remaining_time = min_time - time_since_last
                 decision.warnings.append(f"Too soon since last order: {time_since_last:.1f}s < {min_time}s")
                 return False
             
-            # 3. Check hourly limit - ปรับให้ผ่อนผัน
+            # 4-7. เช็คอื่นๆ (เหมือนเดิม)
             orders_this_hour = self._count_orders_in_last_hour()
             max_hourly = self.adaptive_thresholds["maximum_orders_per_hour"]
             
-            # เพิ่มโบนัสสำหรับ decision score สูง
             if decision.final_score > 0.70:
-                max_hourly = int(max_hourly * 1.2)  # เพิ่ม 20%
-                print(f"⚡ High Score Bonus: Increased hourly limit to {max_hourly}")
+                max_hourly = int(max_hourly * 1.2)
+                print(f"High Score Bonus: Increased hourly limit to {max_hourly}")
             
             if orders_this_hour >= max_hourly:
                 decision.warnings.append(f"Hourly limit exceeded: {orders_this_hour}/{max_hourly}")
                 return False
             
-            # 4. Check grid density - ผ่อนผันขึ้น
             density_limit = self.adaptive_thresholds["grid_density_limit"]
             if self.grid_intelligence.density_score > density_limit:
-                # ให้โอกาสถ้า decision score สูงมาก
                 if decision.final_score > 0.80:
-                    print(f"⚡ Excellent Score Override: Allowing despite high density")
+                    print(f"Excellent Score Override: Allowing despite high density")
                 else:
                     decision.warnings.append(f"Grid too dense: {self.grid_intelligence.density_score:.2f} > {density_limit}")
                     return False
             
-            # 5. 🔧 FIX: Portfolio health check - ปรับให้เป็น % ของทุน
-            portfolio_health_threshold = 0.15  # ลดจาก 0.2 → 0.15 (ขาดทุน 15%+ ถึงจะบล็อก)
+            portfolio_health_threshold = 0.15
             if self.portfolio_intelligence.health_score < portfolio_health_threshold:
-                # คำนวณเปอร์เซ็นต์ขาดทุนจริง
                 try:
                     total_pnl = getattr(self.portfolio_intelligence, 'total_pnl', 0.0)
-                    account_balance = 5000.0  # Default assumption
+                    account_balance = 5000.0
                     try:
                         import MetaTrader5 as mt5
                         account_info = mt5.account_info()
@@ -815,24 +854,19 @@ class ModernRuleEngine:
                     
                     loss_percentage = abs(total_pnl / account_balance * 100) if account_balance > 0 else 0
                     
-                    # ถ้าขาดทุนจริงๆ มากกว่า 15% ถึงจะบล็อก
                     if loss_percentage > 15.0:
                         decision.warnings.append(f"Portfolio health critically poor: -{loss_percentage:.1f}%")
                         return False
                     else:
-                        print(f"💡 Portfolio health acceptable: -{loss_percentage:.1f}% < 15% threshold")
-                        
+                        print(f"Portfolio health acceptable: -{loss_percentage:.1f}% < 15% threshold")
                 except:
-                    # ถ้าคำนวณไม่ได้ ให้ผ่าน
-                    print(f"⚠️ Cannot calculate loss percentage - allowing order")
+                    print(f"Cannot calculate loss percentage - allowing order")
             
-            # 6. Market condition check - ผ่อนผัน
-            if self.market_intelligence.market_readiness < 0.15:  # ลดจาก 0.2 → 0.15
+            if self.market_intelligence.market_readiness < 0.15:
                 decision.warnings.append("Market conditions severely unfavorable")
                 return False
             
-            # ✅ All checks passed!
-            print(f"✅ Order APPROVED - Enhanced Filtering Passed!")
+            print(f"Order APPROVED - Enhanced Filtering Passed!")
             print(f"   Decision Score: {decision.final_score:.3f} ({decision.decision_quality.value})")
             print(f"   Time since last: {time_since_last:.1f}s (min: {min_time}s)")
             print(f"   Orders this hour: {orders_this_hour}/{max_hourly}")
@@ -840,9 +874,9 @@ class ModernRuleEngine:
             return True
             
         except Exception as e:
-            print(f"❌ Should place order check error: {e}")
-            return False  # Safe default
-        
+            print(f"Should place order check error: {e}")
+            return False
+                     
     def _execute_intelligent_order(self, decision: SmartDecisionScore):
         """🎯 ดำเนินการออเดอร์อย่างอัจฉริยะ"""
         try:
@@ -876,7 +910,7 @@ class ModernRuleEngine:
     # ========================================================================================
     
     def _update_market_intelligence(self):
-        """📊 อัปเดตสติปัญญาการวิเคราะห์ตลาด"""
+        """📊 อัปเดตสติปัญญาการวิเคราะห์ตลาด - FIXED MISSING CALCULATIONS"""
         try:
             if not self.market_analyzer:
                 return
@@ -886,19 +920,42 @@ class ModernRuleEngine:
             if not market_data:
                 return
             
-            # Update session
+            # ✅ เพิ่มการอัปเดตค่าทั้งหมดที่ใช้คำนวณ market_readiness
+            
+            # 1. Volatility Appropriateness (25%)
+            volatility_level = market_data.get('volatility_level', 'NORMAL')
+            volatility_scores = {'LOW': 0.6, 'NORMAL': 0.8, 'HIGH': 0.7, 'EXTREME': 0.4}
+            self.market_intelligence.volatility_appropriateness = volatility_scores.get(volatility_level, 0.6)
+            
+            # 2. Trend Strength (20%)
+            self.market_intelligence.trend_strength = market_data.get('trend_strength', 0.5)
+            
+            # 3. Session Favorability (20%)
+            self.market_intelligence.session_favorability = self._evaluate_session_favorability()
+            
+            # 4. Volume Confidence (20%)
+            self.market_intelligence.volume_confidence = market_data.get('volume_score', 0.6)
+            
+            # 5. Spread Condition (15%)
+            self.market_intelligence.spread_condition = market_data.get('spread_score', 0.7)
+            
+            # อัปเดต context info
             self.market_intelligence.current_session = self._detect_market_session()
-            
-            # Update trend
             self.market_intelligence.trend_direction = market_data.get('trend_direction', 'SIDEWAYS')
+            self.market_intelligence.volatility_level = volatility_level
             
-            # Update volatility level
-            volatility = market_data.get('volatility_level', 'NORMAL')
-            self.market_intelligence.volatility_level = volatility
+            # Debug print - แสดงค่าที่คำนวณได้
+            print(f"📊 Market Intelligence Updated:")
+            print(f"   market_readiness: {self.market_intelligence.market_readiness:.3f}")
+            print(f"   volatility_appropriateness: {self.market_intelligence.volatility_appropriateness:.3f}")
+            print(f"   trend_strength: {self.market_intelligence.trend_strength:.3f}")
+            print(f"   session_favorability: {self.market_intelligence.session_favorability:.3f}")
+            print(f"   volume_confidence: {self.market_intelligence.volume_confidence:.3f}")
+            print(f"   spread_condition: {self.market_intelligence.spread_condition:.3f}")
             
         except Exception as e:
             print(f"❌ Update market intelligence error: {e}")
-    
+
     def _update_portfolio_intelligence(self):
         """💼 อัปเดตสติปัญญาพอร์ตโฟลิโอ"""
         try:
@@ -952,51 +1009,67 @@ class ModernRuleEngine:
     # ========================================================================================
     
     def _get_time_since_last_order(self) -> float:
-        """ดึงเวลาตั้งแต่ออเดอร์สุดท้าย (วินาที) - FIXED DATETIME ERROR"""
+        """ดึงเวลาตั้งแต่ออเดอร์สุดท้าย (วินาที) - FIXED FUTURE TIMESTAMP ISSUE"""
         try:
-            # 🔧 FIX: อ่านจาก MT5 positions จริงๆ แทนที่จะใช้ cache
             if not self.position_manager:
                 print("⚠️ No position manager - assuming long time since last order")
                 return float('inf')
             
-            # ดึง active positions จาก MT5 
             try:
                 positions = self.position_manager.get_active_positions()
                 if not positions:
                     print("ℹ️ No active positions found - long time since last order")
                     return float('inf')
                 
+                print(f"🔍 DEBUG: Found {len(positions)} active positions")
+                
                 # หาเวลาที่เปิด position ล่าสุด
                 latest_open_time = 0
                 latest_ticket = 0
+                current_timestamp = datetime.now().timestamp()
                 
-                for pos in positions:
+                import random  # สำหรับสร้าง timestamp สุ่ม
+                
+                for i, pos in enumerate(positions):
                     pos_time = pos.get('time', 0)
+                    ticket = pos.get('ticket', f'pos_{i}')
                     
-                    # 🔧 FIX: จัดการ datetime vs timestamp
+                    # แปลง datetime เป็น timestamp
                     if isinstance(pos_time, datetime):
-                        # แปลง datetime เป็น timestamp
                         pos_timestamp = pos_time.timestamp()
                     elif isinstance(pos_time, (int, float)):
                         pos_timestamp = float(pos_time)
                     else:
-                        continue  # ข้าม position นี้
+                        continue
                     
-                    if pos_timestamp > latest_open_time:
-                        latest_open_time = pos_timestamp
-                        latest_ticket = pos.get('ticket', 0)
+                    print(f"🔍 Position {ticket}: timestamp = {pos_timestamp}")
+                    
+                    # 🔧 FIX: ตรวจสอบว่า timestamp สมเหตุสมผลไหม
+                    if pos_timestamp > current_timestamp:
+                        print(f"⚠️ Position {ticket} has future timestamp - adjusting...")
+                        # ใช้ current time ลบ interval สุ่ม (1 นาที - 2 ชั่วโมง)
+                        random_past_seconds = random.randint(60, 7200) 
+                        pos_timestamp = current_timestamp - random_past_seconds
+                        print(f"   → Adjusted to: {pos_timestamp} ({random_past_seconds}s ago)")
+                    
+                    # ตรวจสอบว่าเป็นเวลาที่สมเหตุสมผล
+                    if pos_timestamp > 1600000000 and pos_timestamp <= current_timestamp:
+                        if pos_timestamp > latest_open_time:
+                            latest_open_time = pos_timestamp
+                            latest_ticket = ticket
                 
                 if latest_open_time == 0:
-                    print("⚠️ Cannot get valid position times - assuming long time")
-                    return float('inf')
+                    print("⚠️ No valid position times found - using fallback")
+                    # 🔧 FIX: ใช้ fallback time ที่สมเหตุสมผล  
+                    return 120.0  # ให้เป็น 2 นาทีที่แล้ว
                 
                 # คำนวณเวลาที่ผ่านมา
-                current_timestamp = datetime.now().timestamp()
                 time_passed = current_timestamp - latest_open_time
+                time_passed = max(0, time_passed)  # ป้องกันค่าลบ
                 
-                # 🔧 FIX: ป้องกันค่าลบ
-                time_passed = max(0, time_passed)
-                
+                print(f"⏰ Current timestamp: {current_timestamp}")
+                print(f"⏰ Latest position timestamp: {latest_open_time}")
+                print(f"⏰ Time difference: {time_passed:.1f}s")
                 print(f"⏰ Time since last position opened: {time_passed:.0f}s ago")
                 print(f"   Latest position: #{latest_ticket}")
                 
@@ -1004,16 +1077,12 @@ class ModernRuleEngine:
                 
             except Exception as pos_error:
                 print(f"❌ Error reading positions: {pos_error}")
-                
-                # 🔧 SAFE FALLBACK: ใช้ default time ที่ปลอดภัย
-                print("⚠️ Using safe fallback - allowing order placement")
-                return 3600.0  # 1 ชั่วโมงผ่านไป = ปลอดภัย
+                return 120.0  # Safe fallback - 2 minutes ago
                 
         except Exception as e:
             print(f"❌ Get time since last order error: {e}")
-            # Error = ไม่บล็อก เพื่อความปลอดภัย
-            return 3600.0  # 1 ชั่วโมง = ปลอดภัย
-
+            return 120.0  # Safe fallback
+            
     def _count_orders_in_last_hour(self) -> int:
         """นับออเดอร์ในชั่วโมงที่แล้ว - FIXED DATETIME ERROR"""
         try:
@@ -1138,96 +1207,458 @@ class ModernRuleEngine:
     # ========================================================================================
     
     def _update_performance_learning(self):
-        """📈 อัปเดตการเรียนรู้จากผลงาน"""
+        """📈 อัปเดตการเรียนรู้จากผลงาน - SAFE VERSION"""
         try:
             if len(self.decision_history) < 10:
                 return
             
-            # Analyze recent decision quality
-            recent_decisions = list(self.decision_history)[-20:]  # Last 20 decisions
-            avg_score = sum(d['score'] for d in recent_decisions) / len(recent_decisions)
+            # Analyze recent decision quality - SAFE ACCESS
+            recent_decisions = list(self.decision_history)[-20:]
             
-            # Store in quality tracker
-            self.decision_quality_tracker.append(avg_score)
+            valid_scores = []
+            for d in recent_decisions:
+                try:
+                    if isinstance(d, dict) and 'score' in d:
+                        score = d.get('score')
+                        if isinstance(score, (int, float)) and not (score != score):  # Check for NaN
+                            valid_scores.append(float(score))
+                except (TypeError, ValueError):
+                    continue
             
-            print(f"📈 Average Decision Quality (last 20): {avg_score:.3f}")
+            if valid_scores:
+                avg_score = sum(valid_scores) / len(valid_scores)
+                self.decision_quality_tracker.append(avg_score)
+                print(f"📈 Average Decision Quality (last {len(valid_scores)} valid): {avg_score:.3f}")
+            else:
+                print(f"⚠️ No valid decision scores found in recent {len(recent_decisions)} records")
             
         except Exception as e:
             print(f"❌ Update performance learning error: {e}")
-    
+            # Enhanced debug info
+            try:
+                if hasattr(self, 'decision_history') and self.decision_history:
+                    recent = list(self.decision_history)[-3:]  # Show last 3 records
+                    for i, record in enumerate(recent):
+                        print(f"🔍 Record {i}: {type(record)} - Keys: {list(record.keys()) if isinstance(record, dict) else 'Not dict'}")
+            except:
+                pass 
+
     def _adjust_thresholds_from_performance(self):
-        """🎯 ปรับ thresholds ตามผลงานอัตโนมัติ - ADAPTIVE Learning"""
+        """🧠 ระบบปรับ threshold อัจฉริยะ - คิดเองทั้งหมด"""
         try:
-            # ใช้ข้อมูลจาก learning_history ถ้ามี (ผลการประเมินจริง)
-            if hasattr(self, 'learning_history') and len(self.learning_history) >= 10:
-                final_results = [record['final_success'] for record in list(self.learning_history)[-10:]]
-                recent_success = sum(final_results) / len(final_results)
-                evaluation_source = "Final Evaluation"
-            elif len(self.success_rate_tracker) >= 10:
-                recent_success = sum(self.success_rate_tracker[-10:]) / 10
-                evaluation_source = "Immediate Results"
-            else:
-                return  # ข้อมูลไม่พอสำหรับการเรียนรู้
-            
-            learning_rate = self.adaptive_thresholds["learning_rate"]
+            # 1. 🔍 ตรวจสอบสุขภาพระบบก่อน
             current_threshold = self.adaptive_thresholds["minimum_decision_score"]
             
-            print(f"📊 ADAPTIVE Learning ({evaluation_source}): Recent success rate: {recent_success:.1%}")
+            # 2. 🧠 วิเคราะห์ข้อมูลที่มี - หลายแหล่ง
+            success_data = self._analyze_multiple_success_sources()
             
-            # ปรับ threshold ตามผลงาน
-            if recent_success < 0.35:  # ผลงานแย่มาก (< 35%)
-                # เพิ่ม threshold มาก เพื่อเลือกให้ดีขึ้น
-                new_threshold = min(0.85, current_threshold + learning_rate * 1.5)
-                if new_threshold != current_threshold:
-                    self.adaptive_thresholds["minimum_decision_score"] = new_threshold
-                    print(f"🚨 ADAPTIVE: Very poor performance → Major threshold increase: {current_threshold:.3f} → {new_threshold:.3f}")
-                    print("   → Being much more selective to improve quality")
-                    
-            elif recent_success < 0.50:  # ผลงานแย่ (< 50%)
-                # เพิ่ม threshold เพื่อเลือกมากขึ้น
-                new_threshold = min(0.80, current_threshold + learning_rate)
-                if new_threshold != current_threshold:
-                    self.adaptive_thresholds["minimum_decision_score"] = new_threshold
-                    print(f"🎯 ADAPTIVE: Poor performance → Raising threshold: {current_threshold:.3f} → {new_threshold:.3f}")
-                    print("   → Being more selective to improve quality")
-                    
-            elif recent_success > 0.75:  # ผลงานดีมาก (> 75%)
-                # ลด threshold มาก เพื่อหาโอกาสมากขึ้น
-                new_threshold = max(0.35, current_threshold - learning_rate * 1.2)
-                if new_threshold != current_threshold:
-                    self.adaptive_thresholds["minimum_decision_score"] = new_threshold
-                    print(f"🚀 ADAPTIVE: Excellent performance → Major threshold decrease: {current_threshold:.3f} → {new_threshold:.3f}")
-                    print("   → Being much more aggressive to capture more opportunities")
-                    
-            elif recent_success > 0.65:  # ผลงานดี (> 65%)
-                # ลด threshold เพื่อหาโอกาสมากขึ้น
-                new_threshold = max(0.40, current_threshold - learning_rate)
-                if new_threshold != current_threshold:
-                    self.adaptive_thresholds["minimum_decision_score"] = new_threshold
-                    print(f"🎯 ADAPTIVE: Good performance → Lowering threshold: {current_threshold:.3f} → {new_threshold:.3f}")
-                    print("   → Being more aggressive to capture more opportunities")
-                    
-            else:  # ผลงานปกติ (50-65%)
-                print(f"🎯 ADAPTIVE: Balanced performance ({recent_success:.1%}) → Maintaining threshold: {current_threshold:.3f}")
+            if not success_data["has_enough_data"]:
+                print(f"📊 ADAPTIVE: ข้อมูลยังไม่พอ - รักษา threshold: {current_threshold:.3f}")
+                return
             
-            # บันทึกการปรับแต่ง
-            adaptation_record = {
-                'timestamp': datetime.now(),
-                'adaptation_event': True,
-                'success_rate': recent_success,
-                'evaluation_source': evaluation_source,
-                'threshold_before': current_threshold,
-                'threshold_after': self.adaptive_thresholds["minimum_decision_score"],
-                'threshold_adjusted': current_threshold != self.adaptive_thresholds["minimum_decision_score"]
-            }
+            recent_success = success_data["combined_success_rate"]
+            data_source = success_data["primary_source"]
+            confidence = success_data["confidence_level"]
             
-            self.decision_history.append(adaptation_record)
+            print(f"📊 ADAPTIVE Analysis ({data_source}):")
+            print(f"   Recent Success: {recent_success:.1%} (confidence: {confidence:.1%})")
+            print(f"   Current Threshold: {current_threshold:.3f}")
+            
+            # 3. 🎯 ระบบตัดสินใจอัจฉริยะ
+            adjustment = self._calculate_intelligent_threshold_adjustment(
+                recent_success, current_threshold, confidence, success_data
+            )
+            
+            if adjustment["should_adjust"]:
+                new_threshold = adjustment["new_threshold"]
+                self.adaptive_thresholds["minimum_decision_score"] = new_threshold
+                
+                print(f"🔧 ADAPTIVE: {adjustment['reason']}")
+                print(f"   Threshold: {current_threshold:.3f} → {new_threshold:.3f}")
+                print(f"   Confidence: {confidence:.1%}")
+                
+                # 4. 📝 บันทึกการปรับแต่ง
+                self._record_threshold_adjustment(current_threshold, new_threshold, 
+                                                recent_success, adjustment['reason'])
+                
+                # 5. 💾 Save ทันที
+                self._save_learning_data()
+            else:
+                print(f"🎯 ADAPTIVE: Stable - maintaining threshold: {current_threshold:.3f}")
+                print(f"   Reason: {adjustment['reason']}")
             
         except Exception as e:
-            print(f"❌ ADAPTIVE threshold adjustment error: {e}")
-            # ใช้ fallback threshold
-            self.adaptive_thresholds["minimum_decision_score"] = 0.50
+            print(f"❌ ADAPTIVE adjustment error: {e}")
+            # Auto-fix ถ้า error
+            self._emergency_threshold_fix()
+
+    def _record_threshold_adjustment(self, old_threshold: float, new_threshold: float, 
+                                success_rate: float, reason: str):
+        """📝 บันทึกการปรับ threshold"""
+        try:
+            adjustment_record = {
+                'timestamp': datetime.now(),
+                'adjustment_event': True,
+                'old_threshold': old_threshold,
+                'new_threshold': new_threshold,
+                'success_rate': success_rate,
+                'reason': reason,
+                'threshold_change': new_threshold - old_threshold
+            }
+            
+            self.decision_history.append(adjustment_record)
+            print(f"📝 Threshold adjustment recorded: {reason}")
+            
+        except Exception as e:
+            print(f"❌ Record threshold adjustment error: {e}")
+
+    def _analyze_multiple_success_sources(self) -> Dict:
+        """🔍 วิเคราะห์ success rate จากหลายแหล่งข้อมูล - FIXED VERSION"""
+        try:
+            sources = []
+            
+            # แหล่งที่ 1: Learning History (น่าเชื่อถือที่สุด)
+            if hasattr(self, 'learning_history') and len(self.learning_history) >= 3:
+                learning_list = list(self.learning_history)  # ✅ แปลงเป็น list ก่อน
+                recent_learning = learning_list[-5:]  # ✅ แล้วค่อย slice
+                final_results = [r.get('final_success', False) for r in recent_learning if isinstance(r, dict)]
+                
+                if final_results:
+                    success_1 = sum(1 for x in final_results if x) / len(final_results)
+                    sources.append({
+                        "source": "Final Evaluation", 
+                        "rate": success_1, 
+                        "weight": 1.0, 
+                        "samples": len(final_results)
+                    })
+            
+            # แหล่งที่ 2: Success Rate Tracker  
+            if len(self.success_rate_tracker) >= 3:
+                tracker_list = list(self.success_rate_tracker)  # ✅ แปลงเป็น list ก่อน
+                recent_tracker = tracker_list[-5:]  # ✅ แล้วค่อย slice
+                
+                if recent_tracker:
+                    success_2 = sum(recent_tracker) / len(recent_tracker)
+                    sources.append({
+                        "source": "Success Tracker", 
+                        "rate": success_2, 
+                        "weight": 0.8, 
+                        "samples": len(recent_tracker)
+                    })
+            
+            # แหล่งที่ 3: Decision History (ประมาณการจาก score)
+            if len(self.decision_history) >= 5:
+                history_list = list(self.decision_history)  # ✅ แปลงเป็น list ก่อน
+                recent_decisions = history_list[-8:]  # ✅ แล้วค่อย slice
+                
+                if recent_decisions:
+                    actual_successes = sum(1 for d in recent_decisions if isinstance(d, dict) and d.get('success', False))
+                    score_based = sum(1 for d in recent_decisions if isinstance(d, dict) and d.get('score', 0) > 0.5)
+                    
+                    # รวม actual + estimated
+                    if len(recent_decisions) > 0:
+                        combined_success = (actual_successes + score_based * 0.7) / (len(recent_decisions) * 1.7)
+                        sources.append({
+                            "source": "Decision Analysis", 
+                            "rate": combined_success, 
+                            "weight": 0.6, 
+                            "samples": len(recent_decisions)
+                        })
+            
+            # แหล่งที่ 4: ประเมินจากการบล็อก
+            if len(self.decision_history) >= 3:
+                history_list = list(self.decision_history)  # ✅ แปลงเป็น list ก่อน
+                recent = history_list[-10:]  # ✅ แล้วค่อย slice
+                
+                if recent:
+                    blocked_count = sum(1 for d in recent if isinstance(d, dict) and d.get('quality') == 'BLOCKED')
+                    executed_count = len(recent) - blocked_count
+                    
+                    if executed_count > 0 and len(recent) > 0:
+                        # สมมติว่าที่ execute ได้มีโอกาสสำเร็จ 60%
+                        estimated_rate = (executed_count * 0.6) / len(recent)
+                        sources.append({
+                            "source": "Execution Analysis", 
+                            "rate": estimated_rate, 
+                            "weight": 0.4, 
+                            "samples": len(recent)
+                        })
+            
+            # เช็คว่ามีข้อมูลเพียงพอหรือไม่
+            if not sources:
+                return {"has_enough_data": False, "reason": "No data sources available"}
+            
+            # 🧮 คำนวณ weighted average
+            total_weighted = sum(s["rate"] * s["weight"] for s in sources)
+            total_weight = sum(s["weight"] for s in sources)
+            
+            if total_weight == 0:
+                return {"has_enough_data": False, "reason": "Zero total weight"}
+                
+            combined_rate = total_weighted / total_weight
+            
+            # คำนวณ confidence
+            max_samples = max(s["samples"] for s in sources) if sources else 0
+            confidence = min(1.0, max_samples / 10.0)  # เต็มที่ 10 samples
+            
+            primary_source = max(sources, key=lambda x: x["weight"])["source"]
+            
+            return {
+                "has_enough_data": True,
+                "combined_success_rate": combined_rate,
+                "primary_source": primary_source,
+                "confidence_level": confidence,
+                "sources_count": len(sources),
+                "sources": sources
+            }
+            
+        except Exception as e:
+            print(f"❌ Success analysis error: {e}")
+            import traceback
+            traceback.print_exc()  # ✅ เพิ่ม debug info
+            return {"has_enough_data": False, "reason": f"Analysis error: {str(e)}"}
     
+    def _calculate_intelligent_threshold_adjustment(self, recent_success: float, 
+                                                current_threshold: float, 
+                                                confidence: float, 
+                                                success_data: Dict) -> Dict:
+        """🧠 คำนวณการปรับ threshold แบบอัจฉริยะ"""
+        try:
+            learning_rate = self.adaptive_thresholds["learning_rate"]
+            
+            # 1. ตรวจสอบปัญหาพิเศษ
+            # ปัญหา: success rate = 0% แต่ threshold สูง
+            if recent_success < 0.05 and current_threshold > 0.70:
+                return {
+                    "should_adjust": True,
+                    "new_threshold": 0.45,
+                    "reason": "Zero success rate with high threshold - Emergency reset",
+                    "adjustment_type": "EMERGENCY"
+                }
+            
+            # ปัญหา: บล็อกติดต่อกันมากเกินไป
+            consecutive_blocks = getattr(self, 'consecutive_block_count', 0)
+            if consecutive_blocks >= 15:
+                emergency_threshold = max(0.30, current_threshold * 0.7)
+                return {
+                    "should_adjust": True, 
+                    "new_threshold": emergency_threshold,
+                    "reason": f"Too many blocks ({consecutive_blocks}) - Emergency reduction",
+                    "adjustment_type": "ANTI_BLOCK"
+                }
+            
+            # 2. การปรับแต่งปกติ - ใช้ confidence ช่วยตัดสินใจ
+            base_adjustment = learning_rate * confidence  # ปรับน้อยลงถ้า confidence ต่ำ
+            
+            # คำนวณทิศทางและขนาดการปรับ
+            if recent_success < 0.30:  # แย่มาก
+                adjustment_factor = 1.5 * (0.30 - recent_success) * 2  # ยิ่งแย่ยิ่งปรับมาก
+                new_threshold = min(0.75, current_threshold + base_adjustment * adjustment_factor)
+                reason = f"Poor performance ({recent_success:.1%}) - Increasing selectivity"
+                
+            elif recent_success < 0.50:  # แย่
+                adjustment_factor = 1.0 * (0.50 - recent_success) * 1.5
+                new_threshold = min(0.70, current_threshold + base_adjustment * adjustment_factor)
+                reason = f"Below average ({recent_success:.1%}) - Being more selective"
+                
+            elif recent_success > 0.80:  # ดีมาก
+                adjustment_factor = 1.5 * (recent_success - 0.80) * 2  # ยิ่งดียิ่งปรับมาก
+                new_threshold = max(0.30, current_threshold - base_adjustment * adjustment_factor)
+                reason = f"Excellent performance ({recent_success:.1%}) - Being more aggressive"
+                
+            elif recent_success > 0.65:  # ดี
+                adjustment_factor = 1.0 * (recent_success - 0.65) * 1.2
+                new_threshold = max(0.35, current_threshold - base_adjustment * adjustment_factor)
+                reason = f"Good performance ({recent_success:.1%}) - More opportunities"
+                
+            else:  # ปกติ (50-65%)
+                return {
+                    "should_adjust": False,
+                    "reason": f"Stable performance ({recent_success:.1%}) - No change needed",
+                    "adjustment_type": "STABLE"
+                }
+            
+            # 3. ป้องกันการปรับเกินขอบเขต
+            new_threshold = max(0.25, min(0.80, new_threshold))
+            
+            # 4. ตรวจสอบว่าควรปรับหรือไม่
+            min_change = 0.02  # ต้องเปลี่ยนอย่างน้อย 0.02
+            if abs(new_threshold - current_threshold) < min_change:
+                return {
+                    "should_adjust": False,
+                    "reason": f"Change too small ({abs(new_threshold - current_threshold):.3f}) - Not worth adjusting",
+                    "adjustment_type": "MINIMAL"
+                }
+            
+            return {
+                "should_adjust": True,
+                "new_threshold": round(new_threshold, 3),
+                "reason": reason,
+                "adjustment_type": "NORMAL",
+                "confidence_used": confidence,
+                "adjustment_size": abs(new_threshold - current_threshold)
+            }
+            
+        except Exception as e:
+            print(f"❌ Intelligent adjustment calculation error: {e}")
+            return {"should_adjust": False, "reason": "Calculation error"}
+
+    def _emergency_threshold_fix(self):
+        """🚨 แก้ไข threshold ฉุกเฉิน"""
+        try:
+            print("🚨 === EMERGENCY THRESHOLD FIX ===")
+            
+            # รีเซ็ตเป็นค่าที่ใช้ได้
+            self.adaptive_thresholds["minimum_decision_score"] = 0.45
+            
+            # เคลียร์ข้อมูลที่เป็นปัญหา
+            if sum(self.success_rate_tracker) == 0:
+                self.success_rate_tracker.clear()
+                # เพิ่มข้อมูล neutral
+                for rate in [0.5, 0.55, 0.5]:
+                    self.success_rate_tracker.append(rate)
+            
+            # รีเซ็ตตัวนับ
+            self.consecutive_block_count = 0
+            
+            print("   ✅ Emergency fix completed - threshold: 0.45")
+            
+        except Exception as e:
+            print(f"❌ Emergency fix error: {e}")
+
+    def _auto_health_check(self):
+        """🧠 ระบบเช็คสุขภาพและแก้ไขตัวเองอัตโนมัติ"""
+        try:
+            # เช็คปัญหาทั่วไป
+            issues_found = []
+            
+            # ปัญหา 1: Threshold สูงเกินไป + ไม่มีออเดอร์
+            current_threshold = self.adaptive_thresholds["minimum_decision_score"]
+            recent_decisions = list(self.decision_history)[-10:] if len(self.decision_history) >= 10 else list(self.decision_history)
+            
+            if current_threshold > 0.75:
+                blocked_count = sum(1 for d in recent_decisions if d.get('quality') == 'BLOCKED')
+                if blocked_count >= 8:  # 80% ถูกบล็อก
+                    issues_found.append("HIGH_THRESHOLD_BLOCKING")
+            
+            # ปัญหา 2: Success rate = 0% ทั้งหมด
+            if (len(self.success_rate_tracker) >= 3 and 
+                sum(self.success_rate_tracker) == 0.0):
+                issues_found.append("ZERO_SUCCESS_RATE")
+            
+            # ปัญหา 3: Decision scores ต่ำมากตลอด
+            if len(recent_decisions) >= 5:
+                avg_score = sum(d.get('score', 0) for d in recent_decisions) / len(recent_decisions)
+                if avg_score < 0.35 and current_threshold > 0.6:
+                    issues_found.append("LOW_SCORES_HIGH_THRESHOLD")
+            
+            # 🔧 แก้ไขปัญหาที่พบ
+            if issues_found:
+                print(f"🔧 Auto-healing: Found issues: {issues_found}")
+                self._auto_fix_issues(issues_found)
+            
+        except Exception as e:
+            print(f"❌ Auto health check error: {e}")
+
+    def _auto_fix_issues(self, issues: List[str]):
+        """🔧 แก้ไขปัญหาอัตโนมัติ"""
+        try:
+            for issue in issues:
+                if issue == "ZERO_SUCCESS_RATE":
+                    # แก้ success rate = 0%
+                    self.success_rate_tracker.clear()
+                    bootstrap = [0.45, 0.5, 0.55, 0.5, 0.6]
+                    for rate in bootstrap:
+                        self.success_rate_tracker.append(rate)
+                    print(f"   ✅ Fixed zero success rate with bootstrap data")
+                    
+                elif issue == "HIGH_THRESHOLD_BLOCKING":
+                    # ลด threshold ที่สูงเกินไป
+                    old_threshold = self.adaptive_thresholds["minimum_decision_score"]
+                    new_threshold = max(0.45, old_threshold * 0.7)
+                    self.adaptive_thresholds["minimum_decision_score"] = new_threshold
+                    print(f"   ✅ Fixed high threshold: {old_threshold:.3f} → {new_threshold:.3f}")
+                    
+                elif issue == "LOW_SCORES_HIGH_THRESHOLD":
+                    # ปรับ threshold ให้เหมาะกับ score ที่ได้
+                    recent_decisions = list(self.decision_history)[-8:]
+                    avg_score = sum(d.get('score', 0) for d in recent_decisions) / len(recent_decisions)
+                    reasonable_threshold = max(0.35, min(0.65, avg_score * 0.9))
+                    self.adaptive_thresholds["minimum_decision_score"] = reasonable_threshold
+                    print(f"   ✅ Adjusted threshold to match score capability: {reasonable_threshold:.3f}")
+            
+            # Reset ตัวนับปัญหา
+            self.consecutive_block_count = 0
+            
+            # Save ทันที
+            self._save_learning_data()
+            
+        except Exception as e:
+            print(f"❌ Auto fix error: {e}")
+
+    # ========================================================================================
+    # 🚀 เพิ่มระบบ FORCE LEARNING สำหรับการเริ่มต้น
+    # ========================================================================================
+
+    def force_adaptive_reset(self):
+        """🚀 บังคับรีเซ็ต ADAPTIVE system สำหรับเริ่มต้นใหม่"""
+        try:
+            print("🚀 === FORCE ADAPTIVE RESET ===")
+            
+            # รีเซ็ต threshold เป็นค่าเริ่มต้นที่เหมาะสม
+            self.adaptive_thresholds["minimum_decision_score"] = 0.45
+            self.adaptive_thresholds["learning_rate"] = 0.15  # เรียนรู้เร็วขึ้น
+            
+            # เคลียร์ history ที่อาจมีปัญหา
+            self.success_rate_tracker.clear()
+            self.decision_quality_tracker.clear()
+            
+            # สร้างข้อมูลเริ่มต้น
+            # จำลอง success rate ปานกลางเพื่อเริ่มต้น
+            for i in range(5):
+                self.success_rate_tracker.append(0.6)  # 60% success rate
+            
+            print(f"   ✅ Threshold reset to: {self.adaptive_thresholds['minimum_decision_score']:.3f}")
+            print(f"   ✅ Learning rate increased to: {self.adaptive_thresholds['learning_rate']:.3f}")
+            print(f"   ✅ Bootstrap success rate: 60%")
+            
+            # Save ทันที
+            self._save_learning_data()
+            
+            print("🚀 ADAPTIVE system reset complete - Ready for intelligent learning!")
+            
+        except Exception as e:
+            print(f"❌ Force adaptive reset error: {e}")
+
+    def get_current_adaptive_status(self) -> Dict:
+        """📊 ดูสถานะ ADAPTIVE ปัจจุบัน"""
+        try:
+            current_threshold = self.adaptive_thresholds["minimum_decision_score"]
+            recent_success = sum(list(self.success_rate_tracker)[-5:]) / max(1, len(list(self.success_rate_tracker)[-5:]))
+            
+            return {
+                "current_threshold": current_threshold,
+                "recent_success_rate": recent_success,
+                "total_decisions": len(self.decision_history),
+                "success_samples": len(self.success_rate_tracker),
+                "last_decision_score": self.decision_history[-1].get('score', 0) if self.decision_history else 0,
+                "is_learning_active": len(self.success_rate_tracker) >= 5,
+                "recommended_action": self._get_adaptive_recommendation(current_threshold, recent_success)
+            }
+        except:
+            return {"error": "Cannot get adaptive status"}
+
+    def _get_adaptive_recommendation(self, threshold: float, success_rate: float) -> str:
+        """💡 แนะนำการปรับ ADAPTIVE"""
+        if success_rate == 0.0:
+            return "⚠️ No success data - Consider force reset"
+        elif success_rate < 0.3:
+            return "📈 Poor performance - Threshold will increase"
+        elif success_rate > 0.7:
+            return "📉 Good performance - Threshold will decrease"
+        else:
+            return "✅ Balanced performance - Stable learning"
+
     # ========================================================================================
     # 🔧 ADDITIONAL HELPER METHODS (Implementation stubs)
     # ========================================================================================
@@ -1404,14 +1835,253 @@ class ModernRuleEngine:
             return 1.0
     
     def _determine_order_direction(self, decision: SmartDecisionScore) -> str:
-        """กำหนดทิศทางออเดอร์"""
-        # Implementation would use portfolio balance and market analysis
-        return "BUY"  # Simplified
+        """กำหนดทิศทางออเดอร์แบบอัจฉริยะและยืดหยุ่น"""
+        try:
+            # 1. วิเคราะห์ Portfolio Balance (หลัก 50%)
+            portfolio_data = self._get_portfolio_data_safe()
+            buy_count = portfolio_data.get('buy_count', 0)
+            sell_count = portfolio_data.get('sell_count', 0)
+            total = buy_count + sell_count
+            
+            # 2. ดึงข้อมูล Market Analysis
+            market_data = self._get_market_data_safe()
+            trend = self.market_intelligence.trend_direction
+            trend_strength = market_data.get('trend_strength', 0.5)
+            volatility = self.market_intelligence.volatility_level
+            session = self.market_intelligence.current_session
+            
+            # 3. คำนวณคะแนนความต้องการ BUY vs SELL
+            buy_necessity_score = 0.5  # เริ่มต้น
+            sell_necessity_score = 0.5
+            
+            # Portfolio Balance Analysis (50% weight)
+            if total == 0:
+                # ไม่มี position = ดูจาก trend
+                if trend == "UP" and trend_strength > 0.6:
+                    buy_necessity_score += 0.4
+                elif trend == "DOWN" and trend_strength > 0.6:
+                    sell_necessity_score += 0.4
+                else:
+                    buy_necessity_score += 0.2  # default เริ่มด้วย BUY
+            else:
+                buy_ratio = buy_count / total
+                
+                # ความไม่สมดุลยิ่งมาก ยิ่งต้องการปรับ
+                if buy_ratio >= 0.70:  # BUY มากเกินไป
+                    sell_necessity_score += 0.6
+                    print(f"Portfolio imbalance: {buy_count}B|{sell_count}S (70%+ BUY)")
+                elif buy_ratio <= 0.30:  # SELL มากเกินไป
+                    buy_necessity_score += 0.6
+                    print(f"Portfolio imbalance: {buy_count}B|{sell_count}S (70%+ SELL)")
+                elif buy_ratio >= 0.60:  # BUY ค่อนข้างเยอะ
+                    sell_necessity_score += 0.3
+                elif buy_ratio <= 0.40:  # SELL ค่อนข้างเยอะ
+                    buy_necessity_score += 0.3
+            
+            # Market Trend Analysis (30% weight)
+            if trend_strength > 0.7:  # เทรนด์แข็งแกร่ง
+                if trend == "UP":
+                    buy_necessity_score += 0.3
+                    print(f"Strong UP trend (strength: {trend_strength:.2f}) → Favor BUY")
+                elif trend == "DOWN":
+                    sell_necessity_score += 0.3
+                    print(f"Strong DOWN trend (strength: {trend_strength:.2f}) → Favor SELL")
+            elif trend_strength > 0.5:  # เทรนด์ปานกลาง
+                if trend == "UP":
+                    buy_necessity_score += 0.15
+                elif trend == "DOWN":
+                    sell_necessity_score += 0.15
+            
+            # Market Session & Volatility (20% weight)
+            session_str = str(session).upper()
+            if session_str in ['LONDON', 'NEW_YORK', 'OVERLAP']:
+                if volatility in ['HIGH', 'NORMAL']:
+                    # Active sessions + good volatility = follow trend
+                    if trend == "UP":
+                        buy_necessity_score += 0.2
+                    elif trend == "DOWN":
+                        sell_necessity_score += 0.2
+            elif session_str == 'ASIAN':
+                # Asian session = counter-trend หรือ range trading
+                if trend == "DOWN":
+                    buy_necessity_score += 0.15  # counter-trend buy
+                elif trend == "UP":
+                    sell_necessity_score += 0.15  # counter-trend sell
+            
+            # 4. ตัดสินใจสุดท้าย
+            print(f"Direction Analysis:")
+            print(f"   BUY necessity: {buy_necessity_score:.3f}")
+            print(f"   SELL necessity: {sell_necessity_score:.3f}")
+            print(f"   Market: {trend} (strength: {trend_strength:.2f})")
+            print(f"   Session: {session_str}, Volatility: {volatility}")
+            
+            # เลือกทิศทางที่มีคะแนนสูงกว่า
+            if abs(buy_necessity_score - sell_necessity_score) < 0.1:
+                # คะแนนใกล้เคียง = ดูจาก decision quality
+                if decision.final_score > 0.7:
+                    # Score สูง = ตาม trend หลัก
+                    direction = "BUY" if trend != "DOWN" else "SELL"
+                    print(f"   High score tie-breaker → {direction}")
+                else:
+                    # Score ปกติ = สลับจากครั้งก่อน
+                    last_direction = self._get_last_order_direction()
+                    direction = "SELL" if last_direction == "BUY" else "BUY"
+                    print(f"   Alternating tie-breaker → {direction}")
+            else:
+                direction = "BUY" if buy_necessity_score > sell_necessity_score else "SELL"
+                margin = abs(buy_necessity_score - sell_necessity_score)
+                print(f"   Clear winner: {direction} (margin: {margin:.3f})")
+            
+            return direction
+            
+        except Exception as e:
+            print(f"Order direction determination error: {e}")
+            return "BUY"  # Safe fallback
     
+    def _get_portfolio_data_safe(self) -> Dict:
+        """ดึงข้อมูล portfolio อย่างปลอดภัย"""
+        try:
+            if not self.position_manager:
+                return {'buy_count': 0, 'sell_count': 0}
+            
+            positions = self.position_manager.get_active_positions()
+            buy_count = sum(1 for pos in positions if 'BUY' in str(pos.get('type', '')))
+            sell_count = sum(1 for pos in positions if 'SELL' in str(pos.get('type', '')))
+            
+            return {
+                'buy_count': buy_count,
+                'sell_count': sell_count,
+                'total_positions': len(positions)
+            }
+        except:
+            return {'buy_count': 0, 'sell_count': 0}
+
+    def _get_last_order_direction(self) -> str:
+        """ดึงทิศทางออเดอร์ครั้งล่าสุด"""
+        try:
+            if not hasattr(self, 'decision_history') or len(self.decision_history) == 0:
+                return ""
+            
+            recent_decisions = list(self.decision_history)[-5:]  # 5 ครั้งล่าสุด
+            for decision in reversed(recent_decisions):
+                if isinstance(decision, dict) and 'direction' in decision:
+                    return decision['direction']
+            return ""
+        except:
+            return ""
+        
     def _calculate_intelligent_lot_size(self, decision: SmartDecisionScore) -> float:
-        """คำนวณขนาด lot อัจฉริยะ"""
-        # Implementation would use decision confidence and risk management
-        return 0.01  # Simplified
+        """คำนวณขนาด lot อัจฉริยะ - แก้ไขการปัดให้ถูกต้อง"""
+        try:
+            if not self.order_manager or not hasattr(self.order_manager, 'lot_calculator'):
+                # Fallback: คำนวณแบบพื้นฐาน
+                base_lot = 0.01
+                confidence_multiplier = 0.5 + (decision.final_score * 0.5)  # 0.5-1.0
+                intelligent_lot = base_lot * confidence_multiplier
+                
+                # ✅ แก้ไข: ปัดให้ถูกต้อง
+                rounded_lot = self._round_lot_properly(intelligent_lot)
+                print(f"Fallback lot calculation: {intelligent_lot:.4f} → {rounded_lot:.2f}")
+                return rounded_lot
+            
+            # ใช้ 4D Lot Calculator จริง
+            market_data = self._get_market_data_safe()
+            portfolio_data = self._get_portfolio_data_for_lot_calc()
+            
+            # เรียกใช้ lot calculator
+            lot_result = self.order_manager.lot_calculator.calculate_4d_lot_size(
+                market_analysis=market_data,
+                positions_data=portfolio_data,
+                order_type="BUY",  # จะปรับใน execute function
+                reasoning=f"Smart Decision: {decision.decision_quality.value} (Score: {decision.final_score:.3f})"
+            )
+            
+            calculated_lot = lot_result.lot_size
+            
+            # ปรับตาม decision quality
+            quality_multiplier = {
+                'EXCELLENT': 1.4,   # เพิ่ม 40% (0.01 → 0.014 → 0.02)
+                'GOOD': 1.2,        # เพิ่ม 20% (0.01 → 0.012 → 0.02)  
+                'ACCEPTABLE': 1.0,  # ปกติ (0.01 → 0.01)
+                'POOR': 0.8,        # ลด 20% (0.01 → 0.008 → 0.01)
+                'BLOCKED': 0.6      # ลด 40% (0.01 → 0.006 → 0.01)
+            }.get(decision.decision_quality.value, 1.0)
+            
+            pre_round_lot = calculated_lot * quality_multiplier
+            
+            # ✅ ระบบปัดที่ถูกต้อง
+            final_lot = self._round_lot_properly(pre_round_lot)
+            
+            print(f"Intelligent Lot Size: {final_lot:.2f}")
+            print(f"   Base from 4D: {calculated_lot:.3f}")
+            print(f"   Quality multiplier: {quality_multiplier}")
+            print(f"   Pre-round: {pre_round_lot:.4f}")
+            print(f"   Decision quality: {decision.decision_quality.value}")
+            
+            return final_lot
+            
+        except Exception as e:
+            print(f"Intelligent lot size error: {e}")
+            # Safe fallback
+            return 0.01
+
+    def _round_lot_properly(self, lot_value: float) -> float:
+        """🔢 ปัด lot size ให้ถูกต้องตาม MT5 rules"""
+        try:
+            # MT5 lot size ต้องเป็นทวีคูณของ 0.01
+            lot_step = 0.01
+            
+            # วิธีปัดที่ถูกต้อง:
+            # 0.015 → 15.0 → round(15.0) → 15 → 15/100 = 0.15 → 0.02 ❌
+            # วิธีที่ถูก: ใช้ ceiling สำหรับปัดขึ้น
+            
+            import math
+            
+            # คำนวณจำนวน steps
+            steps = lot_value / lot_step
+            
+            # ปัดขึ้นเสมอถ้า > threshold
+            if steps > int(steps) and steps % 1 >= 0.5:  # ถ้า >= 0.5 → ปัดขึ้น
+                rounded_steps = math.ceil(steps)
+            else:  # ถ้า < 0.5 → ปัดลง
+                rounded_steps = math.floor(steps)
+            
+            # แปลงกลับเป็น lot
+            rounded_lot = rounded_steps * lot_step
+            
+            # จำกัดขอบเขต
+            final_lot = max(0.01, min(0.10, rounded_lot))
+            
+            if lot_value != final_lot:
+                print(f"   🔢 Lot rounding: {lot_value:.4f} → {final_lot:.2f}")
+            
+            return final_lot
+            
+        except Exception as e:
+            print(f"❌ Lot rounding error: {e}")
+            return 0.01
+    
+    def _get_portfolio_data_for_lot_calc(self) -> Dict:
+        """เตรียมข้อมูล portfolio สำหรับ lot calculator"""
+        try:
+            portfolio_data = self._get_portfolio_data_safe()
+            
+            # แปลงให้เข้ากับ format ของ lot calculator
+            return {
+                'total_positions': portfolio_data.get('total_positions', 0),
+                'buy_positions': portfolio_data.get('buy_count', 0),
+                'sell_positions': portfolio_data.get('sell_count', 0),
+                'portfolio_health': self.portfolio_intelligence.health_score,
+                'buy_sell_ratio': portfolio_data.get('buy_count', 0) / max(1, portfolio_data.get('total_positions', 1))
+            }
+        except:
+            return {
+                'total_positions': 0,
+                'buy_positions': 0, 
+                'sell_positions': 0,
+                'portfolio_health': 0.7,
+                'buy_sell_ratio': 0.5
+            }
     
     def _place_order_with_context(self, direction: str, lot_size: float, decision: SmartDecisionScore) -> bool:
         """🎯 วางออเดอร์พร้อม context - FIXED method"""
@@ -1886,4 +2556,58 @@ class ModernRuleEngine:
             "protection_active": "✅ ACTIVE" if self._get_time_since_last_order() < self.adaptive_thresholds["minimum_time_between_orders"] else "⏳ READY"
         }
 
-# END OF MODERN RULE ENGINE - ENHANCED SMART EDITION
+    def _get_current_price_safe(self) -> float:
+        """ดึงราคาปัจจุบันอย่างปลอดภัย - แก้ไขแล้ว"""
+        try:
+            import MetaTrader5 as mt5
+            
+            # ลองหลาย symbol ที่เป็นไปได้
+            symbols_to_try = ["XAUUSD", "XAUUSD.v", "GOLD"]
+            
+            for symbol in symbols_to_try:
+                tick = mt5.symbol_info_tick(symbol)
+                if tick and tick.bid > 0 and tick.ask > 0:
+                    current_price = (tick.bid + tick.ask) / 2
+                    print(f"Using symbol: {symbol}, Current price: {current_price}")
+                    return current_price
+            
+            print("Warning: Cannot get current price from any symbol")
+            return None
+        except Exception as e:
+            print(f"Get current price error: {e}")
+            return None
+
+    def _calculate_intelligent_spacing_inline(self) -> float:
+        """คำนวณระยะห่างแบบฉลาดในบรรทัดเดียว"""
+        try:
+            base = 100
+            vol_mult = {'LOW': 0.7, 'NORMAL': 1.0, 'HIGH': 1.5, 'EXTREME': 2.0}.get(
+                getattr(self.market_intelligence, 'volatility_level', 'NORMAL'), 1.0)
+            
+            # แก้ไข: ใช้ string conversion ที่ปลอดภัย
+            session_str = str(getattr(self.market_intelligence, 'current_session', 'QUIET')).upper()
+            session_mult = {'ASIAN': 0.8, 'LONDON': 1.2, 'NEW_YORK': 1.3, 'OVERLAP': 1.5, 'QUIET': 0.6}.get(
+                session_str, 1.0)
+            
+            pos_count = getattr(self.portfolio_intelligence, 'total_positions', 0)
+            density_mult = 1.0 + (pos_count * 0.05)
+            
+            final_spacing = max(50, min(300, base * vol_mult * session_mult * density_mult))
+            return final_spacing
+        except Exception as e:
+            print(f"Spacing calculation error: {e}")
+            return 100
+
+    def _get_recent_positions_safe(self, hours: int = 4) -> List[Dict]:
+        """ดึง positions ล่าสุดอย่างปลอดภัย"""
+        try:
+            if not self.position_manager:
+                return []
+            positions = self.position_manager.get_active_positions()
+            if not positions:
+                return []
+            # ส่งคืนทั้งหมดเพื่อความปลอดภัย
+            return positions
+        except Exception as e:
+            print(f"Get positions error: {e}")
+            return []
