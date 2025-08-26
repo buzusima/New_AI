@@ -170,7 +170,7 @@ class ModernRuleEngine:
     # ========================================================================================
     
     def _simple_engine_loop(self):
-        """Main loop - เน้นความเรียบง่ายและประสิทธิภาพ"""
+        """Main loop - เพิ่ม detailed logging"""
         print("🔄 Simple Engine Loop Started...")
         
         while self.is_running:
@@ -180,31 +180,169 @@ class ModernRuleEngine:
                 # 1. Reset hourly counter
                 self._check_hourly_reset()
                 
+                # ✅ เพิ่ม: Log current analysis cycle
+                print(f"🔍 === Analysis Cycle {datetime.now().strftime('%H:%M:%S')} ===")
+                
                 # 2. Simple candlestick analysis
+                print("🕯️  Analyzing candlestick data...")
                 decision = self._analyze_candlestick_signal()
+                
+                # ✅ เพิ่ม: Log analysis results
+                if decision.signal_type != EntryDecision.NO_SIGNAL:
+                    print(f"📊 Signal Found: {decision.signal_type.value}")
+                    print(f"🎯 Confidence: {decision.final_score:.3f}")
+                    print(f"💡 Reasoning: {decision.reasoning[:100]}...")
+                else:
+                    print(f"⚪ No Signal - Score: {decision.final_score:.3f}")
                 
                 # 3. Check if should place order
                 if self._should_place_order(decision):
+                    print(f"✅ Order Placement Approved!")
+                    
                     # 4. Calculate dynamic lot size
                     lot_size = self._calculate_dynamic_lot_size(decision)
+                    print(f"📏 Calculated Lot Size: {lot_size}")
                     
                     # 5. Execute order with intelligent placement
+                    print(f"🎯 Executing {decision.signal_type.value} order...")
                     self._execute_candlestick_order(decision, lot_size)
                 else:
                     if decision.signal_type != EntryDecision.NO_SIGNAL:
                         print(f"🚫 Signal BLOCKED: {decision.warnings}")
+                    else:
+                        print("⏳ Waiting for valid signal...")
                 
                 # 6. Update statistics
                 self._update_daily_stats(decision)
                 
+                # ✅ เพิ่ม: Log current statistics
+                if self.daily_stats["signals_generated"] > 0:
+                    print(f"📈 Today: {self.daily_stats['signals_generated']} signals, {self.daily_stats['orders_placed']} orders")
+                
                 # Loop timing - เร็วขึ้นเพื่อจับ signal มากขึ้น
                 loop_time = time.time() - loop_start
-                sleep_time = max(0.1, 3.0 - loop_time)  # 3-second cycles (เร็วกว่าเดิม)
+                sleep_time = max(0.1, 3.0 - loop_time)  # 3-second cycles
+                
+                print(f"⏱️  Loop completed in {loop_time:.2f}s, sleeping {sleep_time:.1f}s")
+                print("=" * 50)
+                
                 time.sleep(sleep_time)
                 
             except Exception as e:
                 print(f"❌ Simple Engine Loop error: {e}")
+                print(f"🔧 Error details: {str(e)}")
                 time.sleep(5)
+
+    # ✅ เพิ่ม method ใหม่สำหรับ detailed candlestick logging
+    def _analyze_candlestick_signal(self) -> SmartDecisionScore:
+        """🕯️ วิเคราะห์สัญญาณจาก Candlestick - พร้อม DETAILED LOGGING"""
+        try:
+            print("📊 Getting candlestick data from market analyzer...")
+            
+            # ดึงข้อมูล OHLC + Volume
+            candlestick_data = self._get_candlestick_data()
+            
+            if not candlestick_data.get("valid", False):
+                print("❌ Invalid candlestick data received")
+                return self._create_no_signal_decision("No valid candlestick data")
+            
+            print("✅ Valid candlestick data received")
+            
+            # ✅ LOG CURRENT CANDLE INFO
+            current_ohlc = candlestick_data.get("current_ohlc", {})
+            previous_ohlc = candlestick_data.get("previous_ohlc", {})
+            
+            if current_ohlc.get("valid") and previous_ohlc.get("valid"):
+                print(f"🕯️  CURRENT CANDLE:")
+                print(f"   📈 O:{current_ohlc['open']:.2f} H:{current_ohlc['high']:.2f} L:{current_ohlc['low']:.2f} C:{current_ohlc['close']:.2f}")
+                
+                print(f"🕯️  PREVIOUS CANDLE:")  
+                print(f"   📈 O:{previous_ohlc['open']:.2f} H:{previous_ohlc['high']:.2f} L:{previous_ohlc['low']:.2f} C:{previous_ohlc['close']:.2f}")
+                
+                # LOG CANDLE ANALYSIS
+                candlestick_analysis = candlestick_data.get("candlestick_analysis", {})
+                print(f"🎨 Current Candle Color: {candlestick_analysis.get('candle_color', 'N/A')}")
+                print(f"📊 Price Direction: {candlestick_analysis.get('price_direction', 'N/A')}")
+                print(f"💪 Body Ratio: {candlestick_analysis.get('body_ratio', 0):.3f}")
+                print(f"🎯 Pattern: {candlestick_analysis.get('pattern_detected', 'N/A')}")
+            
+            # วิเคราะห์ pattern
+            print("🔍 Evaluating candlestick pattern...")
+            signal_analysis = self._evaluate_candlestick_pattern(candlestick_data)
+            print(f"📊 Pattern Analysis: {signal_analysis.get('signal_type', 'N/A')} (Strength: {signal_analysis.get('signal_strength', 0):.3f})")
+            
+            # ประเมิน volume strength
+            print("📊 Evaluating volume strength...")
+            volume_analysis = self._evaluate_volume_strength(candlestick_data)
+            print(f"🔊 Volume Analysis: Factor {volume_analysis.get('volume_factor', 1):.2f}")
+            
+            # ประเมิน candle quality
+            print("🎨 Evaluating candle quality...")
+            quality_analysis = self._evaluate_candle_quality(candlestick_data)
+            print(f"✨ Quality Score: {quality_analysis.get('quality_score', 0):.3f}")
+            
+            # ประเมิน market timing
+            print("⏰ Evaluating market timing...")
+            timing_analysis = self._evaluate_market_timing()
+            print(f"🕐 Timing Score: {timing_analysis.get('timing_score', 0):.3f}")
+            
+            # สร้าง decision
+            decision = SmartDecisionScore(
+                candlestick_signal=signal_analysis["signal_strength"],
+                volume_strength=volume_analysis["volume_factor"],
+                candle_quality=quality_analysis["quality_score"],
+                market_timing=timing_analysis["timing_score"]
+            )
+            
+            # กำหนด signal type
+            decision.signal_type = signal_analysis["signal_type"]
+            
+            # สร้าง reasoning
+            decision.reasoning = self._generate_candlestick_reasoning(
+                signal_analysis, volume_analysis, quality_analysis, timing_analysis
+            )
+            
+            print(f"🎯 FINAL DECISION: {decision.signal_type.value} (Score: {decision.final_score:.3f})")
+            
+            return decision
+            
+        except Exception as e:
+            print(f"❌ Candlestick signal analysis error: {e}")
+            return self._create_no_signal_decision(f"Analysis error: {e}")
+
+    # ✅ เพิ่ม method สำหรับ detailed market data logging  
+    def _get_candlestick_data(self) -> Dict:
+        """🔧 ดึงข้อมูล OHLC + Volume พร้อม detailed logging"""
+        try:
+            print("🔌 Connecting to market analyzer...")
+            
+            if not self.market_analyzer:
+                print("❌ Market analyzer not available!")
+                return {"valid": False}
+            
+            print("📊 Requesting candlestick info...")
+            
+            # ใช้ method ใหม่จาก market_analyzer
+            if hasattr(self.market_analyzer, 'get_candlestick_info'):
+                print("✅ Using enhanced candlestick_info method")
+                result = self.market_analyzer.get_candlestick_info()
+            else:
+                print("⚠️  Falling back to comprehensive analysis")
+                # Fallback ถึง method เดิม
+                analysis = self.market_analyzer.get_comprehensive_analysis()
+                result = analysis.get("candlestick_data", {"valid": False})
+            
+            if result.get("valid", False):
+                print("✅ Successfully retrieved candlestick data")
+            else:
+                print("❌ Failed to get valid candlestick data")
+            
+            return result
+            
+        except Exception as e:
+            print(f"❌ Get candlestick data error: {e}")
+            print(f"🔧 Market analyzer type: {type(self.market_analyzer)}")
+            return {"valid": False}
     
     # ========================================================================================
     # 🕯️ CANDLESTICK ANALYSIS SYSTEM
@@ -752,27 +890,56 @@ class ModernRuleEngine:
             print(f"❌ Execute candlestick order error: {e}")
     
     def _place_order_with_context(self, direction: str, lot_size: float, 
-                                 decision: SmartDecisionScore, reasoning: str) -> bool:
-        """🔧 วางออเดอร์พร้อม context - รักษา interface เดิม"""
+                                decision: SmartDecisionScore, reasoning: str) -> bool:
+        """🔧 วางออเดอร์พร้อม context - แก้ไข method call"""
         try:
             if not self.order_manager:
                 return False
             
-            # ใช้ method เดิมถ้ามี
-            if hasattr(self.order_manager, 'place_market_order'):
-                result = self.order_manager.place_market_order(
-                    direction.upper(),
-                    lot_size,
-                    reasoning
-                )
-                return result.success if hasattr(result, 'success') else bool(result)
+            print(f"🎯 Placing {direction} order - Lot: {lot_size:.3f}")
             
-            # Fallback method
-            print(f"🔧 Fallback order placement: {direction} {lot_size:.3f}")
-            return True
+            # ✅ แก้ไข: สร้าง OrderRequest object ให้ตรงกับ method signature
+            from order_manager import OrderRequest, OrderType, OrderReason
             
+            # กำหนด order type
+            if "BUY" in direction.upper():
+                order_type = OrderType.MARKET_BUY
+            elif "SELL" in direction.upper():
+                order_type = OrderType.MARKET_SELL
+            else:
+                print(f"❌ Invalid direction: {direction}")
+                return False
+            
+            # สร้าง OrderRequest object
+            order_request = OrderRequest(
+                order_type=order_type,
+                volume=lot_size,
+                price=0.0,  # Market order ไม่ต้องใส่ราคา
+                sl=0.0,
+                tp=0.0,
+                reason=OrderReason.FOUR_D_AI_ENTRY,
+                confidence=decision.final_score,
+                reasoning=reasoning,
+                max_slippage=20,
+                magic_number=100001,
+                four_d_score=decision.final_score,
+                hybrid_factors=None
+            )
+            
+            # ✅ เรียก method ที่ถูกต้อง (รับ 1 parameter เท่านั้น)
+            result = self.order_manager.place_market_order(order_request)
+            
+            # ตรวจสอบผลลัพธ์
+            if result.success:
+                print(f"✅ Order SUCCESS: Ticket {result.ticket}, Price: {result.price:.5f}")
+                return True
+            else:
+                print(f"❌ Order FAILED: {result.message}")
+                return False
+                
         except Exception as e:
             print(f"❌ Place order with context error: {e}")
+            print(f"🔧 Error details: {str(e)}")
             return False
     
     # ========================================================================================

@@ -38,7 +38,7 @@ class MarketAnalyzer:
         self.config = config
         
         # Trading symbol และ timeframe
-        self.symbol = config.get("trading", {}).get("symbol", "XAUUSD")
+        self.symbol = config.get("trading", {}).get("symbol", "XAUUSD.v")
         self.main_timeframe = mt5.TIMEFRAME_M5  # หลักสำหรับ candlestick analysis
         
         # Volume analysis settings
@@ -57,105 +57,153 @@ class MarketAnalyzer:
     # ========================================================================================
     
     def get_current_ohlc(self) -> Dict:
-        """🆕 ดึงข้อมูล OHLC ของแท่งปัจจุบัน"""
+        """📊 ดึงข้อมูล OHLC แท่งปัจจุบัน - FIXED: Symbol + Numpy handling"""
         try:
-            # ดึงข้อมูล 2 แท่งล่าสุด (แท่งปัจจุบัน + แท่งก่อนหน้า)
-            rates = mt5.copy_rates_from_pos(
-                self.symbol, 
-                self.main_timeframe, 
-                0,  # เริ่มจากแท่งปัจจุบัน
-                2   # 2 แท่ง
-            )
+            self.log("📊 Requesting current OHLC data...")
             
-            if rates is None or len(rates) < 2:
+            if not self.mt5_connector or not self.mt5_connector.is_connected:
+                self.log("❌ MT5 connector not available or not connected")
                 return self._get_fallback_ohlc()
             
-            # แท่งปัจจุบัน
-            current = rates[-1]
+            # ✅ ตรวจหา symbol ที่ถูกต้องก่อน
+            actual_symbol = self._find_correct_gold_symbol()
+            if not actual_symbol:
+                self.log("❌ Cannot find valid gold symbol")
+                return self._get_fallback_ohlc()
             
-            return {
-                "time": datetime.fromtimestamp(current['time']),
-                "open": float(current['open']),
-                "high": float(current['high']),
-                "low": float(current['low']),
-                "close": float(current['close']),
-                "volume": int(current.get('tick_volume', 0)),
+            self.log(f"🔍 Using symbol: {actual_symbol}")
+            
+            # ✅ Select symbol ก่อนดึงข้อมูล
+            if not mt5.symbol_select(actual_symbol, True):
+                self.log(f"❌ Failed to select symbol {actual_symbol}")
+                return self._get_fallback_ohlc()
+            
+            # ดึงข้อมูล 5 แท่งล่าสุด
+            rates = mt5.copy_rates_from_pos(actual_symbol, self.main_timeframe, 0, 5)
+            
+            if rates is None or len(rates) < 1:
+                self.log(f"❌ Failed to get rates for {actual_symbol}")
+                error_info = mt5.last_error()
+                self.log(f"🔧 MT5 Error: {error_info}")
+                return self._get_fallback_ohlc()
+            
+            # ✅ แก้ไข: Handle numpy array correctly
+            current_bar = rates[-1]  # ได้ numpy.void object
+            
+            ohlc_data = {
+                "time": datetime.fromtimestamp(current_bar['time']),
+                "open": float(current_bar['open']),
+                "high": float(current_bar['high']),
+                "low": float(current_bar['low']),
+                "close": float(current_bar['close']),
+                "volume": int(current_bar['tick_volume']),  # ✅ ใช้ direct access ไม่ใช่ .get()
                 "valid": True
             }
+            
+            # ✅ LOG SUCCESS
+            self.log(f"✅ Current OHLC Retrieved ({actual_symbol}):")
+            self.log(f"   ⏰ Time: {ohlc_data['time'].strftime('%Y-%m-%d %H:%M:%S')}")
+            self.log(f"   📈 OHLC: {ohlc_data['open']:.5f} | {ohlc_data['high']:.5f} | {ohlc_data['low']:.5f} | {ohlc_data['close']:.5f}")
+            self.log(f"   🔊 Volume: {ohlc_data['volume']}")
+            
+            return ohlc_data
             
         except Exception as e:
             self.log(f"❌ Current OHLC error: {e}")
             return self._get_fallback_ohlc()
-    
+
     def get_previous_ohlc(self) -> Dict:
-        """🆕 ดึงข้อมูล OHLC ของแท่งก่อนหน้า"""
+        """📊 ดึงข้อมูล OHLC แท่งก่อนหน้า - FIXED: Symbol + Numpy handling"""
         try:
-            # ดึงข้อมูล 3 แท่งล่าสุด
-            rates = mt5.copy_rates_from_pos(
-                self.symbol, 
-                self.main_timeframe, 
-                0,  # เริ่มจากแท่งปัจจุบัน
-                3   # 3 แท่ง
-            )
+            self.log("📊 Requesting previous OHLC data...")
             
-            if rates is None or len(rates) < 2:
+            if not self.mt5_connector or not self.mt5_connector.is_connected:
+                self.log("❌ MT5 connector not available or not connected")
                 return self._get_fallback_ohlc()
             
-            # แท่งก่อนหน้า (index -2)
-            previous = rates[-2]
+            # ใช้ symbol ที่ถูกต้อง
+            actual_symbol = self._find_correct_gold_symbol()
+            if not actual_symbol:
+                self.log("❌ Cannot find valid gold symbol")
+                return self._get_fallback_ohlc()
             
-            return {
-                "time": datetime.fromtimestamp(previous['time']),
-                "open": float(previous['open']),
-                "high": float(previous['high']),
-                "low": float(previous['low']),
-                "close": float(previous['close']),
-                "volume": int(previous.get('tick_volume', 0)),
+            # ดึงข้อมูล 5 แท่งล่าสุด
+            rates = mt5.copy_rates_from_pos(actual_symbol, self.main_timeframe, 0, 5)
+            
+            if rates is None or len(rates) < 2:
+                self.log(f"❌ Insufficient rates for previous candle")
+                return self._get_fallback_ohlc()
+            
+            # ✅ แก้ไข: Handle numpy array correctly
+            previous_bar = rates[-2]  # แท่งก่อนหน้า
+            
+            ohlc_data = {
+                "time": datetime.fromtimestamp(previous_bar['time']),
+                "open": float(previous_bar['open']),
+                "high": float(previous_bar['high']),
+                "low": float(previous_bar['low']),
+                "close": float(previous_bar['close']),
+                "volume": int(previous_bar['tick_volume']),  # ✅ ใช้ direct access
                 "valid": True
             }
+            
+            self.log(f"✅ Previous OHLC Retrieved ({actual_symbol}):")
+            self.log(f"   📈 OHLC: {ohlc_data['open']:.5f} | {ohlc_data['high']:.5f} | {ohlc_data['low']:.5f} | {ohlc_data['close']:.5f}")
+            
+            return ohlc_data
             
         except Exception as e:
             self.log(f"❌ Previous OHLC error: {e}")
             return self._get_fallback_ohlc()
-    
+
     def get_volume_data(self) -> Dict:
-        """🆕 ดึงข้อมูล volume และคำนวณ average"""
+        """🔊 ดึงข้อมูล Volume - FIXED: Numpy handling"""
         try:
-            # ดึงข้อมูล volume lookback แท่ง
-            rates = mt5.copy_rates_from_pos(
-                self.symbol,
-                self.main_timeframe,
-                0,  # เริ่มจากแท่งปัจจุบัน
-                self.volume_lookback + 1
-            )
+            self.log("📊 Step 3: Getting volume data...")
             
-            if rates is None or len(rates) < self.volume_lookback:
-                return self._get_fallback_volume_data()
-            
-            # แยกข้อมูล
-            volumes = [int(rate.get('tick_volume', 0)) for rate in rates]
-            current_volume = volumes[-1] if volumes else 0
-            
-            # คำนวณ average volume (ไม่รวมแท่งปัจจุบัน)
-            historical_volumes = volumes[:-1] if len(volumes) > 1 else volumes
-            avg_volume = statistics.mean(historical_volumes) if historical_volumes else 0
-            
-            # Volume ratio
-            volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
-            
-            # ตรวจสอบความพร้อมใช้งาน volume
-            if current_volume == 0 and avg_volume == 0:
+            if not self.mt5_connector or not self.mt5_connector.is_connected:
+                self.log("❌ MT5 connector not available")
                 self.volume_available = False
                 return self._get_fallback_volume_data()
+            
+            # ใช้ symbol ที่ถูกต้อง
+            actual_symbol = self._find_correct_gold_symbol()
+            if not actual_symbol:
+                self.volume_available = False
+                return self._get_fallback_volume_data()
+            
+            # ดึงข้อมูล volume หลายแท่ง
+            rates = mt5.copy_rates_from_pos(actual_symbol, self.main_timeframe, 0, self.volume_lookback + 2)
+            
+            if rates is None or len(rates) < 2:
+                self.log("❌ Failed to get volume data")
+                self.volume_available = False
+                return self._get_fallback_volume_data()
+            
+            # ✅ แก้ไข: Handle numpy array volumes correctly
+            volumes = []
+            for rate in rates:
+                volume = int(rate['tick_volume'])  # ✅ Direct access ไม่ใช่ .get()
+                if volume > 0:
+                    volumes.append(volume)
+            
+            if not volumes:
+                self.log("❌ No valid volume data")
+                self.volume_available = False
+                return self._get_fallback_volume_data()
+            
+            current_volume = volumes[-1] if volumes else 0
+            average_volume = sum(volumes) / len(volumes) if volumes else 1
+            volume_ratio = current_volume / average_volume if average_volume > 0 else 1.0
             
             self.volume_available = True
             
             return {
                 "current_volume": current_volume,
-                "average_volume": avg_volume,
+                "average_volume": average_volume,
                 "volume_ratio": volume_ratio,
                 "volume_available": True,
-                "lookback_periods": len(historical_volumes)
+                "lookback_periods": len(volumes)
             }
             
         except Exception as e:
@@ -163,24 +211,156 @@ class MarketAnalyzer:
             self.volume_available = False
             return self._get_fallback_volume_data()
     
-    def get_candlestick_info(self) -> Dict:
-        """🆕 รวมข้อมูล candlestick ที่จำเป็นทั้งหมด"""
+    def _find_correct_gold_symbol(self) -> Optional[str]:
+        """🔍 หา Gold Symbol ที่ถูกต้องในโบรกเกอร์นี้"""
         try:
+            # 1. ลองใช้ symbol ที่ mt5_connector detect ไว้
+            if hasattr(self.mt5_connector, 'gold_symbol') and self.mt5_connector.gold_symbol:
+                detected_symbol = self.mt5_connector.gold_symbol
+                self.log(f"🔍 Trying detected symbol: {detected_symbol}")
+                
+                symbol_info = mt5.symbol_info(detected_symbol)
+                if symbol_info:
+                    self.symbol = detected_symbol  # Update internal symbol
+                    return detected_symbol
+            
+            # 2. ค้นหาจากรายชื่อ symbol ทั้งหมด
+            self.log("🔍 Searching all available symbols...")
+            all_symbols = mt5.symbols_get()
+            
+            if not all_symbols:
+                self.log("❌ No symbols available")
+                return None
+            
+            # รายการ pattern ที่ต้องหา
+            gold_patterns = [
+                'XAUUSD.v',     # ของคุณ
+                'XAUUSD.',      # มี dot หลัง
+                'XAUUSD',       # standard
+                'GOLD',         # ชื่อ GOLD เฉยๆ
+                'XAU/USD',      # มี slash
+                'XAUUSD#',      # มี # หลัง
+                'XAUUSD-',      # มี dash หลัง
+            ]
+            
+            # ค้นหาตาม pattern
+            for pattern in gold_patterns:
+                for symbol in all_symbols:
+                    if symbol.name.upper() == pattern.upper():
+                        self.log(f"🔍 Found exact match: {symbol.name}")
+                        
+                        # ทดสอบว่าใช้งานได้
+                        if self._test_symbol_usability(symbol.name):
+                            self.symbol = symbol.name  # Update internal
+                            return symbol.name
+            
+            # 3. ค้นหาแบบ contains
+            for symbol in all_symbols:
+                name_upper = symbol.name.upper()
+                if ('XAU' in name_upper and 'USD' in name_upper) or 'GOLD' in name_upper:
+                    self.log(f"🔍 Testing symbol: {symbol.name}")
+                    
+                    if self._test_symbol_usability(symbol.name):
+                        self.symbol = symbol.name
+                        return symbol.name
+            
+            self.log("❌ No valid gold symbol found")
+            return None
+            
+        except Exception as e:
+            self.log(f"❌ Find symbol error: {e}")
+            return None
+
+    def _test_symbol_usability(self, symbol_name: str) -> bool:
+        """🧪 ทดสอบว่า symbol ใช้งานได้หรือไม่"""
+        try:
+            # Select symbol
+            if not mt5.symbol_select(symbol_name, True):
+                return False
+            
+            # Get tick data
+            tick = mt5.symbol_info_tick(symbol_name)
+            if not tick:
+                return False
+            
+            # ตรวจสอบราคาอยู่ในช่วงทองคำ
+            if tick.bid < 1000 or tick.bid > 10000:
+                return False
+            
+            # ลองดึง rates
+            rates = mt5.copy_rates_from_pos(symbol_name, mt5.TIMEFRAME_M5, 0, 2)
+            if rates is None or len(rates) < 1:
+                return False
+            
+            self.log(f"✅ Symbol {symbol_name} is usable - Price: {tick.bid:.2f}")
+            return True
+            
+        except Exception as e:
+            self.log(f"❌ Test symbol {symbol_name} error: {e}")
+            return False
+
+    # ✅ เพิ่ม Debug method
+    def debug_available_symbols(self):
+        """🔍 Debug แสดงรายชื่อ symbol ทั้งหมด"""
+        try:
+            self.log("🔍 === ALL AVAILABLE SYMBOLS ===")
+            
+            all_symbols = mt5.symbols_get()
+            if not all_symbols:
+                self.log("❌ No symbols available")
+                return
+            
+            # แสดง gold-related symbols
+            gold_symbols = []
+            for symbol in all_symbols:
+                name = symbol.name.upper()
+                if ('XAU' in name or 'GOLD' in name):
+                    gold_symbols.append(symbol.name)
+            
+            self.log(f"🥇 Gold-related symbols found: {len(gold_symbols)}")
+            for symbol in gold_symbols[:10]:  # แสดงแค่ 10 ตัวแรก
+                self.log(f"   📊 {symbol}")
+            
+            # แสดงรายการทั้งหมด (แค่ 50 ตัวแรก)
+            self.log(f"📊 Total symbols: {len(all_symbols)}")
+            self.log("📋 First 50 symbols:")
+            for i, symbol in enumerate(all_symbols[:50]):
+                self.log(f"   {i+1:2d}. {symbol.name}")
+            
+            self.log("=" * 50)
+            
+        except Exception as e:
+            self.log(f"❌ Debug symbols error: {e}")
+
+    def get_candlestick_info(self) -> Dict:
+        """🆕 รวมข้อมูล candlestick ที่จำเป็นทั้งหมด - พร้อม comprehensive logging"""
+        try:
+            self.log("🕯️  === STARTING CANDLESTICK ANALYSIS ===")
+            
             # ดึงข้อมูลพื้นฐาน
+            self.log("📊 Step 1: Getting current OHLC...")
             current_ohlc = self.get_current_ohlc()
+            
+            self.log("📊 Step 2: Getting previous OHLC...")
             previous_ohlc = self.get_previous_ohlc()
+            
+            self.log("📊 Step 3: Getting volume data...")
             volume_data = self.get_volume_data()
             
             if not current_ohlc.get("valid") or not previous_ohlc.get("valid"):
+                self.log("❌ Invalid OHLC data - using fallback")
                 return self._get_fallback_candlestick_info()
             
+            self.log("📊 Step 4: Analyzing candlestick pattern...")
             # คำนวณ candlestick metrics
             candlestick_analysis = self._analyze_candlestick_pattern(
                 current_ohlc, previous_ohlc
             )
             
+            self.log("✅ Candlestick analysis completed successfully")
+            
             # รวมข้อมูลทั้งหมด
-            return {
+            result = {
                 "current_ohlc": current_ohlc,
                 "previous_ohlc": previous_ohlc,
                 "volume_data": volume_data,
@@ -189,13 +369,28 @@ class MarketAnalyzer:
                 "valid": True
             }
             
+            # ✅ LOG COMPREHENSIVE SUMMARY
+            self.log("🎯 === CANDLESTICK ANALYSIS SUMMARY ===")
+            self.log(f"✅ Analysis Valid: {result['valid']}")
+            self.log(f"🎨 Candle Color: {candlestick_analysis.get('candle_color', 'N/A')}")
+            self.log(f"📊 Price Direction: {candlestick_analysis.get('price_direction', 'N/A')}")
+            self.log(f"💪 Body Ratio: {candlestick_analysis.get('body_ratio', 0):.3f}")
+            self.log(f"🎯 Pattern: {candlestick_analysis.get('pattern_detected', 'N/A')}")
+            self.log(f"🔊 Volume Available: {volume_data.get('volume_available', False)}")
+            self.log("=" * 50)
+            
+            return result
+            
         except Exception as e:
             self.log(f"❌ Candlestick info error: {e}")
+            self.log(f"🔧 Error details: {str(e)}")
             return self._get_fallback_candlestick_info()
-    
+
     def _analyze_candlestick_pattern(self, current: Dict, previous: Dict) -> Dict:
-        """🆕 วิเคราะห์ pattern แท่งเทียน"""
+        """🆕 วิเคราะห์ pattern แท่งเทียน - พร้อม detailed logging"""
         try:
+            self.log("🔍 Analyzing candlestick pattern details...")
+            
             # ข้อมูลแท่งปัจจุบัน
             open_price = current["open"]
             high_price = current["high"]
@@ -204,45 +399,85 @@ class MarketAnalyzer:
             
             # ข้อมูลแท่งก่อนหน้า
             previous_close = previous["close"]
+            previous_open = previous["open"]
+            
+            self.log(f"📊 Current: O={open_price:.5f}, H={high_price:.5f}, L={low_price:.5f}, C={close_price:.5f}")
+            self.log(f"📊 Previous: O={previous_open:.5f}, C={previous_close:.5f}")
             
             # 1. สีแท่งเทียน
-            candle_color = "GREEN" if close_price > open_price else "RED"
+            candle_color = "GREEN" if close_price > open_price else "RED" if close_price < open_price else "DOJI"
+            previous_color = "GREEN" if previous_close > previous_open else "RED" if previous_close < previous_open else "DOJI"
+            
+            self.log(f"🎨 Candle Colors: Previous={previous_color}, Current={candle_color}")
             
             # 2. ขนาด body
             body_size = abs(close_price - open_price)
+            previous_body_size = abs(previous_close - previous_open)
             
             # 3. ขนาดช่วงราคาเต็ม
             full_range = high_price - low_price
+            previous_full_range = previous["high"] - previous["low"]
             
             # 4. อัตราส่วน body ต่อ range
             body_ratio = body_size / full_range if full_range > 0 else 0
             
+            self.log(f"📏 Body Size: {body_size:.5f} | Full Range: {full_range:.5f} | Ratio: {body_ratio:.3f}")
+            
             # 5. ทิศทางราคา
-            price_direction = "UP" if close_price > previous_close else "DOWN"
+            price_direction = "UP" if close_price > previous_close else "DOWN" if close_price < previous_close else "SIDEWAYS"
+            price_change = close_price - previous_close
+            price_change_pct = (price_change / previous_close * 100) if previous_close > 0 else 0
             
-            # 6. ประเมินความแข็งแกร่งแท่งเทียน
-            candle_strength = self._calculate_candle_strength(body_ratio)
+            self.log(f"📊 Price Direction: {price_direction} | Change: {price_change:.5f} ({price_change_pct:.2f}%)")
             
-            # 7. การจำแนกประเภทแท่ง
-            candle_type = self._classify_candle_type(body_ratio)
+            # 6. ✨ ENHANCED PATTERN RECOGNITION
+            pattern_info = self._detect_candlestick_patterns(current, previous)
+            self.log(f"🎯 Pattern Detected: {pattern_info.get('pattern_name', 'STANDARD')}")
             
-            return {
+            # 7. ✨ TREND CONTEXT
+            trend_context = self._get_short_term_trend_context(current, previous)
+            self.log(f"📈 Trend Alignment: {trend_context.get('trend_alignment', 0.5):.3f}")
+            
+            # 8. ✅ ประเมินความแข็งแกร่งแท่งเทียน
+            candle_strength = self._calculate_enhanced_candle_strength(
+                body_ratio, full_range, price_change_pct, pattern_info
+            )
+            self.log(f"💪 Candle Strength: {candle_strength:.3f}")
+            
+            result = {
+                # Basic candlestick info
                 "candle_color": candle_color,
+                "previous_color": previous_color,
                 "body_size": body_size,
                 "full_range": full_range,
                 "body_ratio": body_ratio,
                 "price_direction": price_direction,
+                "close_vs_previous": price_change,
+                "price_change_pct": price_change_pct,
+                
+                # ✨ Enhanced analysis
+                "pattern_detected": pattern_info.get("pattern_name", "STANDARD"),
+                "pattern_strength": pattern_info.get("pattern_strength", 0.5),
+                "trend_alignment": trend_context.get("trend_alignment", 0.5),
+                "momentum_score": trend_context.get("momentum_score", 0.5),
                 "candle_strength": candle_strength,
-                "candle_type": candle_type,
-                "close_vs_previous": close_price - previous_close
+                
+                # Multi-candle context
+                "candle_sequence": f"{previous_color}-{candle_color}",
+                "body_size_comparison": "LARGER" if body_size > previous_body_size else "SMALLER",
+                "range_comparison": "WIDER" if full_range > previous_full_range else "NARROWER"
             }
             
+            self.log("✅ Candlestick pattern analysis completed")
+            return result
+            
         except Exception as e:
-            self.log(f"❌ Candlestick pattern analysis error: {e}")
+            self.log(f"❌ Enhanced candlestick pattern analysis error: {e}")
             return {
                 "candle_color": "NEUTRAL", "body_size": 0, "full_range": 0,
                 "body_ratio": 0, "price_direction": "NEUTRAL", 
-                "candle_strength": 0.5, "candle_type": "UNKNOWN"
+                "candle_strength": 0.5, "pattern_detected": "NONE",
+                "trend_alignment": 0.5
             }
     
     def _analyze_candlestick_pattern(self, current: Dict, previous: Dict) -> Dict:

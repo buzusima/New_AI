@@ -221,7 +221,7 @@ class OrderManager:
             print(f"   4D Score: {order_request.four_d_score:.3f}")
             print(f"   Confidence: {order_request.confidence:.3f}")
             
-            # Enhanced validation with detailed checks
+            # ✅ แก้ไข: เปลี่ยนจาก is_connected() เป็น is_connected (property)
             if not self.mt5_connector.is_connected:
                 return OrderResult(False, 0, 0.0, 0.0, "MT5 not connected", metadata={})
             
@@ -240,187 +240,92 @@ class OrderManager:
             print(f"👤 Account: {account_info.login} (Trade Allowed: {account_info.trade_allowed})")
             
             if not account_info.trade_allowed:
-                return OrderResult(False, 0, 0.0, 0.0, "Trading not allowed on this account", metadata={})
+                return OrderResult(False, 0, 0.0, 0.0, "Trading not allowed on account", metadata={})
+            
+            if not account_info.trade_expert:
+                return OrderResult(False, 0, 0.0, 0.0, "Expert Advisor trading not allowed", metadata={})
             
             # Get current price
-            current_price = self._get_current_price()
-            if current_price <= 0:
-                return OrderResult(False, 0, 0.0, 0.0, "Invalid current price", metadata={})
-            
-            print(f"📊 Current Price: {current_price:.5f}")
-            
-            # Get proper execution price from MT5 tick
             tick = mt5.symbol_info_tick(self.symbol)
             if tick is None:
                 return OrderResult(False, 0, 0.0, 0.0, f"Cannot get tick for {self.symbol}", metadata={})
             
-            # Use proper bid/ask for execution
+            # Determine execution price
             if order_request.order_type == OrderType.MARKET_BUY:
-                mt5_action = mt5.TRADE_ACTION_DEAL
-                mt5_order_type = mt5.ORDER_TYPE_BUY
-                execution_price = tick.ask  # Use ASK for BUY
+                execution_price = tick.ask
+                action = mt5.TRADE_ACTION_DEAL
+                type_order = mt5.ORDER_TYPE_BUY
             elif order_request.order_type == OrderType.MARKET_SELL:
-                mt5_action = mt5.TRADE_ACTION_DEAL
-                mt5_order_type = mt5.ORDER_TYPE_SELL
-                execution_price = tick.bid  # Use BID for SELL
+                execution_price = tick.bid
+                action = mt5.TRADE_ACTION_DEAL
+                type_order = mt5.ORDER_TYPE_SELL
             else:
-                return OrderResult(False, 0, 0.0, 0.0, f"Unsupported order type: {order_request.order_type}", metadata={})
+                return OrderResult(False, 0, 0.0, 0.0, f"Invalid market order type: {order_request.order_type}", metadata={})
             
-            print(f"💱 Execution Price: {execution_price:.5f} (Spread: {tick.ask - tick.bid:.5f})")
+            print(f"💰 Execution Price: {execution_price:.5f} (Bid: {tick.bid:.5f}, Ask: {tick.ask:.5f})")
             
-            # สร้าง MT5 request
-            mt5_request = {
-                "action": mt5_action,
+            # Prepare MT5 request
+            request = {
+                "action": action,
                 "symbol": self.symbol,
                 "volume": order_request.volume,
-                "type": mt5_order_type,
+                "type": type_order,
                 "price": execution_price,
+                "sl": order_request.sl if order_request.sl > 0 else 0.0,
+                "tp": order_request.tp if order_request.tp > 0 else 0.0,
                 "deviation": order_request.max_slippage,
-                "magic": getattr(order_request, 'magic_number', 100001),
-                "comment": f"4D AI Gold: {order_request.reasoning[:20]}",
+                "magic": order_request.magic_number,
+                "comment": f"4D_AI_{order_request.reason.value}",
                 "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_IOC
             }
             
-            # Try different type_filling options with error handling
-            filling_options = [
-                (mt5.ORDER_FILLING_IOC, "IOC"),      # Immediate or Cancel
-                (mt5.ORDER_FILLING_RETURN, "RETURN"), # Return/Partial
-                (mt5.ORDER_FILLING_FOK, "FOK"),      # Fill or Kill
-            ]
+            print(f"📋 MT5 Request prepared: {request}")
             
-            print(f"📋 MT5 Request: {mt5_request}")
+            # Execute order
+            print("🚀 Sending order to MT5...")
+            result = mt5.order_send(request)
             
-            # Try multiple filling types if first fails
-            last_error = None
-            successful_result = None
+            execution_time = time.time() - start_time
             
-            for filling_type, filling_name in filling_options:
-                try:
-                    mt5_request["type_filling"] = filling_type
-                    
-                    print(f"🚀 Sending order to MT5 ({filling_name})...")
-                    result = mt5.order_send(mt5_request)
-                    execution_time = time.time() - start_time
-                    
-                    print(f"📨 MT5 Response ({filling_name}): {result}")
-                    
-                    # Check if successful
-                    if result and result.retcode == mt5.TRADE_RETCODE_DONE:
-                        successful_result = result
-                        print(f"✅ Order executed successfully with {filling_name}")
-                        break
-                    elif result and result.retcode != mt5.TRADE_RETCODE_DONE:
-                        # Record error but continue trying
-                        error_msg = f"Retcode: {result.retcode}"
-                        if hasattr(result, 'comment'):
-                            error_msg += f", Comment: {result.comment}"
-                        
-                        print(f"⚠️ {filling_name} failed: {error_msg}")
-                        last_error = error_msg
-                        
-                        # If it's not a filling type error, stop trying
-                        if result.retcode not in [mt5.TRADE_RETCODE_INVALID_FILL, 
-                                                mt5.TRADE_RETCODE_INVALID_ORDER,
-                                                mt5.TRADE_RETCODE_REJECT]:
-                            print(f"❌ Non-filling related error, stopping attempts")
-                            break
-                    else:
-                        print(f"❌ {filling_name}: No response from MT5")
-                        last_error = "No response from MT5"
-                        
-                except Exception as filling_error:
-                    print(f"❌ {filling_name} exception: {filling_error}")
-                    last_error = str(filling_error)
-                    continue
+            if result is None:
+                error_msg = f"MT5 order_send returned None - {mt5.last_error()}"
+                print(f"❌ {error_msg}")
+                return OrderResult(False, 0, 0.0, 0.0, error_msg, execution_time=execution_time, metadata={})
             
-            # Check final result
-            if successful_result and successful_result.retcode == mt5.TRADE_RETCODE_DONE:
-                # Success - order is now in MT5!
-                actual_price = successful_result.price if hasattr(successful_result, 'price') else execution_price
-                actual_volume = successful_result.volume if hasattr(successful_result, 'volume') else order_request.volume
-                ticket = successful_result.order if hasattr(successful_result, 'order') else 0
+            # Check result
+            if result.retcode == mt5.TRADE_RETCODE_DONE:
+                # Success
+                actual_price = result.price if hasattr(result, 'price') else execution_price
+                slippage = abs(actual_price - execution_price)
                 
-                # Calculate slippage
-                requested_price = execution_price
-                slippage_points = abs(actual_price - requested_price) if actual_price > 0 else 0
-                slippage_pips = slippage_points / self.point_value if self.point_value > 0 else 0
-                
-                print(f"✅ MARKET ORDER SUCCESS:")
-                print(f"   Ticket: {ticket}")
-                print(f"   Price: {actual_price:.5f} (requested: {requested_price:.5f})")
-                print(f"   Slippage: {slippage_points:.5f} points ({slippage_pips:.1f} pips)")
-                print(f"   Volume: {actual_volume:.3f}")
+                print(f"✅ ORDER SUCCESS:")
+                print(f"   Ticket: {result.order}")
+                print(f"   Price: {actual_price:.5f}")
+                print(f"   Volume: {result.volume:.3f}")
+                print(f"   Slippage: {slippage:.5f}")
                 print(f"   Execution Time: {execution_time:.3f}s")
-                
-                # Update statistics
-                self._update_execution_stats(True, execution_time, slippage_points)
-                
-                # Store history
-                order_history = {
-                    'timestamp': datetime.now(),
-                    'ticket': ticket,
-                    'type': order_request.order_type.value,
-                    'volume': actual_volume,
-                    'price': actual_price,
-                    'slippage': slippage_points,
-                    'execution_time': execution_time,
-                    'success': True,
-                    'four_d_score': order_request.four_d_score,
-                    'confidence': order_request.confidence
-                }
-                self.order_history.append(order_history)
                 
                 return OrderResult(
                     success=True,
-                    ticket=ticket,
+                    ticket=result.order,
                     price=actual_price,
-                    volume=actual_volume,
-                    message=f"Market order executed successfully",
-                    slippage=slippage_points,
+                    volume=result.volume,
+                    message="Market order executed successfully",
+                    slippage=slippage,
                     execution_time=execution_time,
                     four_d_score=order_request.four_d_score,
                     metadata={
-                        "mt5_result": successful_result,
-                        "slippage_pips": slippage_pips,
+                        "mt5_result": result,
                         "order_type": order_request.order_type.value,
                         "reason": order_request.reason.value,
                         "confidence": order_request.confidence
                     }
                 )
-                
             else:
-                # Failed - tried all filling types
-                error_code = successful_result.retcode if successful_result else "NO_RESPONSE"
-                error_comment = successful_result.comment if successful_result and hasattr(successful_result, 'comment') else last_error
-                
-                error_msg = f"MT5 Order Failed (All filling types tried) - Code: {error_code}, Comment: {error_comment}"
-                
-                print(f"❌ MARKET ORDER FAILED:")
-                print(f"   Error Code: {error_code}")
-                print(f"   Error Comment: {error_comment}")
-                print(f"   Tried filling types: IOC, RETURN, FOK")
-                print(f"   Request: {mt5_request}")
-                print(f"   Execution Time: {execution_time:.3f}s")
-                
-                # Update statistics
-                self._update_execution_stats(False, execution_time, 0)
-                
-                # Store history
-                order_history = {
-                    'timestamp': datetime.now(),
-                    'ticket': 0,
-                    'type': order_request.order_type.value,
-                    'volume': order_request.volume,
-                    'price': execution_price,
-                    'slippage': 0,
-                    'execution_time': execution_time,
-                    'success': False,
-                    'error_code': error_code,
-                    'error_comment': error_comment,
-                    'four_d_score': order_request.four_d_score,
-                    'confidence': order_request.confidence
-                }
-                self.order_history.append(order_history)
+                # Failed
+                error_msg = f"Order failed - Code: {result.retcode}, Comment: {result.comment if hasattr(result, 'comment') else 'N/A'}"
+                print(f"❌ {error_msg}")
                 
                 return OrderResult(
                     success=False,
@@ -430,17 +335,16 @@ class OrderManager:
                     message=error_msg,
                     execution_time=execution_time,
                     metadata={
-                        "error_code": error_code,
-                        "error_comment": error_comment,
-                        "mt5_result": successful_result,
-                        "attempted_filling_types": ["IOC", "RETURN", "FOK"]
+                        "error_code": result.retcode,
+                        "error_comment": result.comment if hasattr(result, 'comment') else 'N/A',
+                        "mt5_result": result
                     }
                 )
-                
+            
         except Exception as e:
             print(f"❌ Execute market order to MT5 error: {e}")
             return OrderResult(False, 0, 0.0, 0.0, f"Execution error: {e}", metadata={})
-
+    
     def _execute_market_order_with_retry(self, mt5_request: Dict, order_request: OrderRequest) -> OrderResult:
         """Execute market order with retry logic - ใช้ชื่อเดิม - แก้ไขแล้ว"""
         try:
@@ -597,18 +501,49 @@ class OrderManager:
             print(f"❌ Prepare enhanced MT5 request error: {e}")
             return {}
 
-    def _validate_mt5_connection_enhanced(self) -> bool:
-        """เช็ค MT5 connection อย่างละเอียด - ใช้ชื่อเดิม - แก้ไขแล้ว"""
+    def _validate_market_order_inputs_enhanced(self, order_request: OrderRequest) -> bool:
+        """ตรวจสอบความถูกต้องของ Market Order inputs - ใช้ชื่อเดิม - แก้ไขแล้ว"""
         try:
-            # เช็คว่า MT5 module โหลดได้
-            if not hasattr(mt5, 'terminal_info'):
-                print("❌ MT5 module not properly loaded")
+            # เช็ค order type
+            valid_types = [OrderType.MARKET_BUY, OrderType.MARKET_SELL]
+            if order_request.order_type not in valid_types:
+                print(f"❌ Invalid order type: {order_request.order_type}")
                 return False
             
-            # เช็ค terminal info
+            # เช็ค volume
+            if order_request.volume < self.min_lot or order_request.volume > self.max_lot:
+                print(f"❌ Invalid volume: {order_request.volume} (range: {self.min_lot}-{self.max_lot})")
+                return False
+            
+            # เช็ค confidence
+            if order_request.confidence < 0 or order_request.confidence > 1:
+                print(f"❌ Invalid confidence: {order_request.confidence}")
+                return False
+            
+            # ✅ แก้ไข: เปลี่ยนจาก is_connected() เป็น is_connected (property)
+            if not self.mt5_connector.is_connected:
+                print("❌ MT5 not connected")
+                return False
+            
+            print("✅ Order inputs validation passed")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Input validation error: {e}")
+            return False
+
+    def _validate_mt5_connection_enhanced(self) -> bool:
+        """ตรวจสอบการเชื่อมต่อ MT5 - ใช้ชื่อเดิม - แก้ไขแล้ว"""
+        try:
+            # ✅ แก้ไข: เปลี่ยนจาก is_connected() เป็น is_connected (property)
+            if not self.mt5_connector.is_connected:
+                print("❌ MT5 connector not connected")
+                return False
+            
+            # ตรวจสอบ terminal info
             terminal_info = mt5.terminal_info()
             if terminal_info is None:
-                print("❌ Cannot get terminal info - MT5 not running?")
+                print("❌ Cannot get MT5 terminal info")
                 return False
             
             print(f"🔌 Terminal: {terminal_info.name} - Connected: {terminal_info.connected}")
@@ -661,36 +596,6 @@ class OrderManager:
             print(f"❌ Enhanced MT5 connection validation error: {e}")
             return False
 
-    def _validate_market_order_inputs_enhanced(self, order_request: OrderRequest) -> bool:
-        """ตรวจสอบความถูกต้องของ Market Order inputs - ใช้ชื่อเดิม - แก้ไขแล้ว"""
-        try:
-            # เช็ค order type
-            valid_types = [OrderType.MARKET_BUY, OrderType.MARKET_SELL]
-            if order_request.order_type not in valid_types:
-                print(f"❌ Invalid order type: {order_request.order_type}")
-                return False
-            
-            # เช็ค volume
-            if order_request.volume < self.min_lot or order_request.volume > self.max_lot:
-                print(f"❌ Invalid volume: {order_request.volume} (range: {self.min_lot}-{self.max_lot})")
-                return False
-            
-            # เช็ค confidence
-            if order_request.confidence < 0 or order_request.confidence > 1:
-                print(f"❌ Invalid confidence: {order_request.confidence}")
-                return False
-            
-            # เช็ค connection - FIX: ใช้ property ไม่ใช่ method
-            if not self.mt5_connector.is_connected:
-                print("❌ MT5 not connected")
-                return False
-            
-            print("✅ Order inputs validation passed")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Input validation error: {e}")
-            return False
 
     def _get_current_price(self) -> float:
         """ดึงราคาปัจจุบัน - ใช้ชื่อเดิม - แก้ไขแล้ว"""
