@@ -878,11 +878,18 @@ class ModernRuleEngine:
             return False
                      
     def _execute_intelligent_order(self, decision: SmartDecisionScore):
-        """🎯 ดำเนินการออเดอร์อย่างอัจฉริยะ"""
+        """🎯 ดำเนินการออเดอร์อย่างอัจฉริยะ - ปรับปรุงให้ใช้ spacing_manager"""
         try:
             if not self.order_manager:
                 print("❌ No order manager available")
                 return
+            
+            print(f"🎯 === ENHANCED INTELLIGENT ORDER EXECUTION ===")
+            print(f"   Decision Score: {decision.final_score:.3f}")
+            
+            # 🔧 ปรับปรุง: เพิ่มข้อมูลออเดอร์ที่มีอยู่
+            active_orders = self._get_active_orders_for_spacing()
+            print(f"   Active Orders: {len(active_orders)}")
             
             # Determine order direction based on decision analysis
             order_direction = self._determine_order_direction(decision)
@@ -890,11 +897,20 @@ class ModernRuleEngine:
                 print("⏳ Decision suggests waiting for better opportunity")
                 return
             
+            # 🔧 ปรับปรุง: เช็คสมดุลก่อนตัดสินใจ
+            order_direction = self._check_balance_and_adjust_direction(order_direction, active_orders)
+            
             # Calculate intelligent lot size
             lot_size = self._calculate_intelligent_lot_size(decision)
             
+            # 🔧 ปรับปรุง: ใช้ spacing_manager ถ้ามี
+            target_price = self._calculate_smart_target_price(order_direction, active_orders, decision)
+            if not target_price:
+                print("🚫 Cannot calculate safe target price - skipping order")
+                return
+            
             # Execute order with context
-            success = self._place_order_with_context(order_direction, lot_size, decision)
+            success = self._place_order_with_context(order_direction, lot_size, decision, target_price)
             
             # Record result for learning
             self._record_order_result(decision, success, order_direction, lot_size)
@@ -904,7 +920,203 @@ class ModernRuleEngine:
             
         except Exception as e:
             print(f"❌ Execute intelligent order error: {e}")
-    
+
+    def _get_active_orders_for_spacing(self) -> List[Dict]:
+        """🔍 ดึงออเดอร์สำหรับ spacing_manager - ปรับปรุงจาก method เดิม"""
+        try:
+            active_orders = []
+            
+            # ลอง method ต่างๆ ที่มีอยู่
+            if hasattr(self, 'position_manager') and self.position_manager:
+                # ลองดึงจาก position_manager
+                positions = self.position_manager.get_active_positions()
+                if positions:
+                    for pos in positions:
+                        active_orders.append({
+                            'type': pos.get('type', 'UNKNOWN'),
+                            'price': float(pos.get('price', 0)),
+                            'volume': float(pos.get('volume', 0)),
+                            'ticket': pos.get('ticket', 0)
+                        })
+            
+            # ลองดึงจาก order_manager
+            if hasattr(self, 'order_manager') and self.order_manager:
+                if hasattr(self.order_manager, 'get_pending_orders'):
+                    pending = self.order_manager.get_pending_orders()
+                    active_orders.extend(pending)
+            
+            return active_orders
+            
+        except Exception as e:
+            print(f"❌ Get active orders for spacing error: {e}")
+            return []
+
+    def _check_balance_and_adjust_direction(self, original_direction: str, active_orders: List[Dict]) -> str:
+        """⚖️ เช็คสมดุลและปรับทิศทาง - เพิ่มใหม่แต่ง่าย"""
+        try:
+            if not active_orders:
+                return original_direction
+            
+            # นับ BUY vs SELL
+            buy_count = sum(1 for o in active_orders if 'BUY' in str(o.get('type', '')).upper())
+            sell_count = sum(1 for o in active_orders if 'SELL' in str(o.get('type', '')).upper())
+            
+            print(f"⚖️ Balance Check: BUY={buy_count}, SELL={sell_count}")
+            
+            # ถ้าไม่สมดุลมาก ให้ปรับ
+            if buy_count > sell_count * 2:  # BUY มากเกินไป
+                if original_direction == "BUY":
+                    print(f"🔄 Override: Too many BUY - switching to SELL")
+                    return "SELL"
+            elif sell_count > buy_count * 2:  # SELL มากเกินไป
+                if original_direction == "SELL":
+                    print(f"🔄 Override: Too many SELL - switching to BUY")
+                    return "BUY"
+            
+            return original_direction
+            
+        except Exception as e:
+            print(f"❌ Balance check error: {e}")
+            return original_direction
+
+    def _calculate_smart_target_price(self, order_direction: str, active_orders: List[Dict], 
+                                    decision: SmartDecisionScore) -> Optional[float]:
+        """🎯 คำนวณราคาเป้าหมายอย่างฉลาด - แก้ไข syntax แล้ว"""
+        try:
+            # ดึงราคาปัจจุบัน
+            current_price = self._get_current_price_safe()
+            if not current_price:
+                return None
+            
+            print(f"🎯 Smart Price Calculation:")
+            print(f"   Current Price: {current_price:.5f}")
+            print(f"   Direction: {order_direction}")
+            
+            # ลองใช้ spacing_manager ถ้ามี
+            if (hasattr(self, 'order_manager') and self.order_manager and 
+                hasattr(self.order_manager, 'spacing_manager') and self.order_manager.spacing_manager):
+                
+                try:
+                    spacing_manager = self.order_manager.spacing_manager
+                    
+                    # เตรียม market analysis
+                    market_analysis = {
+                        "volatility": decision.market_quality,
+                        "trend": decision.timing_opportunity,
+                        "session": "ACTIVE",
+                        "volume": 0.5
+                    }
+                    
+                    # คำนวณราคาเป้าหมายคร่าวๆ ก่อน
+                    base_spacing = 100  # points
+                    spacing_distance = base_spacing * 0.01
+                    
+                    if order_direction == "BUY":
+                        target_price = current_price - spacing_distance
+                    else:
+                        target_price = current_price + spacing_distance
+                    
+                    # ใช้ spacing_manager ตรวจสอบ
+                    spacing_result = spacing_manager.get_flexible_spacing(
+                        target_price=target_price,
+                        current_price=current_price,
+                        market_analysis=market_analysis,
+                        order_type=order_direction,
+                        active_orders=active_orders
+                    )
+                    
+                    if spacing_result.get('placement_allowed', True):
+                        final_price = spacing_result.get('target_price', target_price)
+                        print(f"   Spacing Manager: {final_price:.5f} (spacing: {spacing_result.get('spacing_points', 0)} points)")
+                        return final_price
+                    else:
+                        print(f"   Spacing Manager blocked: {spacing_result.get('warnings', [])}")
+                        return None
+                        
+                except Exception as e:
+                    print(f"   Spacing Manager error: {e}")
+                    pass  # ไปใช้ fallback
+            
+            # Fallback: คำนวณเอง
+            fallback_spacing = self._calculate_intelligent_spacing_inline()
+            spacing_distance = fallback_spacing * 0.01
+            
+            if order_direction == "BUY":
+                target_price = current_price - spacing_distance
+            else:
+                target_price = current_price + spacing_distance
+            
+            # เช็คว่าชนกับออเดอร์เดิมหรือไม่
+            if self._check_price_collision_simple(target_price, active_orders):
+                print(f"   Collision detected at {target_price:.5f}")
+                
+                # หาราคาทดแทนง่ายๆ
+                alternative_price = self._find_simple_alternative_price(
+                    target_price, current_price, active_orders, order_direction
+                )
+                
+                if alternative_price:
+                    print(f"   Alternative Price: {alternative_price:.5f}")
+                    return alternative_price
+                else:
+                    print(f"   No suitable alternative found")
+                    return None
+            
+            print(f"   Fallback Price: {target_price:.5f} (spacing: {fallback_spacing} points)")
+            return target_price
+            
+        except Exception as e:
+            print(f"❌ Smart target price error: {e}")
+            return None
+
+    def _check_price_collision_simple(self, target_price: float, active_orders: List[Dict]) -> bool:
+        """🚫 เช็คการชนอย่างง่าย - ใหม่แต่สั้น"""
+        try:
+            collision_buffer = 0.30  # 30 cents
+            
+            for order in active_orders:
+                order_price = float(order.get('price', 0))
+                distance = abs(target_price - order_price)
+                
+                if distance < collision_buffer:
+                    return True  # มีการชน
+            
+            return False  # ไม่ชน
+            
+        except Exception as e:
+            return False
+
+    def _find_simple_alternative_price(self, original_price: float, current_price: float,
+                                    active_orders: List[Dict], order_direction: str) -> Optional[float]:
+        """🔍 หาราคาทดแทนง่ายๆ - ใหม่แต่สั้น"""
+        try:
+            # หาราคาออเดอร์ทั้งหมด
+            all_prices = [float(o.get('price', 0)) for o in active_orders if o.get('price')]
+            
+            if not all_prices:
+                return original_price
+            
+            # เรียงราคา
+            all_prices.sort()
+            
+            if order_direction == "BUY":
+                # หาจุดที่ต่ำกว่าราคาต่ำสุด
+                min_price = min(all_prices)
+                alternative = min_price - 0.50  # ห่าง 50 cents
+            else:
+                # หาจุดที่สูงกว่าราคาสูงสุด
+                max_price = max(all_prices)
+                alternative = max_price + 0.50  # ห่าง 50 cents
+            
+            # เช็คว่าไม่ไกลจาก current price เกินไป
+            max_distance = 3.0  # ไม่เกิน 3 dollars
+            if abs(alternative - current_price) <= max_distance:
+                return alternative
+            else:
+                return None
+                
+        except Exception as e:
+            return None    
     # ========================================================================================
     # 📊 INTELLIGENCE UPDATES
     # ========================================================================================
@@ -2083,19 +2295,20 @@ class ModernRuleEngine:
                 'buy_sell_ratio': 0.5
             }
     
-    def _place_order_with_context(self, direction: str, lot_size: float, decision: SmartDecisionScore) -> bool:
-        """🎯 วางออเดอร์พร้อม context - FIXED method"""
+    def _place_order_with_context(self, direction: str, lot_size: float, decision: SmartDecisionScore, target_price: float = None) -> bool:
+        """🎯 วางออเดอร์พร้อม context - แก้ไขรองรับ target_price"""
         try:
             if not self.order_manager:
                 print("❌ No order manager available")
                 return False
             
-            print(f"🎯 Executing order through Order Manager:")
+            print(f"🎯 Executing enhanced order through Order Manager:")
             print(f"   Direction: {direction}")
             print(f"   Volume: {lot_size}")
+            print(f"   Target Price: {target_price:.5f}" if target_price else "   Price: Market")
             print(f"   Decision Score: {decision.final_score:.3f}")
             
-            # สร้าง OrderRequest
+            # สร้าง OrderRequest (ใช้โครงสร้างเดิม)
             from order_manager import OrderRequest, OrderType, OrderReason
             
             # กำหนด order type
@@ -2111,10 +2324,10 @@ class ModernRuleEngine:
             order_request = OrderRequest(
                 order_type=order_type,
                 volume=lot_size,
-                price=0.0,  # Market order
+                price=target_price or 0.0,  # ใช้ target_price ถ้ามี
                 reason=OrderReason.PORTFOLIO_BALANCE,
                 confidence=decision.final_score,
-                reasoning=f"Smart Decision: Score {decision.final_score:.3f}, Quality {decision.decision_quality.value}",
+                reasoning=f"Enhanced Smart Decision: Score {decision.final_score:.3f}, Quality {decision.decision_quality.value}",
                 max_slippage=25,  # ยอมรับ slippage ปานกลาง
                 four_d_score=decision.final_score
             )
@@ -2123,7 +2336,7 @@ class ModernRuleEngine:
             result = self.order_manager.place_market_order(order_request)
             
             if result.success:
-                print(f"✅ Order executed successfully!")
+                print(f"✅ Enhanced order executed successfully!")
                 print(f"   Ticket: #{result.ticket}")
                 print(f"   Price: {result.price:.5f}")
                 print(f"   Volume: {result.volume:.3f}")
@@ -2131,13 +2344,13 @@ class ModernRuleEngine:
                     print(f"   Execution Time: {result.execution_time:.3f}s")
                 return True
             else:
-                print(f"❌ Order execution failed: {result.message}")
+                print(f"❌ Enhanced order execution failed: {result.message}")
                 return False
                 
         except Exception as e:
-            print(f"❌ Place order with context error: {e}")
+            print(f"❌ Enhanced place order error: {e}")
             return False
-    
+        
     def _record_order_result(self, decision: SmartDecisionScore, success: bool, direction: str, lot_size: float):
         """📊 บันทึกผลลัพธ์ออเดอร์พร้อมระบบประเมินผลใหม่"""
         try:
